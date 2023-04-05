@@ -17,6 +17,6 @@ export default function DropzoneButton() {
     >
         {/* eslint-disable-next-line react/jsx-props-no-spreading */}
         <input {...getInputProps({accept: '.tif, .tiff'})} />
-        File
+        Add File
     </Button>);
 }

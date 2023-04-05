@@ -1,12 +1,11 @@
 /* eslint-disable no-nested-ternary */
 import shallow from 'zustand/shallow';
-import React, {useContext, useState} from 'react';
-import {PictureInPictureViewer} from '@hms-dbmi/viv';
+import React, {useContext, useEffect, useState} from 'react';
+import {getDefaultInitialViewState, PictureInPictureViewer} from '@hms-dbmi/viv';
 import {useChannelsStore, useImageSettingsStore, useLoader, useViewerStore} from '../state';
 import {DEFAULT_OVERVIEW} from '../constants';
 import {AppContext} from "../../context/GlobalContext";
 import {ColorMixingExtension} from "../../components/shaders/index.js";
-import debounce from "lodash/debounce";
 
 
 const Viewer = (props) => {
@@ -70,18 +69,6 @@ const Viewer = (props) => {
             return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
         }
 
-
-// Prevents viewstate from changing
-        const onViewStateChange = ({viewState, oldViewState}) => {
-            context.setViewState(viewState)
-            return viewState;
-            // if (!allowNavigation) {
-            //     // console.log('viewstate prevented',oldViewState)
-            //     // useViewerStore.setState({viewState: oldViewState})
-            //     return oldViewState;
-            // }
-        };
-
         const getColorSpace = (colormap) => {
             return [new ColorMixingExtension({colormap})];
 
@@ -89,8 +76,18 @@ const Viewer = (props) => {
 
         const onClick = () => {
             const _coordinate = useViewerStore.getState()?.coordinate?.map((x) => Math.round(x));
-
         }
+
+
+        useEffect(() => {
+            const viewState = getDefaultInitialViewState(loader, {height, width}, 0.5);
+            useViewerStore.setState({
+                viewState: viewState,
+                pyramidResolution: Math.min(Math.max(Math.round(-viewState?.zoom), 0), loader.length - 1)
+            })
+            console.log('Viewer useEffect')
+
+        }, [loader, height, width])
 
         return (
             <div className={'viewerWrapper'} onClick={onClick}>
@@ -115,14 +112,13 @@ const Viewer = (props) => {
                     lensEnabled={lensEnabled}
                     extensions={getColorSpace(colormap)}
                     colormap={colormap || 'viridis'}
-                    onViewStateChange={debounce(
-                        ({viewState: newViewState, viewId}) =>
-                            useViewerStore.setState({
-                                viewState: {...newViewState, id: viewId}
-                            }),
-                        250,
-                        {trailing: true}
-                    )}
+                    onViewStateChange={({viewState: newViewState, viewId}) =>
+                        useViewerStore.setState({
+                            viewState: {...newViewState, id: viewId},
+                            pyramidResolution: Math.min(Math.max(Math.round(-newViewState?.zoom), 0), loader.length - 1)
+
+                        })
+                    }
                     deckProps={{
                         layers: overlayLayers
 

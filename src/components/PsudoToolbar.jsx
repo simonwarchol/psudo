@@ -12,6 +12,7 @@ import shallow from "zustand/shallow";
 import SingleChannelWrapper from "./SingleChannelWrapper.jsx";
 import {AttachFile, InsertLink} from "@mui/icons-material";
 import DropzoneButton from "../Avivator/components/Controller/components/DropzoneButton.jsx";
+import Footer from "../Avivator/components/Footer.jsx";
 
 function PsudoToolbar() {
     const context = useContext(AppContext);
@@ -125,6 +126,9 @@ function PsudoToolbar() {
         <Grid container sx={{bottom: 0, left: 0, position: 'absolute', zIndex: 100000}} direction="row"
               justifyContent="flex-start"
               alignItems="center">
+            <Grid item xs={'auto'}>
+                <Footer/>
+            </Grid>
             <Grid item xs={'auto'}>
                 <IconButton
                     id="source-button"

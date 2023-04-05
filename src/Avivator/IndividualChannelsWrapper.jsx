@@ -47,10 +47,11 @@ function IndividualChannelsWrapper() {
         {value: 'Oklab', label: 'OKLAB'},
         {value: 'sRGB', label: 'sRGB'},
     ];
-    const [globalSelection, channelOptions, source, viewState, zoom] = useViewerStore(
-        store => [store.globalSelection, store.channelOptions, store.source, store.viewState],
+    const [globalSelection, channelOptions, source, viewState, pyramidResolution] = useViewerStore(
+        store => [store.globalSelection, store.channelOptions, store.source, store.viewState, store.pyramidResolution],
         shallow
     );
+
     const [colorSpace, setColorSpace] = useState(colorOptions[0].value);
     useEffect(() => {
         if (!colorSpace) return;
@@ -70,6 +71,8 @@ function IndividualChannelsWrapper() {
         // Only return a slider if there is a "stack."
         return size > 1 ? (<GlobalSelectionSlider key={label} size={size} label={label}/>) : null;
     });
+
+
 
 
     const [anchorEl, setAnchorEl] = useState(null);

@@ -14,7 +14,6 @@ export const ContextWrapper = (props) => {
         const [colorExcluded, setColorExcluded] = useState([]);
         const [showOptimizedColor, setShowOptimizedColor] = useState(false);
         const [pastPalettes, setPastPalettes] = useState([]);
-        const [viewState, setViewState] = useState({});
         const [optimizationScope, setOptimizationScope] = useState('global');
 
         const rgb2hex = (rgb) => {
@@ -41,7 +40,6 @@ export const ContextWrapper = (props) => {
                 value={{
                     rgb2hex, hex2rgb,
                     isLoading, setIsLoading,
-                    viewState, setViewState,
                     lockedChannelColors, setLockedChannelColors,
                     channelColorNames, setChannelColorNames,
                     colorExcluded, setColorExcluded,
