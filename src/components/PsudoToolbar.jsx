@@ -176,9 +176,7 @@ function PsudoToolbar() {
               justifyContent="flex-end"
               alignItems="center" p={1}>
             <Grid item xs={'auto'} id={'built-with'}>
-                    <span>Built With&nbsp;<a className={'color-gradient'}
-                                             href={'http://vitessce.io/'}>Vitessce</a>&nbsp;and
-                        <a className={'color-gradient'} href={'http://viv.gehlenborglab.org/'}>&nbsp;Viv</a></span>
+                    <span>Built With<a className={'color-gradient'} href={'http://viv.gehlenborglab.org/'}>&nbsp;Viv</a></span>
             </Grid>
         </Grid>
         <Grid container sx={{top: 0, right: 0, position: 'absolute'}} direction="row"

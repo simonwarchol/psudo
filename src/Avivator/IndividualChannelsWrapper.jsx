@@ -24,15 +24,9 @@ import ColorNameSelect from "../components/ColorNameSelect.jsx";
 import {GLOBAL_SLIDER_DIMENSION_FIELDS} from "./constants.js";
 import GlobalSelectionSlider from "./components/Controller/components/GlobalSelectionSlider.jsx";
 import ChannelList from "../components/ChannelList.jsx";
+import LayersIcon from '@mui/icons-material/Layers';
+import * as wasm from "psudo-analysis";
 
-function DeleteIcon() {
-    return null;
-}
-
-
-function LayersIcon() {
-    return null;
-}
 
 // import lodash
 function IndividualChannelsWrapper() {
@@ -121,10 +115,36 @@ function IndividualChannelsWrapper() {
     }
 
     const optimize = async () => {
-        console.log('selections', selections);
-        console.log('channelsVisible', channelsVisible);
-        console.log('colors', contrastLimits);
+        const channelsPayload = []
+        channelsVisible.forEach((d, i) => {
+            if (d) {
+                const channelPayload = {
+                    color: colors[i],
+                    contrastLimits: contrastLimits[i],
+                    selection: selections[i]
+                }
+                channelsPayload.push(channelPayload)
+            }
+        })
+        const uint16Colors = new Uint16Array(channelsVisible.length * 3)
+        const uint16ContrastLimits = new Uint16Array(channelsVisible.length * 2);
+        const uint16Width = new Uint16Array(1);
+        const uint16Height = new Uint16Array(1);
+        const uint16ChannelRaster = await (Promise.all(channelsPayload.map(async (d, i) => {
+            uint16Colors[i * 3] = d.color[0]
+            uint16Colors[i * 3 + 1] = d.color[1]
+            uint16Colors[i * 3 + 2] = d.color[2]
+            uint16ContrastLimits[i * 2] = d.contrastLimits[0]
+            uint16ContrastLimits[i * 2 + 1] = d.contrastLimits[1];
+            const raster = await loader?.[pyramidResolution]?.getRaster({selection: d.selection})
+            uint16Width[0] = raster.width;
+            uint16Height[0] = raster.height;
+            return raster.data
+        })))
+        wasm.greet()
+        console.log('uint16Colors', uint16Colors, uint16ContrastLimits, uint16ChannelRaster)
     }
+
 
     const getNewPalette = async () => {
         context?.setIsLoading(true)

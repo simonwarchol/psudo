@@ -46,6 +46,7 @@
     "glsl-transpiler": "github:simonwarchol/glsl-transpiler",
     "glslify": "^7.1.1",
     "lodash": "^4.17.21",
+    "psudo-analysis": "file:./lib/pkg",
     "react": "^17.0.2",
     "react-animated-text-content": "^1.0.1",
     "react-color": "^2.19.3",
