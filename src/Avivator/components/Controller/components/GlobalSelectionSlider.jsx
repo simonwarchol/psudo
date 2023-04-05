@@ -65,16 +65,7 @@ export default function GlobalSelectionSlider(props) {
         [loader, selections]
     );
 
-    useEffect(() => {
-        const getScales = async () => {
-            if (!source) return;
-            const scaleRes = await fetch(source?.urlOrFile.replace(/ome\.tif(f?)/gi, 'scale.json'));
-            const isScaleNot200 = scaleRes.status !== 200;
-            const scale = !isScaleNot200 ? await scaleRes.json() : undefined;
-            setScale(scale);
-        }
-        getScales();
-    }, [source])
+  
 
     const displayValueFunction = (v) => {
         if (scale && scale?.shift && scale?.scale) {

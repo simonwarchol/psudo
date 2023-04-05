@@ -73,8 +73,6 @@ function IndividualChannelsWrapper() {
     });
 
 
-
-
     const [anchorEl, setAnchorEl] = useState(null);
     const openEl = Boolean(anchorEl);
     const handleElClick = (event) => {
@@ -120,6 +118,12 @@ function IndividualChannelsWrapper() {
 
     const handleChangeOptimizationScope = (event) => {
         context.setOptimizationScope(event.target.value);
+    }
+
+    const optimize = async () => {
+        console.log('selections', selections);
+        console.log('channelsVisible', channelsVisible);
+        console.log('colors', contrastLimits);
     }
 
     const getNewPalette = async () => {
@@ -255,7 +259,7 @@ function IndividualChannelsWrapper() {
                             </FormControl>
                         </Grid>
                         <Grid item xs={6} p={1}>
-                            <Button variant="contained" onClick={getNewPalette}
+                            <Button variant="contained" onClick={optimize}
                             >Optimize Palette</Button>
                         </Grid>
                     </Grid>

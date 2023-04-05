@@ -61,16 +61,16 @@ function ChannelColorDisplay(props) {
         removeIsChannelLoading(channelIndex);
     };
 
-    useEffect(() => {
-        const getRaster = async () => {
-            return await loader?.[0].getRaster({selection: {c: 0, t: 0, z: 0}})
-        }
-        getRaster().then(raster => {
-            console.log('use effect', raster, loader)
-            console.log('selections', selections)
-        });
-
-    }, [loader, selections])
+    // useEffect(() => {
+    //     const getRaster = async () => {
+    //         return await loader?.[0].getRaster({selection: {c: 0, t: 0, z: 0}})
+    //     }
+    //     getRaster().then(raster => {
+    //         console.log('use effect', raster, loader)
+    //         console.log('selections', selections)
+    //     });
+    //
+    // }, [loader, selections])
 
 
     useEffect(() => {
@@ -81,16 +81,6 @@ function ChannelColorDisplay(props) {
         }
     }, [colors]);
 
-    useEffect(() => {
-        const getScales = async () => {
-            if (!source) return;
-            const scaleRes = await fetch(source?.urlOrFile.replace(/ome\.tif(f?)/gi, 'scale.json'));
-            const isScaleNot200 = scaleRes.status !== 200;
-            const scale = !isScaleNot200 ? await scaleRes.json() : undefined;
-            setScale(scale);
-        }
-        getScales();
-    }, [source])
 
     const toggleVisibility = () => {
         let _tmpChannelsVisible = _.cloneDeep(channelsVisible);
