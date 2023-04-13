@@ -25,7 +25,8 @@ import {GLOBAL_SLIDER_DIMENSION_FIELDS} from "./constants.js";
 import GlobalSelectionSlider from "./components/Controller/components/GlobalSelectionSlider.jsx";
 import ChannelList from "../components/ChannelList.jsx";
 import LayersIcon from '@mui/icons-material/Layers';
-import * as wasm from "psudo-analysis";
+import * as psudoAnalysis from "psudo-analysis";
+import fs from "fs";
 
 
 // import lodash
@@ -141,8 +142,17 @@ function IndividualChannelsWrapper() {
             uint16Height[0] = raster.height;
             return raster.data
         })))
-        wasm.greet()
-        console.log('uint16Colors', uint16Colors, uint16ContrastLimits, uint16ChannelRaster)
+        // const test = psudoAnalysis.apply_ramp_function(uint16ChannelRaster[0], uint16ContrastLimits.slice(0, 2))
+        // const test2 = psudoAnalysis.color_to_oklab(uint16Colors.slice(0, 3))
+        // Declare f32 array with 1.0 and 2.0
+
+        // let float32Colors = new Float32Array(uint16Colors.length);
+
+        const test = psudoAnalysis.color_test(new Float32Array([0.5, 0.2]));
+        console.log('test2', test)
+        // console.log('test', JSON.stringify({'arr': Array.from(test)}))
+        // console.log('Adding one', psudoAnalysis.add_one(444))
+        // console.log('uint16Colors', uint16Colors, uint16ContrastLimits, uint16ChannelRaster)
     }
 
 
