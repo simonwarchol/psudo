@@ -26,8 +26,6 @@ import GlobalSelectionSlider from "./components/Controller/components/GlobalSele
 import ChannelList from "../components/ChannelList.jsx";
 import LayersIcon from '@mui/icons-material/Layers';
 import * as psudoAnalysis from "psudo-analysis";
-import fs from "fs";
-
 
 // import lodash
 function IndividualChannelsWrapper() {
@@ -131,28 +129,41 @@ function IndividualChannelsWrapper() {
         const uint16ContrastLimits = new Uint16Array(channelsVisible.length * 2);
         const uint16Width = new Uint16Array(1);
         const uint16Height = new Uint16Array(1);
-        const uint16ChannelRaster = await (Promise.all(channelsPayload.map(async (d, i) => {
-            uint16Colors[i * 3] = d.color[0]
-            uint16Colors[i * 3 + 1] = d.color[1]
-            uint16Colors[i * 3 + 2] = d.color[2]
-            uint16ContrastLimits[i * 2] = d.contrastLimits[0]
-            uint16ContrastLimits[i * 2 + 1] = d.contrastLimits[1];
-            const raster = await loader?.[pyramidResolution]?.getRaster({selection: d.selection})
-            uint16Width[0] = raster.width;
-            uint16Height[0] = raster.height;
-            return raster.data
+        let intensityList = new Float32Array([]);
+        let colorList = new Uint16Array([]);
+        await (Promise.all(channelsPayload.map(async (d, i) => {
+            const raster = await loader?.[pyramidResolution]?.getRaster({selection: d.selection});
+            const rampedData = psudoAnalysis.apply_ramp_function(raster.data, d.contrastLimits);
+            intensityList = new Float32Array([...intensityList, ...rampedData])
+            colorList = new Uint16Array([...colorList, ...d.color]);
         })))
-        // const test = psudoAnalysis.apply_ramp_function(uint16ChannelRaster[0], uint16ContrastLimits.slice(0, 2))
-        // const test2 = psudoAnalysis.color_to_oklab(uint16Colors.slice(0, 3))
-        // Declare f32 array with 1.0 and 2.0
 
-        // let float32Colors = new Float32Array(uint16Colors.length);
+        console.log('rampedIntensities', intensityList)
+        console.log('colors', colorList)
+        let startTime = performance.now();
+        const test = psudoAnalysis.optimize_palette(intensityList, colorList);
+        console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`, test)
+        console.log('test', JSON.stringify({
+            'intensityList': Array.from(intensityList),
+            'colorList': Array.from(colorList)
+        }))
 
-        const test = psudoAnalysis.color_test(new Float32Array([0.5, 0.2]));
-        console.log('test2', test)
-        // console.log('test', JSON.stringify({'arr': Array.from(test)}))
-        // console.log('Adding one', psudoAnalysis.add_one(444))
-        // console.log('uint16Colors', uint16Colors, uint16ContrastLimits, uint16ChannelRaster)
+        psudoAnalysis.get_from_js().then(result => {
+            console.log('TESULT', result);
+        });/**/
+
+        //
+        //
+        // _.range(10).map(() => {
+        //
+        //         const test = psudoAnalysis.color_test(new Float32Array([0.5, 0.2]));
+        //         console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
+        //     }
+        // )
+        //
+        // // console.log('test', JSON.stringify({'arr': Array.from(test)}))
+        // // console.log('Adding one', psudoAnalysis.add_one(444))
+        // // console.log('uint16Colors', uint16Colors, uint16ContrastLimits, uint16ChannelRaster)
     }
 
 
