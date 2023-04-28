@@ -125,10 +125,7 @@ function IndividualChannelsWrapper() {
                 channelsPayload.push(channelPayload)
             }
         })
-        const uint16Colors = new Uint16Array(channelsVisible.length * 3)
-        const uint16ContrastLimits = new Uint16Array(channelsVisible.length * 2);
-        const uint16Width = new Uint16Array(1);
-        const uint16Height = new Uint16Array(1);
+
         let intensityList = new Float32Array([]);
         let colorList = new Uint16Array([]);
         await (Promise.all(channelsPayload.map(async (d, i) => {
@@ -138,19 +135,48 @@ function IndividualChannelsWrapper() {
             colorList = new Uint16Array([...colorList, ...d.color]);
         })))
 
-        console.log('rampedIntensities', intensityList)
-        console.log('colors', colorList)
-        let startTime = performance.now();
-        const test = psudoAnalysis.optimize_palette(intensityList, colorList);
-        console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`, test)
-        console.log('test', JSON.stringify({
-            'intensityList': Array.from(intensityList),
-            'colorList': Array.from(colorList)
-        }))
 
-        psudoAnalysis.get_from_js().then(result => {
-            console.log('TESULT', result);
+        // Length of each channel's intensity list.
+        const channelLength = intensityList.length / channelsPayload.length;
+
+        console.log('intensityList', channelLength, intensityList);
+
+        // New intensityList
+        const newIntensityList = new Float32Array(intensityList.length);
+        console.time("Code execution time");
+
+        // Iterate for channelLength
+        _.range(channelLength).map(i => {
+            _.range(channelsPayload.length).map(j => {
+                newIntensityList[i * channelsPayload.length + j] = intensityList[i + j * channelLength]
+            })
+        })
+
+        console.timeEnd("Code execution time");
+
+
+        console.log('newIntensityList', JSON.stringify(Array.from(newIntensityList)))
+
+
+        // convert Uint16Array to Float32 Array, where each value is /255
+        const colorListFloat = new Float32Array(colorList.length);
+        colorList.forEach((d, i) => {
+            colorListFloat[i] = d / 255;
+        })
+        console.log('colors', colorList, colorListFloat)
+        // const test = psudoAnalysis.optimize_palette(intensityList, colorList);
+        // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`, test)
+        // console.log('test', JSON.stringify({
+        //     'intensityList': Array.from(intensityList),
+        //     'colorList': Array.from(colorList)
+        // }))
+        //
+        let startTime = performance.now();
+
+        psudoAnalysis.mix_and_color(newIntensityList, colorListFloat).then(result => {
+            console.log('TESULT', JSON.stringify(Array.from(result)));
         });/**/
+        // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
 
         //
         //

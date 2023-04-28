@@ -1,4 +1,4 @@
-// shader.wgsl
+// srgb_ciexyz.wgsl
 
 struct Floats {
     data: array<f32>
@@ -24,6 +24,7 @@ fn linear_to_xyz(color: vec3<f32>) -> vec3<f32> {
 
     return vec3<f32>(X, Y, Z);
 }
+
 
 @compute
 @workgroup_size(1, 1, 1)

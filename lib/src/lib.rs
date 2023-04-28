@@ -4,17 +4,16 @@ use std::convert::TryInto;
 use std::future::Future;
 
 use bytemuck::{Pod, Zeroable};
+use js_sys;
+use js_sys::Promise;
 use kolor::{Color, spaces};
 // use rust_c3::C3;
 // use kolor::Rgb;
 use ndarray::{Array1, Array2, Axis};
 use wasm_bindgen::prelude::*;
-use web_sys::console;
-
-use js_sys;
-use js_sys::Promise;
 use wasm_bindgen_futures;
 use wasm_bindgen_futures::JsFuture;
+use web_sys::console;
 
 mod utils;
 
@@ -41,10 +40,16 @@ extern {
 //     console::log_1(&"Hello from Rust!".into());
 //     result.to_vec()
 // }
+//
+#[wasm_bindgen]
+pub async fn get_from_js(intensities: &[f32]) -> Result<JsValue, JsValue> {
+    let result_slice = compute::run_compute_shader(include_str!("compute/srgb_ciexyz.wgsl"), intensities.to_vec()).await;
+    Ok(serde_wasm_bindgen::to_value(&result_slice)?)
+}
 
 #[wasm_bindgen]
-pub async fn get_from_js() -> Result<JsValue, JsValue> {
-    let result_slice = compute::wgpu_stuff_v2("shader").await;
+pub async fn mix_and_color(intensities: &[f32], colors: &[f32]) -> Result<JsValue, JsValue> {
+    let result_slice = compute::mix_and_color(include_str!("compute/mix_and_color.wgsl"), intensities.to_vec(), colors.to_vec()).await;
     Ok(serde_wasm_bindgen::to_value(&result_slice)?)
 }
 
