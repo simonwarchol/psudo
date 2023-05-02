@@ -2,7 +2,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::future::Future;
-
 use bytemuck::{Pod, Zeroable};
 use js_sys;
 use js_sys::Promise;
@@ -10,9 +9,11 @@ use kolor::{Color, spaces};
 // use rust_c3::C3;
 // use kolor::Rgb;
 use ndarray::{Array1, Array2, Axis};
+use rayon::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures;
 use wasm_bindgen_futures::JsFuture;
+
 use web_sys::console;
 
 mod utils;
@@ -41,11 +42,6 @@ extern {
 //     result.to_vec()
 // }
 //
-#[wasm_bindgen]
-pub async fn get_from_js(intensities: &[f32]) -> Result<JsValue, JsValue> {
-    let result_slice = compute::run_compute_shader(include_str!("compute/srgb_ciexyz.wgsl"), intensities.to_vec()).await;
-    Ok(serde_wasm_bindgen::to_value(&result_slice)?)
-}
 
 #[wasm_bindgen]
 pub async fn mix_and_color(intensities: &[f32], colors: &[f32]) -> Result<JsValue, JsValue> {
@@ -53,12 +49,34 @@ pub async fn mix_and_color(intensities: &[f32], colors: &[f32]) -> Result<JsValu
     Ok(serde_wasm_bindgen::to_value(&result_slice)?)
 }
 
-// #[wasm_bindgen]
-// pub async fn get_from_test() -> Result<JsValue, JsValue> {
-//     let result_slice = test_compute::run().await;
-//     let result_slice_str = result_slice.iter().map(|x| x.to_string()).collect::<Vec<String>>();
-//     Ok(serde_wasm_bindgen::to_value(&result_slice)?)
-// }
+#[wasm_bindgen]
+pub async fn optimize_palette(intensities: &[f32]) -> Result<JsValue, JsValue> {
+    let result_vec= compute::optimize(intensities.to_vec());
+    Ok(serde_wasm_bindgen::to_value(&result_vec.unwrap())?)
+}
+
+
+#[wasm_bindgen]
+pub async fn saturated_penalty(intensities: &[f32], colors: &[f32]) -> Result<JsValue, JsValue> {
+    let result_slice = compute::saturated_pixel_penalty(include_str!("compute/saturated.wgsl"), intensities.to_vec(), colors.to_vec()).await;
+    let saturated_sum: Vec<f32> = vec![result_slice.par_iter().sum()];
+    Ok(serde_wasm_bindgen::to_value(&saturated_sum)?)
+}
+
+#[wasm_bindgen]
+pub async fn test() -> Result<JsValue, JsValue> {
+    let result_slice_future = async {compute::test()};
+    let result_slice = result_slice_future.await;
+    Ok(serde_wasm_bindgen::to_value(&result_slice)?)
+}
+
+
+#[wasm_bindgen]
+pub async fn diff_penalty(intensities: &[f32], colors: &[f32]) -> Result<JsValue, JsValue> {
+    let result_slice = compute::diff_penalty(include_str!("compute/diff.wgsl"), &intensities.to_vec(), colors.to_vec()).await;
+    let diff_sum: Vec<f32> = vec![result_slice.par_iter().sum()];
+    Ok(serde_wasm_bindgen::to_value(&diff_sum)?)
+}
 
 
 #[wasm_bindgen]
@@ -156,17 +174,6 @@ fn oklab_to_xyz_helper(color: &[f32]) -> Vec<f32> {
 
 
 #[wasm_bindgen]
-pub fn optimize_palette(intensities: &[f32], rgb_colors: &[u16]) -> f32 {
-    // Sum of rgb_colors
-    let mut sum = 0.0;
-    for i in rgb_colors {
-        sum += *i as f32;
-    }
-    sum
-}
-
-
-#[wasm_bindgen]
 pub fn color_test(color: f32) -> String {
     console::log_1(&"Hello from Rust!".into());
     let c3_instance = c3::C3::new();
@@ -180,3 +187,6 @@ pub fn color_test(color: f32) -> String {
     let json = serde_json::to_string(&analyzed_palette).unwrap();
     json
 }
+
+
+

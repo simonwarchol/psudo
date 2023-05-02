@@ -9,8 +9,8 @@ struct Lengths {
 };
 
 
-struct Output {
-    data: array<vec4<f32>>
+struct Sum {
+     data: array<f32>
 };
 
 const SRGB_ALPHA: f32 = 0.055;
@@ -18,6 +18,7 @@ const SRGB_ALPHA: f32 = 0.055;
 fn srgb_to_lrgb(color: vec3<f32>) -> vec3<f32> {
   // sRGB to linear RGB conversion formula
   let inv_gamma: f32 = 2.4;
+  let linear_color = mix(pow((color + SRGB_ALPHA) / (1.0 + SRGB_ALPHA), vec3<f32>(inv_gamma)), color / 12.92, step(color, vec3<f32>(0.04045)));
   return linear_color;
 }
 
@@ -105,6 +106,12 @@ fn oklab_to_xyz(lab: vec3<f32>) -> vec3<f32> {
     );
 }
 
+fn distance_to_nearest_point_on_cube(coordinates: vec3<f32>) -> f32 {
+    let closest_coordinates = clamp(coordinates, vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(1.0, 1.0, 1.0));
+    let squared_distances = (coordinates - closest_coordinates) * (coordinates - closest_coordinates);
+    return sqrt(dot(squared_distances, vec3<f32>(1.0, 1.0, 1.0)));
+}
+
 @group(0)
 @binding(0)
 var<storage, read> intensities: Input;
@@ -117,14 +124,17 @@ var<storage, read> lengths: Lengths;
 
 @group(0)
 @binding(2)
-var<storage, read_write> output: Output;
+var<storage, read_write> sum: Sum;
 
 @compute
 @workgroup_size(256, 1, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let index = global_id.x;
-    var pixel_color: vec3<f32> = vec3<f32>(0.0,0.0,0.0);
-    for (var i : u32 = 0u; i < lengths.colors_length / 3u; i = i + 1u) {
+    var pixel_color: vec4<f32> = vec4<f32>(0.0,0.0,0.0,0.0);
+//    Create an array of vec4<f32> colors of length lengths.colors_length / 3u
+    let num_colors = lengths.colors_length / 3u;
+    var colors: array<vec3<f32>, 10> = array<vec3<f32>, 10>();
+    for (var i : u32 = 0u; i < num_colors; i = i + 1u) {
 
         let color: vec4<f32> = vec4<f32>(lengths.colors[i * 3u], lengths.colors[i * 3u + 1u], lengths.colors[i * 3u + 2u], 0.0);
         let intensity = intensities.data[index * (lengths.colors_length / 3u) + i];
@@ -134,8 +144,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let color_oklab = xyz_to_oklab(color_xyz);
         let color_scaled_by_intensity = vec3<f32>(color_oklab.x * intensity, color_oklab.y * intensity, color_oklab.z * intensity);
         let back_to_xyz = oklab_to_xyz(color_scaled_by_intensity);
-        pixel_color = vec3<f32>(pixel_color[0] + back_to_xyz[0], pixel_color[1] + back_to_xyz[1], pixel_color[2] + back_to_xyz[2]);
+        colors[i] = back_to_xyz;
+//        pixel_color = vec4<f32>(pixel_color[0] + back_to_xyz[0], pixel_color[1] + back_to_xyz[1], pixel_color[2] + back_to_xyz[2], 1.0f);
     }
-    let srgb_result = vec3<f32>(lrgb_to_srgb(xyz_to_lrgb(pixel_color)));
-    output.data[index] = vec4<f32>(srgb_result.x, srgb_result.y, srgb_result.z, 1.0);
+    var combined_dist: f32 = 0.0;
+
+    for (var i : u32 = 0u; i < num_colors; i = i + 1u) {
+        var channel_color = vec3<f32>(0.0,0.0,0.0);
+        var combined_color = vec3<f32>(0.0,0.0,0.0);
+        for (var j : u32 = 0u; j < num_colors; j = j + 1u) {
+                if (i != j) {
+                    combined_color = vec3<f32>(colors[j][0] + combined_color[0], colors[j][1] + combined_color[1], colors[j][2] + combined_color[2]);
+                } else{
+                    channel_color = colors[j];
+                }
+            }
+        combined_color = xyz_to_oklab(combined_color);
+        channel_color = xyz_to_oklab(channel_color);
+        combined_dist = combined_dist + distance(combined_color, channel_color) + distance(channel_color, vec3<f32>(0.0,0.0,0.0)) ;
     }
+    sum.data[index] = combined_dist;
+}

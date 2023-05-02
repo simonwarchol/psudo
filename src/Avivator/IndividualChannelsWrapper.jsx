@@ -26,6 +26,7 @@ import GlobalSelectionSlider from "./components/Controller/components/GlobalSele
 import ChannelList from "../components/ChannelList.jsx";
 import LayersIcon from '@mui/icons-material/Layers';
 import * as psudoAnalysis from "psudo-analysis";
+import {saturated_penalty} from "psudo-analysis";
 
 // import lodash
 function IndividualChannelsWrapper() {
@@ -171,14 +172,21 @@ function IndividualChannelsWrapper() {
         //     'colorList': Array.from(colorList)
         // }))
         //
-        let startTime = performance.now();
-
-        psudoAnalysis.mix_and_color(newIntensityList, colorListFloat).then(result => {
+        //
+        // psudoAnalysis.optimize_palette(newIntensityList).then(result => {
+        //     console.log('TESULT', JSON.stringify(Array.from(result)));
+        // });/**/
+        psudoAnalysis.test().then(result => {
             console.log('TESULT', JSON.stringify(Array.from(result)));
         });/**/
-        // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
+        let startTime = performance.now();
 
+        // let tes = psudoAnalysis.optimize_palette(newIntensityList);
+        // console.log(tes);
+        // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
+        // // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
         //
+        // //
         //
         // _.range(10).map(() => {
         //
