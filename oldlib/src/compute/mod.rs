@@ -1,6 +1,9 @@
 use std::borrow::Cow;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
+use anyhow::{bail, Context, Result};
 use argmin::core::{CostFunction, Error, Executor, Operator, OptimizationResult, State};
 use argmin::solver::simulatedannealing::{Anneal, SATempFunc};
 use argmin::solver::simulatedannealing::SimulatedAnnealing;
@@ -10,8 +13,11 @@ use futures_intrusive;
 use rand::distributions::Uniform;
 use rand::prelude::*;
 use rand::Rng;
+use rand_xoshiro::rand_core::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use rayon::prelude::*;
+use simulated_annealing::{APF, Bounds, NeighbourMethod, Point, SA, Schedule, Status};
+use wasm_bindgen_futures::spawn_local;
 use web_sys::console;
 use wgpu::{
     Backends, BindGroup,
@@ -370,17 +376,6 @@ pub async fn diff_penalty(shader: &str, input_data: &Vec<f32>, color_vec: Vec<f3
                             map_buffer, output_length).await
 }
 
-pub fn test() -> Vec<f32> {
-    let init_param = vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
-    let intensities = vec![1.0, 2.0, 3.0];
-    // let mut runtime = Runtime::new().unwrap();
-    // let return_val = runtime.block_on(diff_penalty(include_str!("diff.wgsl"), &intensities, init_param.clone()));
-
-    //
-    //
-
-    vec![1.0, 2.0, 3.0]
-}
 
 struct Loss {
     rng: Arc<Mutex<Xoshiro256PlusPlus>>,
@@ -455,29 +450,33 @@ pub fn optimize(intensities: Vec<f32>) -> Result<(), Error> {
 
     let initial_temp = 100.0;
     let max_iter = 1000;
-    let init_param = vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
-    let intensities = vec![1.0, 2.0, 3.0];
+
     //
-    let future_result = diff_penalty(include_str!("diff.wgsl"), &intensities, init_param.clone());
     // Console log
-    let result: Vec<f32> = futures::executor::block_on(future_result);
-    console::log_1(&"Hello from Rust!".into());
+    spawn_local(async move {
+        let init_param = vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        let intensities = vec![1.0, 2.0, 3.0];
+        let future_result = diff_penalty(include_str!("diff.wgsl"), &intensities, init_param.clone());
+        let result = future_result.await;
+        // console log "Hello, world!"
+        console::log_1(&"Spawn".into());
+    });
+    console::log_1(&"Prawn".into());
 
-
-    let solver = SimulatedAnnealing::new(initial_temp)?;
-    // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
-    let res = Executor::new(cost_function, solver)
-        .configure(|state| {
-            state
-                .param(init_param)
-                .max_iters(max_iter)
-        })
-        // Optional: Attach an observer
-        .run()?;
-    // Print result
-    println!("{res}");
-    let best_param = res.state().get_best_param().unwrap();
-    println!("Best parameter: {:?}", *best_param);
+    // let solver = SimulatedAnnealing::new(initial_temp)?;
+    // // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
+    // let res = Executor::new(cost_function, solver)
+    //     .configure(|state| {
+    //         state
+    //             .param(init_param)
+    //             .max_iters(max_iter)
+    //     })
+    //     // Optional: Attach an observer
+    //     .run()?;
+    // // Print result
+    // println!("{res}");
+    // let best_param = res.state().get_best_param().unwrap();
+    // println!("Best parameter: {:?}", *best_param);
     Ok(())
 }
 

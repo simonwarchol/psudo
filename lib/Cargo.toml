@@ -1,5 +1,5 @@
 [package]
-name = "psudo-analysis"
+name = "lib"
 version = "0.1.0"
 authors = ["Simon Warchol <simonwarchol@g.harvard.edu>"]
 edition = "2018"
@@ -11,47 +11,29 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
-wasm-bindgen = "0.2.63"
+wasm-bindgen = "0.2.84"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
 # all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
 # code size when deploying.
-console_error_panic_hook = { version = "0.1.6", optional = true }
-
-# `wee_alloc` is a tiny allocator for wasm that is only ~1K in code size
-# compared to the default allocator's ~10K. It is slower than the default
-# allocator, however.
-wee_alloc = { version = "0.4.5", optional = true }
-kolor = "0.1.8"
-linfa-nn = "0.6.1"
+console_error_panic_hook = { version = "0.1.7", optional = true }
 ndarray = "0.15.6"
-kd-tree = "0.5.1"
-typenum = "1.16.0"
-serde_json = "1.0.95"
-serde = { version = "1.0", features = ["derive"] }
-serde-wasm-bindgen = "0.4"
-getrandom = { version = "0.2", features = ["js"] }
-web-sys = { version = "0.3.61", features = ["console"] }
-ndarray-npy = "0.8.1"
-rust_c3 = "0.1.5"
-wgpu = "0.16.0"
-bytemuck = "1.13.1"
-futures-intrusive = "0.5.0"
-js-sys = "0.3.61"
-wasm-bindgen-futures = "0.4.34"
-pollster = "0.3.0"
-rayon = "1.7.0"
-rand_xoshiro = "0.6.0"
-argmin = { version = "0.8.1", features = ["wasm-bindgen"] }
-rand = "0.8.5"
-anyhow = "1.0.71"
-futures = "0.3.28"
+rayon = "1.8.0"
+linfa = "0.6.1"
+linfa-clustering = "0.6.1"
+statrs = "0.16.0"
+imp = "0.1.0"
+js-sys = "0.3.64"
 
+getrandom = { version = "0.2", features = ["js"] }
+web-sys = { version = "0.3.64", features = ["console"]}
+ndarray-stats = "0.5.1"
+rand = "0.8.5"
 
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3.13"
+wasm-bindgen-test = "0.3.34"
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.

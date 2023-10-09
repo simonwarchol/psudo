@@ -85,7 +85,6 @@ const Viewer = (props) => {
                 viewState: viewState,
                 pyramidResolution: Math.min(Math.max(Math.round(-viewState?.zoom), 0), loader.length - 1)
             })
-            console.log('Viewer useEffect')
 
         }, [loader, height, width])
 

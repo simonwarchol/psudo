@@ -68,6 +68,7 @@ export const useImage = (source, history) => {
                 });
             }
         }
+        console.log('source: ', source)
 
         if (source) changeLoader();
     }, [source, history]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -171,7 +172,6 @@ export const useDropzone = () => {
                 description: 'data.zarr'
             };
         }
-        console.log('STATE', {source: newSource})
         useViewerStore.setState({source: newSource});
     };
     return useReactDropzone({
