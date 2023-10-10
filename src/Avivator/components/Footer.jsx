@@ -38,7 +38,8 @@ export default function Footer() {
             style={{
                 position: 'fixed',
                 marginTop: 'calc(5% + 60px)',
-                bottom: 0
+                bottom: 0,
+                left: '50px'
             }}
         >
             <Paper className={classes.paper}>

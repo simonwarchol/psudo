@@ -8,6 +8,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ColorNameSelect from "./ColorNameSelect.jsx";
 import LockIcon from "@mui/icons-material/Lock";
+import Typography from "@mui/material/Typography";
 import {
   useChannelsStore,
   useLoader,
@@ -93,12 +94,8 @@ function ChannelColorDisplay(props) {
   const loader = useLoader();
 
   const rgbColor = `rgb(${colors?.[channelIndex]})`;
-  let ind = 0;
-  for (let i = 0; i < channelIndex; i++) {
-    if (channelsVisible[i]) {
-      ind++;
-    }
-  }
+  let ind = channelIndex;
+ 
 
   const [min, max] = domains[ind];
   // If the min/max range is and the dtype is float, make the step size smaller so contrastLimits are smoother.
@@ -133,12 +130,36 @@ function ChannelColorDisplay(props) {
     }
   }, [colors]);
 
+
+
   const toggleVisibility = () => {
     let _tmpChannelsVisible = _.cloneDeep(channelsVisible);
     _tmpChannelsVisible[channelIndex] = !_tmpChannelsVisible[channelIndex];
     useChannelsStore.setState({
       channelsVisible: _tmpChannelsVisible,
     });
+  };
+
+  const MAX_RETRIES = 3;
+
+  const runChannelGMM = (raster, attempt = 1) => {
+    if (attempt > MAX_RETRIES) {
+      console.error("Failed to run channel_gmm after", MAX_RETRIES, "attempts");
+      return;
+    }
+
+    console.log("raster", raster);
+    try {
+      const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
+      const intContrastLimits = [
+        _.toInteger(conrastLimits[0]),
+        _.toInteger(conrastLimits[1]),
+      ];
+      setPropertiesForChannel(ind, { contrastLimits: intContrastLimits });
+    } catch (error) {
+      console.error("channel_gmm failed on attempt", attempt, ":", error);
+      runChannelGMM(raster, attempt + 1);
+    }
   };
 
   const calculateContrastLimits = () => {
@@ -149,15 +170,10 @@ function ChannelColorDisplay(props) {
         selection: selections[channelIndex],
       })
       .then((raster) => {
-        console.log("raster", raster);
-        const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
-        const intContrastLimits = [
-          _.toInteger(conrastLimits[0]),
-          _.toInteger(conrastLimits[1]),
-        ];
-
-        console.log("contrast limits", intContrastLimits, raster.data);
-        setPropertiesForChannel(ind, { contrastLimits: intContrastLimits });
+        runChannelGMM(raster);
+      })
+      .catch((error) => {
+        console.error("Error getting raster:", error);
       })
       .finally(() => {
         context?.setIsLoading(false);
@@ -233,7 +249,6 @@ function ChannelColorDisplay(props) {
               value={channelOptions[selections[ind].c]}
               onChange={onSelectionChange}
               variant="standard"
-              className={"simon"}
             >
               {channelOptions.map((opt) => (
                 <option key={opt} value={opt}>
@@ -247,69 +262,55 @@ function ChannelColorDisplay(props) {
                 {!channelsVisible?.[channelIndex] && <VisibilityOffIcon />}
               </IconButton>
             </Grid>
-            {channelsVisible?.[channelIndex] && (
-              <Grid item xs={1} sx={{ paddingTop: "20px" }}>
-                <IconButton color="primary" onClick={toggleLock}>
-                  {colorLocked && <LockIcon />}
-                  {!colorLocked && <LockOpenIcon />}
-                </IconButton>
-              </Grid>
-            )}
-            {channelsVisible?.[channelIndex] && (
-              <Grid
-                item
-                xs={4}
-                sx={{ paddingLeft: "15px", paddingTop: "20px" }}
+            <Grid item xs={1} sx={{ paddingTop: "20px" }}>
+              <IconButton color="primary" onClick={toggleLock}>
+                {colorLocked && <LockIcon />}
+                {!colorLocked && <LockOpenIcon />}
+              </IconButton>
+            </Grid>
+            <Grid item xs={4} sx={{ paddingLeft: "15px", paddingTop: "20px" }}>
+              <ColorNameSelect
+                label={"Color Name"}
+                channelIndex={channelIndex}
+                multiSelect={false}
+              />
+            </Grid>
+            <Grid item xs={2} sx={{ paddingLeft: "10px", paddingTop: "25px" }}>
+              <Button
+                aria-controls={openEl ? "basic-menu" : undefined}
+                aria-haspopup="true"
+                aria-expanded={openEl ? "true" : undefined}
+                onClick={handleElClick}
+                sx={{
+                  maxWidth: "35px",
+                  maxHeight: "35px",
+                  minWidth: "35px",
+                  minHeight: "35px",
+                  border: "1px solid black",
+                  background: colorArrayToRGB(colors[channelIndex]),
+                  ":hover": {
+                    bgcolor: colorArrayToRGB(colors[channelIndex]),
+                    color: colorArrayToRGB(colors[channelIndex]),
+                  },
+                }}
+              ></Button>
+              <Menu
+                id="basic-menu"
+                anchorEl={anchorEl}
+                open={openEl}
+                onClose={handleCloseEl}
+                MenuListProps={{
+                  "aria-labelledby": "basic-button",
+                }}
               >
-                <ColorNameSelect
-                  label={"Color Name"}
-                  channelIndex={channelIndex}
-                  multiSelect={false}
+                <ChromePicker
+                  disableAlpha={true}
+                  color={pickerColor}
+                  onChange={handleChange}
                 />
-              </Grid>
-            )}
-            {channelsVisible?.[channelIndex] && (
-              <Grid
-                item
-                xs={2}
-                sx={{ paddingLeft: "10px", paddingTop: "25px" }}
-              >
-                <Button
-                  aria-controls={openEl ? "basic-menu" : undefined}
-                  aria-haspopup="true"
-                  aria-expanded={openEl ? "true" : undefined}
-                  onClick={handleElClick}
-                  sx={{
-                    maxWidth: "35px",
-                    maxHeight: "35px",
-                    minWidth: "35px",
-                    minHeight: "35px",
-                    border: "1px solid black",
-                    background: colorArrayToRGB(colors[channelIndex]),
-                    ":hover": {
-                      bgcolor: colorArrayToRGB(colors[channelIndex]),
-                      color: colorArrayToRGB(colors[channelIndex]),
-                    },
-                  }}
-                ></Button>
-                <Menu
-                  id="basic-menu"
-                  anchorEl={anchorEl}
-                  open={openEl}
-                  onClose={handleCloseEl}
-                  MenuListProps={{
-                    "aria-labelledby": "basic-button",
-                  }}
-                >
-                  <ChromePicker
-                    disableAlpha={true}
-                    color={pickerColor}
-                    onChange={handleChange}
-                  />
-                </Menu>
-              </Grid>
-            )}
-            <Grid item xs={8}>
+              </Menu>
+            </Grid>
+            <Grid item xs={7}>
               <Slider
                 value={contrastLimits[ind]}
                 onChange={handleSliderChange}
@@ -321,18 +322,28 @@ function ChannelColorDisplay(props) {
                 orientation="horizontal"
                 style={{
                   color: rgbColor,
-                  marginTop: "7px",
+                  //   margin: "0 20px",
                 }}
               />
             </Grid>
             <Grid
+              container
+              alignItems="flex-start"
+              justifyContent="flex-start"
+              sx={{ margin: "0 20px" }}
               item
-              xs={4}
-              sx={{ paddingLeft: "15px", paddingRight: "15px" }}
+              xs={2}
             >
-              <IconButton color="primary" onClick={calculateContrastLimits}>
-                <ContrastIcon />
-              </IconButton>
+              <Grid item>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<ContrastIcon sx={{ fontSize: "30px" }} />}
+                  onClick={calculateContrastLimits}
+                >
+                  <Typography variant="caption">Auto-Contrast</Typography>
+                </Button>
+              </Grid>
             </Grid>
           </Grid>
         </>

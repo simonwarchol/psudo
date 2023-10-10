@@ -24,10 +24,10 @@ pub fn greet() {
 
 #[wasm_bindgen]
 pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
-    console::log_1(&"Starting GMM!".into());
-    let sampled_array = if array.len() > 10_000 {
+    console::log_1(&"Starting GMM".into());
+    let sampled_array = if array.len() > 20_000 {
         let mut rng = rand::thread_rng();
-        array.choose_multiple(&mut rng, 10_000).cloned().collect::<Vec<_>>()
+        array.choose_multiple(&mut rng, 20_000).cloned().collect::<Vec<_>>()
     } else {
         array.to_vec()
     };
@@ -37,22 +37,31 @@ pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
         .map(|&x| x as f32)
         .collect::<Vec<f32>>();
     // take a random sample of 1000 values
-    let vals_log: Array1<f32> = vals
+    // Iterate over vals, if value is 0 or nan, make it 0, otherwise take the log
+
+    let vals_log = vals
         .iter()
-        .filter(|&&x| x > 0.0)
-        .map(|&x| x.ln())
+        .map(|&x| {
+            if x == 0.0 || x.is_nan() { 0.0 } else { x.ln() }
+        })
         .collect::<Array1<f32>>();
 
-    console::log_1(&"Logarithmized!".into());
-
     let dataset = Dataset::from(vals_log.insert_axis(Axis(1)));
-    let gmm = GaussianMixtureModel::params(3)
+    console::log_1(&"Created Dataset!".into());
+    let gmm_result = GaussianMixtureModel::params(3)
         .n_runs(1)
-        .tolerance(1e-6)
+        .tolerance(1e-4)
         .max_n_iterations(1000)
-        .fit(&dataset)
-        .expect("GMM fitting");
-    console::log_1(&"Fitted!".into());
+        .fit(&dataset);
+
+    let gmm = match gmm_result {
+        Ok(g) => g,
+        Err(e) => {
+            let error_message = format!("GMM fitting error: {:?}", e);
+            console::log_1(&error_message.into());
+            panic!("GMM fitting failed!");
+        }
+    };
     let means = gmm.means();
     let covariances = gmm.covariances();
     let weights = gmm.weights();

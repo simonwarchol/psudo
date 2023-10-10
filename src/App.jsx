@@ -35,7 +35,6 @@ function App() {
                                             <RoutedAvivator allowNavigation={true}/>
                                         </Grid>
                                         <Grid item xs={6} container
-                                              sx={{height: '100%', width: '100%'}} direction="column"
                                               justifyContent="space-between"
                                         >
                                             <IndividualChannelsWrapper/>

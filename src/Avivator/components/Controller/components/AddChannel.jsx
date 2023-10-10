@@ -74,9 +74,10 @@ const AddChannel = () => {
         <Button
             // disabled={selections.length === MAX_CHANNELS || isViewerLoading}
             onClick={handleChannelAdd}
-            fullWidth
+            variant="contained"
+            // fullWidth
             startIcon={<AddIcon/>}
-            size="small"
+            size="medium"
         >
             Channel
         </Button>

@@ -1,5 +1,8 @@
 import React, { Fragment, useContext, useEffect, useState } from "react";
 import { AppContext } from "../context/GlobalContext.jsx";
+import PerfectScrollbar from "react-perfect-scrollbar";
+import "react-perfect-scrollbar/dist/css/styles.css";
+
 import {
   Button,
   FormControlLabel,
@@ -8,6 +11,7 @@ import {
   InputLabel,
   Menu,
   MenuItem,
+  Paper,
   Radio,
   RadioGroup,
   Select,
@@ -25,9 +29,9 @@ import ChannelColorDisplay from "../components/ChannelColorDisplay.jsx";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { makeBoundingBox } from "@vivjs/layers";
 import FormControl from "@mui/material/FormControl";
-import ColorNameSelect from "../components/ColorNameSelect.jsx";
 import { GLOBAL_SLIDER_DIMENSION_FIELDS } from "./constants.js";
 import GlobalSelectionSlider from "./components/Controller/components/GlobalSelectionSlider.jsx";
+import AddChannel from "./components/Controller/components/AddChannel.jsx";
 import ChannelList from "../components/ChannelList.jsx";
 import LayersIcon from "@mui/icons-material/Layers";
 import * as psudoAnalysis from "psudo-analysis";
@@ -131,110 +135,6 @@ function IndividualChannelsWrapper() {
     context.setPastPalettes([newColors, ...context.pastPalettes]);
   };
 
-  const handleChangeOptimizationScope = (event) => {
-    context.setOptimizationScope(event.target.value);
-  };
-
-  const optimize = async () => {
-    const channelsPayload = [];
-    channelsVisible.forEach((d, i) => {
-      if (d) {
-        const channelPayload = {
-          color: colors[i],
-          contrastLimits: contrastLimits[i],
-          selection: selections[i],
-        };
-        channelsPayload.push(channelPayload);
-      }
-    });
-
-    let intensityList = new Float32Array([]);
-    let colorList = new Uint16Array([]);
-    await Promise.all(
-      channelsPayload.map(async (d, i) => {
-        // const resolution = pyramidResolution;
-        const raster = await loader?.[pyramidResolution]?.getRaster({
-          selection: d.selection,
-        });
-        // Print the size of raster.data
-        console.log("raster.data size", raster.data.length, raster.data.length);
-        // Subsample
-        // time the next line
-        console.time("channel_gmm");
-        const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
-        console.timeEnd("channel_gmm");
-        let floatArr = new Float32Array([...conrastLimits]);
-        // Make Javascript Array
-        floatArr = Array.from(floatArr);
-        console.log("conrastLimits", floatArr);
-      })
-    );
-
-    // Length of each channel's intensity list.
-    const channelLength = intensityList.length / channelsPayload.length;
-
-    console.log("intensityList", channelLength, intensityList);
-
-    // New intensityList
-    const newIntensityList = new Float32Array(intensityList.length);
-    console.time("Code execution time");
-
-    // Iterate for channelLength
-    _.range(channelLength).map((i) => {
-      _.range(channelsPayload.length).map((j) => {
-        newIntensityList[i * channelsPayload.length + j] =
-          intensityList[i + j * channelLength];
-      });
-    });
-
-    console.timeEnd("Code execution time");
-
-    console.log(
-      "newIntensityList",
-      JSON.stringify(Array.from(newIntensityList))
-    );
-
-    // convert Uint16Array to Float32 Array, where each value is /255
-    const colorListFloat = new Float32Array(colorList.length);
-    colorList.forEach((d, i) => {
-      colorListFloat[i] = d / 255;
-    });
-    console.log("colors", colorList, colorListFloat);
-    // const test = psudoAnalysis.optimize_palette(intensityList, colorList);
-    // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`, test)
-    // console.log('test', JSON.stringify({
-    //     'intensityList': Array.from(intensityList),
-    //     'colorList': Array.from(colorList)
-    // }))
-    //
-    //
-    // psudoAnalysis.optimize_palette(newIntensityList).then(result => {
-    //     console.log('TESULT', JSON.stringify(Array.from(result)));
-    // });/**/
-    // psudoAnalysis.optimize_palette(newIntensityList).then((result) => {
-    //   console.log("TESULT", result);
-    // }); /**/
-    let startTime = performance.now();
-
-    // let tes = psudoAnalysis.optimize_palette(newIntensityList);
-    // console.log(tes);
-    // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
-    // // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
-    //
-    // //
-    //
-    // _.range(10).map(() => {
-    //
-    //         const test = psudoAnalysis.color_test(new Float32Array([0.5, 0.2]));
-    //         console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
-    //     }
-    // )
-    //
-    // // console.log('test', JSON.stringify({'arr': Array.from(test)}))
-    // // console.log('Adding one', psudoAnalysis.add_one(444))
-    // // console.log('uint16Colors', uint16Colors, uint16ContrastLimits, uint16ChannelRaster)
-  };
-
   const getNewPalette = async () => {
     context?.setIsLoading(true);
     await savePastPalette();
@@ -281,132 +181,36 @@ function IndividualChannelsWrapper() {
   return (
     <>
       <ThemeProvider theme={darkTheme}>
-        <Grid
-          container
-          direction="row"
-          justifyContent="center"
-          alignItems="center"
-          item
-          xs={"auto"}
-        >
-          <Grid item xs={12}>
-            <Button
-              endIcon={<LayersIcon />}
-              id="channels-button"
-              aria-controls={openEl ? "basic-menu" : undefined}
-              aria-haspopup="true"
-              aria-expanded={openEl ? "true" : undefined}
-              onClick={handleElClick}
+        {/* Add a rounded white border to this */}
+          <div style={{ maxHeight: "85vh", overflowY: "scroll", overflowX: 'hidden', marginTop:'8vh', marginBottom: '7vh' }}>
+            <Grid
+              container
+              direction="column"
+              item
+              justifyContent="center"
+              alignItems="center"
+              maxHeight="300vh"
             >
-              Channels
-            </Button>
-            <Menu
-              id="basic-menu"
-              anchorEl={anchorEl}
-              open={openEl}
-              onClose={handleCloseEl}
-              MenuListProps={{
-                "aria-labelledby": "basic-button",
-              }}
-            >
-              <ChannelList />
-            </Menu>
-          </Grid>
-          <Grid item xs={6}>
-            {globalControllers}
-          </Grid>
-        </Grid>
-
-        {channelsVisible.map((d, i) => (
-          <Fragment key={`mini__avivator_wrapper_${i}_${JSON.stringify(i)}`}>
-            {d == true && (
-              <Grid
-                container
-                item
-                xs={true}
-                key={`mini__avivator_${i}_${JSON.stringify(i)}`}
-              >
-                <Grid item xs={6}>
-                  <MiniAvivator
-                    channelsVisible={d}
-                    allowNavigation={false}
-                    showChannel={i}
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <ChannelColorDisplay channelIndex={i} />
-                </Grid>
-              </Grid>
-            )}
-          </Fragment>
-        ))}
-
-        <>
-          <Grid
-            container
-            direction="row"
-            justifyContent="center"
-            alignItems="center"
-            sx={{
-              margin: 2,
-              paddingRight: 10,
-              paddingLeft: 10,
-            }}
-          >
-            <Grid item xs={6} p={1}>
-              <ColorNameSelect label={"Excluded Colors"} multiSelect={true} />
-            </Grid>
-            <Grid item xs={6} p={1}>
-              <FormControl>
-                <FormLabel id="optimization-scope-grouplabel">
-                  Optimization Scope
-                </FormLabel>
-                <RadioGroup
-                  row
-                  aria-labelledby="optimization-scope-grouplabel"
-                  value={context.optimizationScope}
-                  onChange={handleChangeOptimizationScope}
+              {channelsVisible.map((d, i) => (
+                <Grid
+                  container
+                  item
+                  key={`mini__avivator_${i}_${JSON.stringify(i)}`}
+                  sx={{paddingRight:'20px', zIndex:1000}}
                 >
-                  <FormControlLabel
-                    value="global"
-                    control={<Radio />}
-                    label="Global"
-                  />
-                  <FormControlLabel
-                    value="viewport"
-                    control={<Radio />}
-                    label="Viewport"
-                  />
-                </RadioGroup>
-              </FormControl>
+                  <Grid item xs={6} >
+                    <MiniAvivator
+                      allowNavigation={false}
+                      showChannel={i}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <ChannelColorDisplay channelIndex={i} />
+                  </Grid>
+                </Grid>
+              ))}
             </Grid>
-            {/* <Grid item xs={6} p={1}> */}
-            {/* <FormControl className={"color-space-form"}>
-                <InputLabel id="color-space-select-label">
-                  Color Space
-                </InputLabel>
-                <Select
-                  id="color-space"
-                  value={colorSpace}
-                  defaultValue={colorOptions[0].value}
-                  onChange={handleChange}
-                  size="small"
-                > */}
-            {/* {colorOptions.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label} key={option.value}
-                    </MenuItem>
-                  ))} */}
-            {/* </Select>
-              </FormControl>
-            </Grid> */}
-            <Grid item xs={6} p={1}>
-              <Button variant="contained" onClick={optimize}>
-                Optimize Palette
-              </Button>
-            </Grid>
-          </Grid>
-        </>
+          </div>
       </ThemeProvider>
     </>
   );
