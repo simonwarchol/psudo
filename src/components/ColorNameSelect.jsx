@@ -51,7 +51,7 @@ function ColorNameSelect(props) {
 
     return (
         <>
-            <FormControl sx={{width: width}}>
+            <FormControl sx={{width: width, marginTop:'10px', marginBottom: '5px'}}>
                 <InputLabel id="exclude-select-label">{label}</InputLabel>
                 <Select
                     id={`${id}`}

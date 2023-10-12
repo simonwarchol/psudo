@@ -47,7 +47,7 @@ export default function Avivator(props) {
                 <>
                     <DropzoneWrapper>{!isViewerLoading &&
                         <Viewer allowNavigation={allowNavigation} dimensions={dimensions}/>}</DropzoneWrapper>
-                    <Controller/>
+                    {/* <Controller/> */}
                     <SnackBars/>
                     {/*<Footer/>*/}
                 </>

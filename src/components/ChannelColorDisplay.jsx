@@ -1,10 +1,12 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { AppContext } from "../context/GlobalContext.jsx";
-import { Button, Grid, IconButton, Menu, Select, Slider } from "@mui/material";
+import { Button, Grid, IconButton, Menu, Select, Slider,Icon } from "@mui/material";
 import { ChromePicker } from "react-color";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import ContrastIcon from "@mui/icons-material/Contrast";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import SquareIcon from "@mui/icons-material/Square";
+
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ColorNameSelect from "./ColorNameSelect.jsx";
 import LockIcon from "@mui/icons-material/Lock";
@@ -95,7 +97,6 @@ function ChannelColorDisplay(props) {
 
   const rgbColor = `rgb(${colors?.[channelIndex]})`;
   let ind = channelIndex;
- 
 
   const [min, max] = domains[ind];
   // If the min/max range is and the dtype is float, make the step size smaller so contrastLimits are smoother.
@@ -129,8 +130,6 @@ function ChannelColorDisplay(props) {
       setPickerColor(rgbColor);
     }
   }, [colors]);
-
-
 
   const toggleVisibility = () => {
     let _tmpChannelsVisible = _.cloneDeep(channelsVisible);
@@ -240,60 +239,30 @@ function ChannelColorDisplay(props) {
             container
             sx={{ height: "100%" }}
             direction="row"
-            justifyContent="flex-start"
+            justifyContent="space-evenly"
             alignItems="center"
             ref={ref}
           >
-            <Select
-              native
-              value={channelOptions[selections[ind].c]}
-              onChange={onSelectionChange}
-              variant="standard"
+            <Grid
+              item
+              xs={1}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              {channelOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </Select>
-            <Grid item xs={1} sx={{ paddingTop: "20px" }}>
-              <IconButton color="primary" onClick={toggleVisibility}>
-                {channelsVisible?.[channelIndex] && <VisibilityIcon />}
-                {!channelsVisible?.[channelIndex] && <VisibilityOffIcon />}
-              </IconButton>
-            </Grid>
-            <Grid item xs={1} sx={{ paddingTop: "20px" }}>
-              <IconButton color="primary" onClick={toggleLock}>
-                {colorLocked && <LockIcon />}
-                {!colorLocked && <LockOpenIcon />}
-              </IconButton>
-            </Grid>
-            <Grid item xs={4} sx={{ paddingLeft: "15px", paddingTop: "20px" }}>
-              <ColorNameSelect
-                label={"Color Name"}
-                channelIndex={channelIndex}
-                multiSelect={false}
-              />
-            </Grid>
-            <Grid item xs={2} sx={{ paddingLeft: "10px", paddingTop: "25px" }}>
-              <Button
-                aria-controls={openEl ? "basic-menu" : undefined}
-                aria-haspopup="true"
-                aria-expanded={openEl ? "true" : undefined}
+              <SquareIcon
                 onClick={handleElClick}
                 sx={{
-                  maxWidth: "35px",
-                  maxHeight: "35px",
-                  minWidth: "35px",
-                  minHeight: "35px",
-                  border: "1px solid black",
-                  background: colorArrayToRGB(colors[channelIndex]),
+                  fontSize: 35, // or your preferred icon size
+                  color: colorArrayToRGB(colors[channelIndex]), // This sets the color of the icon
+                  cursor: "pointer", // change cursor style during hover
                   ":hover": {
-                    bgcolor: colorArrayToRGB(colors[channelIndex]),
-                    color: colorArrayToRGB(colors[channelIndex]),
+                    color: colorArrayToRGB(colors[channelIndex]), // Keep the same color on hover, or choose another
                   },
                 }}
-              ></Button>
+              />
               <Menu
                 id="basic-menu"
                 anchorEl={anchorEl}
@@ -303,6 +272,12 @@ function ChannelColorDisplay(props) {
                   "aria-labelledby": "basic-button",
                 }}
               >
+                <ColorNameSelect
+                  label={"Color Name"}
+                  width={"100%"}
+                  channelIndex={channelIndex}
+                  multiSelect={false}
+                />
                 <ChromePicker
                   disableAlpha={true}
                   color={pickerColor}
@@ -310,7 +285,44 @@ function ChannelColorDisplay(props) {
                 />
               </Menu>
             </Grid>
-            <Grid item xs={7}>
+            <Grid item xs={4}>
+              <Select
+                native
+                value={channelOptions[selections[ind].c]}
+                onChange={onSelectionChange}
+                variant="standard"
+              >
+                {channelOptions.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
+            </Grid>
+            <Grid item xs={1}>
+              <IconButton color="white" onClick={toggleVisibility}>
+                {channelsVisible?.[channelIndex] && <VisibilityIcon />}
+                {!channelsVisible?.[channelIndex] && <VisibilityOffIcon />}
+              </IconButton>
+            </Grid>
+            <Grid item xs={1}>
+              <IconButton color="white" onClick={toggleLock}>
+                {colorLocked && <LockIcon />}
+                {!colorLocked && <LockOpenIcon />}
+              </IconButton>
+            </Grid>
+            <Grid item xs={1}>
+              <IconButton color="white" onClick={calculateContrastLimits}>
+                <Icon sx={{ fontSize: 30 }} >
+                  <img src="/src/assets/auto-contrast-icon.svg" />
+                </Icon>
+              </IconButton>
+            </Grid>
+            {/* <Grid item xs={4} sx={{ paddingLeft: "15px" }}>
+              
+            </Grid> */}
+
+            <Grid item xs={8}>
               <Slider
                 value={contrastLimits[ind]}
                 onChange={handleSliderChange}
@@ -325,25 +337,6 @@ function ChannelColorDisplay(props) {
                   //   margin: "0 20px",
                 }}
               />
-            </Grid>
-            <Grid
-              container
-              alignItems="flex-start"
-              justifyContent="flex-start"
-              sx={{ margin: "0 20px" }}
-              item
-              xs={2}
-            >
-              <Grid item>
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  startIcon={<ContrastIcon sx={{ fontSize: "30px" }} />}
-                  onClick={calculateContrastLimits}
-                >
-                  <Typography variant="caption">Auto-Contrast</Typography>
-                </Button>
-              </Grid>
             </Grid>
           </Grid>
         </>

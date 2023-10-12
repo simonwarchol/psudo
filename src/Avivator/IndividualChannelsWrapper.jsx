@@ -182,7 +182,7 @@ function IndividualChannelsWrapper() {
     <>
       <ThemeProvider theme={darkTheme}>
         {/* Add a rounded white border to this */}
-          <div style={{ maxHeight: "85vh", overflowY: "scroll", overflowX: 'hidden', marginTop:'8vh', marginBottom: '7vh' }}>
+          <div style={{ maxHeight: "85vh", overflowY: "auto", overflowX: 'hidden', marginTop:'8vh', marginBottom: '7vh', width:'100%', colorScheme:'dark' }}>
             <Grid
               container
               direction="column"
@@ -196,9 +196,9 @@ function IndividualChannelsWrapper() {
                   container
                   item
                   key={`mini__avivator_${i}_${JSON.stringify(i)}`}
-                  sx={{paddingRight:'20px', zIndex:1000}}
+                  sx={{paddingRight:'20px', zIndex:1000, minHeight:'200px'}}
                 >
-                  <Grid item xs={6} >
+                  <Grid item xs={6} sx={{paddingRight:'30px'}} >
                     <MiniAvivator
                       allowNavigation={false}
                       showChannel={i}
