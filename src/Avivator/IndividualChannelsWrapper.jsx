@@ -108,7 +108,6 @@ function IndividualChannelsWrapper() {
     ],
     shallow
   );
-
   const savePastPalette = async () => {
     const visibleIndices = selections
       .map((s) => s.c)
@@ -191,7 +190,7 @@ function IndividualChannelsWrapper() {
               alignItems="center"
               maxHeight="300vh"
             >
-              {channelsVisible.map((d, i) => (
+              {selections.map((d, i) => (
                 <Grid
                   container
                   item

@@ -35,6 +35,11 @@ const Viewer = (props) => {
 
   const [overlayLayers, setOverlayLayers] = useState([]);
 
+  const [pyramidResolution] = useViewerStore(
+    (store) => [store.pyramidResolution],
+    shallow
+  );
+
   let [colors, contrastLimits, channelsVisible, selections, pixelValues] =
     useChannelsStore(
       (store) => [
@@ -169,6 +174,9 @@ const Viewer = (props) => {
         setLensRadius,
         lensOpacity,
         setLensOpacity,
+        pyramidResolution,
+        channelsVisible,
+        selections
       },
     };
     hoverHooks = {
@@ -185,7 +193,9 @@ const Viewer = (props) => {
       });
       return movingLens ? oldViewState : newViewState;
     };
-    onHover = (v) => {
+    onHover = (v, d, e) => {
+      // console.log("Hover", v, d, e, loader);
+
       useViewerStore.setState({ coordinate: v?.coordinate });
     };
   } else {

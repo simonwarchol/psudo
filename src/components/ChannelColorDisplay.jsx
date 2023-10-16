@@ -1,6 +1,14 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { AppContext } from "../context/GlobalContext.jsx";
-import { Button, Grid, IconButton, Menu, Select, Slider,Icon } from "@mui/material";
+import {
+  Button,
+  Grid,
+  IconButton,
+  Menu,
+  Select,
+  Slider,
+  Icon,
+} from "@mui/material";
 import { ChromePicker } from "react-color";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import ContrastIcon from "@mui/icons-material/Contrast";
@@ -112,17 +120,6 @@ function ChannelColorDisplay(props) {
     removeIsChannelLoading(channelIndex);
   };
 
-  // useEffect(() => {
-  //     const getRaster = async () => {
-  //         return await loader?.[0].getRaster({selection: {c: 0, t: 0, z: 0}})
-  //     }
-  //     getRaster().then(raster => {
-  //         console.log('use effect', raster, loader)
-  //         console.log('selections', selections)
-  //     });
-  //
-  // }, [loader, selections])
-
   useEffect(() => {
     if (colors?.[channelIndex]) {
       const color = colors?.[channelIndex];
@@ -163,6 +160,7 @@ function ChannelColorDisplay(props) {
 
   const calculateContrastLimits = () => {
     context?.setIsLoading(true);
+    console.log("lsm", loader, selections);
 
     loader?.[pyramidResolution]
       ?.getRaster({
@@ -313,7 +311,7 @@ function ChannelColorDisplay(props) {
             </Grid>
             <Grid item xs={1}>
               <IconButton color="white" onClick={calculateContrastLimits}>
-                <Icon sx={{ fontSize: 30 }} >
+                <Icon sx={{ fontSize: 30 }}>
                   <img src="/src/assets/auto-contrast-icon.svg" />
                 </Icon>
               </IconButton>

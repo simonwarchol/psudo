@@ -22,6 +22,8 @@ import { getNameFromUrl } from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
 import JoinInnerIcon from "@mui/icons-material/JoinInner";
+import BarChartIcon from "@mui/icons-material/BarChart";
+
 import shallow from "zustand/shallow";
 import SingleChannelWrapper from "./SingleChannelWrapper.jsx";
 import { AttachFile, InsertLink } from "@mui/icons-material";
@@ -38,6 +40,10 @@ function PsudoToolbar() {
   const openOverlap = Boolean(anchorElOverlap);
   const [anchorElOptimization, setAnchorElOptimization] = useState(null);
   const openOptimization = Boolean(anchorElOptimization);
+  const [anchorElChart, setAnchorElChart] = useState(null);
+
+  const openChart = Boolean(anchorElChart);
+
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [source] = useViewerStore((store) => [store.source], shallow);
@@ -75,12 +81,20 @@ function PsudoToolbar() {
   const handleOverlapClick = (event) => {
     setAnchorElOverlap(event.currentTarget);
   };
-  const handleOptimizationClick = (event) => {
-    setAnchorElOptimization(event.currentTarget);
-  };
 
   const handleCloseOverlap = () => {
     setAnchorElOverlap(null);
+  };
+  const handleChartClick = (event) => {
+    console.log("handleChartClick", openChart);
+    setAnchorElChart(event.currentTarget);
+  };
+
+  const handleCloseChart = () => {
+    setAnchorElChart(null);
+  };
+  const handleOptimizationClick = (event) => {
+    setAnchorElOptimization(event.currentTarget);
   };
 
   const handleHistoryClick = (event) => {
@@ -305,6 +319,40 @@ function PsudoToolbar() {
           <Footer />
         </Grid>
         <Grid item xs={"auto"}>
+          <IconButton
+            id="source-button"
+            aria-controls={openChart ? "basic-menu" : undefined}
+            aria-haspopup="true"
+            aria-expanded={openChart ? "true" : undefined}
+            onClick={handleChartClick}
+          >
+            <BarChartIcon sx={{ fontSize: 40 }} />
+          </IconButton>
+          <Menu
+            id="basic-menu"
+            anchorEl={anchorElChart}
+            open={openChart}
+            onClose={handleCloseChart}
+            MenuListProps={{
+              "aria-labelledby": "basic-button",
+            }}
+          >
+            <Grid
+              container
+              direction="column"
+              justifyContent="center"
+              alignItems="center"
+              p={0}
+              m={0}
+            >
+              <Grid item p={0} m={0}>
+                <h4 style={{ margin: 0, padding: 0 }}>Chart</h4>
+              </Grid>
+            </Grid>
+          </Menu>
+          <Footer />
+        </Grid>
+        <Grid item xs={"auto"}>
           {/* Increase size of icon */}
           <IconButton
             id="optimizationButton-button"
@@ -381,10 +429,10 @@ function PsudoToolbar() {
         alignItems="center"
         p={1}
       >
-        <Grid item xs={5} style={{ zIndex: 100 }} alignItems={'center'}>
+        <Grid item xs={5} style={{ zIndex: 100 }} alignItems={"center"}>
           <AddChannel />
         </Grid>
-        <Grid item xs={"auto"} style={{ zIndex: 100 }} alignItems={'center'}>
+        <Grid item xs={"auto"} style={{ zIndex: 100 }} alignItems={"center"}>
           <IconButton
             id="source-button"
             aria-controls={openSource ? "basic-menu" : undefined}
