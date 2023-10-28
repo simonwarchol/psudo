@@ -25,9 +25,9 @@ pub fn greet() {
 #[wasm_bindgen]
 pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
     console::log_1(&"Starting GMM".into());
-    let sampled_array = if array.len() > 20_000 {
+    let sampled_array = if array.len() > 10_000 {
         let mut rng = rand::thread_rng();
-        array.choose_multiple(&mut rng, 20_000).cloned().collect::<Vec<_>>()
+        array.choose_multiple(&mut rng, 10_000).cloned().collect::<Vec<_>>()
     } else {
         array.to_vec()
     };
@@ -46,12 +46,19 @@ pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
         })
         .collect::<Array1<f32>>();
 
+    let min_log_val = vals_log.min().unwrap();
+    let max_log_val = vals_log.max().unwrap();
+    console::log_1(
+        &format!("Log-transformed data - Min: {}, Max: {}", min_log_val, max_log_val).into()
+    );
+
     let dataset = Dataset::from(vals_log.insert_axis(Axis(1)));
+
     console::log_1(&"Created Dataset!".into());
     let gmm_result = GaussianMixtureModel::params(3)
         .n_runs(1)
-        .tolerance(1e-4)
-        .max_n_iterations(1000)
+        .tolerance(1e-2)
+        .max_n_iterations(2000)
         .fit(&dataset);
 
     let gmm = match gmm_result {

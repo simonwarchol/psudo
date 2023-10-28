@@ -5,7 +5,7 @@ uniform vec2 lensCenter;
 
 // lens uniforms
 uniform bool lensEnabled;
-uniform int lensSelection;
+// uniform int lensSelection;
 uniform vec3 lensBorderColor;
 uniform float lensOpacity;
 uniform float lensBorderRadius;
@@ -13,6 +13,7 @@ uniform float lensBorderRadius;
 // color palette
 uniform vec3 colors[6];
 uniform float channelsVisible;
+uniform int lensSelection[6];
 
 
 bool frag_in_lens_bounds(vec2 vTexCoord) {
@@ -53,7 +54,11 @@ vec3 color_transfer(vec3 color, float intensity, vec2 vTexCoord, int channelInde
 
     bool isFragInLensBounds = frag_in_lens_bounds(vTexCoord);
     bool inLensAndUseLens = lensEnabled && isFragInLensBounds;
-    bool isSelectedChannel = channelIndex == lensSelection;
+    bool channelsInLens = !(lensSelection[0] == 0 && lensSelection[1] == 0 
+                       && lensSelection[2] == 0 && lensSelection[3] == 0 
+                       && lensSelection[4] == 0 && lensSelection[5] == 0);
+    inLensAndUseLens = inLensAndUseLens && channelsInLens;
+    bool isSelectedChannel = lensSelection[channelIndex] != 0;
 
     // When the lens is disabled, and it's the selected channel, we want full intensity
     bool useSelectedChannelDirectly = !lensEnabled && isSelectedChannel;

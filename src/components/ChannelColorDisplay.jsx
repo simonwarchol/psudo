@@ -23,6 +23,7 @@ import {
   useChannelsStore,
   useLoader,
   useViewerStore,
+  useImageSettingsStore,
 } from "../Avivator/state.js";
 import shallow from "zustand/shallow";
 
@@ -88,6 +89,10 @@ function ChannelColorDisplay(props) {
     ],
     shallow
   );
+  const [lensSelection] = useImageSettingsStore(
+    (store) => [store.lensSelection],
+    shallow
+  );
   const [anchorEl, setAnchorEl] = useState(null);
   const [scale, setScale] = useState({});
 
@@ -102,6 +107,9 @@ function ChannelColorDisplay(props) {
   const ref = useRef(null);
   const paperRef = useRef(null);
   const loader = useLoader();
+  useEffect(() => {
+    console.log(lensSelection, "xxx");
+  }, [lensSelection]);
 
   const rgbColor = `rgb(${colors?.[channelIndex]})`;
   let ind = channelIndex;
@@ -127,6 +135,9 @@ function ChannelColorDisplay(props) {
       setPickerColor(rgbColor);
     }
   }, [colors]);
+
+  // const lensIcon =
+  console.log("lensSelection[channelIndex]");
 
   const toggleVisibility = () => {
     let _tmpChannelsVisible = _.cloneDeep(channelsVisible);
@@ -177,6 +188,12 @@ function ChannelColorDisplay(props) {
       });
 
     console.log("calculate contrast limits", channelIndex);
+  };
+
+  const addRemoveToLens = () => {
+    let lensSelectionCopy = _.cloneDeep(lensSelection);
+    lensSelectionCopy[channelIndex] = !lensSelectionCopy[channelIndex] ? 1 : 0;
+    useImageSettingsStore.setState({ lensSelection: lensSelectionCopy });
   };
 
   function colorArrayToRGB(color) {
@@ -313,6 +330,19 @@ function ChannelColorDisplay(props) {
               <IconButton color="white" onClick={calculateContrastLimits}>
                 <Icon sx={{ fontSize: 30 }}>
                   <img src="/src/assets/auto-contrast-icon.svg" />
+                </Icon>
+              </IconButton>
+            </Grid>
+            <Grid item xs={1}>
+              <IconButton color="white" onClick={addRemoveToLens}>
+                <Icon sx={{ fontSize: 30 }}>
+                  <img
+                    src={
+                      lensSelection[channelIndex] == 0
+                        ? "/src/assets/add-to-lens-icon.svg"
+                        : "/src/assets/remove-from-lens-icon.svg"
+                    }
+                  />
                 </Icon>
               </IconButton>
             </Grid>

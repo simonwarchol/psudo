@@ -1,4 +1,5 @@
 // @ts-nocheck
+import shallow from "zustand/shallow";
 import { LensExtension } from "@hms-dbmi/viv";
 import { VivView } from "@hms-dbmi/viv";
 import { CompositeLayer, COORDINATE_SYSTEM } from "@deck.gl/core";
@@ -15,8 +16,8 @@ import oklabFs from "../components/shaders/fragment-shaders/oklab-color-mixing-f
 import { useImageSettingsStore, useViewerStore } from "./state.js";
 
 const defaultProps = {
-  lensEnabled: { type: "boolean", value: false, compare: true },
-  lensSelection: { type: "number", value: 0, compare: true },
+  lensEnabled: { type: "boolean", value: true, compare: true },
+  lensSelection: { type: "array", value: [0, 0, 0, 0, 0, 0], compare: true },
   lensRadius: { type: "number", value: 100, compare: true },
   lensOpacity: { type: "number", value: 1.0, compare: true },
   lensBorderColor: { type: "array", value: [255, 255, 255], compare: true },
@@ -165,6 +166,8 @@ const LensLayer = class extends CompositeLayer {
 
   renderLayers() {
     const { id, viewState } = this.props;
+    const showLens = useImageSettingsStore.getState()?.lensEnabled;
+    if (!showLens) return [];
     const mousePosition = this.context.userData.mousePosition || [
       Math.round((this.context.deck.width || 0) / 2),
       Math.round((this.context.deck.height || 0) / 2),
@@ -433,6 +436,8 @@ const LensLayer = class extends CompositeLayer {
     const sizeAtPyramidLevel = size / Math.pow(2, pyramidLevel);
     const x = coordinate[0] / Math.pow(2, pyramidLevel);
     const y = coordinate[1] / Math.pow(2, pyramidLevel);
+    const x_center = x;
+    const y_center = y;
 
     const loaderAtThisLevel = loader[pyramidLevel];
     const shapeAtThisLevel = loaderAtThisLevel.shape;
@@ -501,6 +506,7 @@ const LensLayer = class extends CompositeLayer {
         let channelSelection = this.context.userData.selections[i];
         thisChannel.selection = channelSelection;
         thisChannel.data = [];
+        const radiusSquared = sizeAtPyramidLevel * sizeAtPyramidLevel;
         for (let y = yMinClamped; y <= yMaxClamped; y++) {
           for (let x = xMinClamped; x <= xMaxClamped; x++) {
             const tileData = await loaderAtThisLevel.getTile({
@@ -512,10 +518,16 @@ const LensLayer = class extends CompositeLayer {
               const xIndex = x * tileSizeAtThisLevel[0] + (j % tileData.width);
               const yIndex =
                 y * tileSizeAtThisLevel[1] + Math.floor(j / tileData.width);
-              indexArray.push([xIndex, yIndex, j]);
+              // indexArray.push([xIndex, yIndex, j]);
+
               if (xIndex > xMin && xIndex <= xMax) {
                 if (yIndex >= yMin && yIndex <= yMax) {
-                  thisChannel.data.push(tileData.data[j]);
+                  const dx = xIndex - x_center;
+                  const dy = yIndex - y_center;
+                  const distanceSquared = dx * dx + dy * dy;
+                  if (distanceSquared <= radiusSquared) {
+                    thisChannel.data.push([tileData.data[j], xIndex, yIndex]);
+                  }
                 }
               }
             }
@@ -524,11 +536,11 @@ const LensLayer = class extends CompositeLayer {
         channelData.push(thisChannel);
       }
     }
-    console.log("channelData", channelData);
-    channelData.forEach((channel) => {
-      let mean = _.mean(channel.data);
-      console.log("mean", mean, channel.selection.c);
-    });
+    // console.log("channelData", JSON.stringify(channelData));
+    // channelData.forEach((channel) => {
+    //   let mean = _.mean(channel.data);
+    //   // console.log("mean", mean, channel.selection.c);
+    // });
     this.context.userData.setMovingLens(false);
   }
 };

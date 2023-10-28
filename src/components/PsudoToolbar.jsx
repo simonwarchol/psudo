@@ -17,7 +17,11 @@ import {
   Button,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { useChannelsStore, useViewerStore } from "../Avivator/state.js";
+import {
+  useChannelsStore,
+  useViewerStore,
+  useImageSettingsStore,
+} from "../Avivator/state.js";
 import { getNameFromUrl } from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
@@ -30,6 +34,8 @@ import { AttachFile, InsertLink } from "@mui/icons-material";
 import DropzoneButton from "../Avivator/components/Controller/components/DropzoneButton.jsx";
 import Footer from "../Avivator/components/Footer.jsx";
 import AddChannel from "../Avivator/components/Controller/components/AddChannel.jsx";
+import _ from 'lodash';
+
 function PsudoToolbar() {
   const context = useContext(AppContext);
   const [anchorElSource, setAnchorElSource] = useState(null);
@@ -43,6 +49,11 @@ function PsudoToolbar() {
   const [anchorElChart, setAnchorElChart] = useState(null);
 
   const openChart = Boolean(anchorElChart);
+
+  const [lensEnabled] = useImageSettingsStore(
+    (store) => [store.lensEnabled],
+    shallow
+  );
 
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [showLinkInput, setShowLinkInput] = useState(false);
@@ -124,6 +135,9 @@ function PsudoToolbar() {
         description: getNameFromUrl(imageUrl),
       },
     });
+  };
+  const toggleShowLens = () => {
+    useImageSettingsStore.setState({ lensEnabled: !_.cloneDeep(lensEnabled) });
   };
 
   const optimize = async () => {
@@ -317,6 +331,19 @@ function PsudoToolbar() {
             </Grid>
           </Menu>
           <Footer />
+        </Grid>
+        <Grid item xs={"auto"}>
+          <IconButton onClick={toggleShowLens}>
+            <Icon sx={{ fontSize: 30 }}>
+              <img
+                src={
+                  lensEnabled
+                    ? "/src/assets/add-lens-icon.svg"
+                    : "/src/assets/remove-lens-icon.svg"
+                }
+              />
+            </Icon>
+          </IconButton>
         </Grid>
         <Grid item xs={"auto"}>
           <IconButton

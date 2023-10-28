@@ -157,8 +157,8 @@ const Viewer = (props) => {
           ]);
         }
       },
-      lensEnabled: false,
-      lensSelection: 0,
+      lensEnabled: lensEnabled,
+      lensSelection,
       lensRadius: 100,
       extensions: [new MinervaVivLensing(colormap)],
     };
@@ -176,7 +176,7 @@ const Viewer = (props) => {
         setLensOpacity,
         pyramidResolution,
         channelsVisible,
-        selections
+        selections,
       },
     };
     hoverHooks = {

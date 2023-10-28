@@ -1,5 +1,5 @@
 import create from "zustand";
-import {getNameFromUrl} from './viewerUtils.js';
+import { getNameFromUrl } from "./viewerUtils.js";
 
 const captialize = (string) => string.charAt(0).toUpperCase() + string.slice(1);
 
@@ -86,11 +86,11 @@ export const useChannelsStore = create((set) => ({
 }));
 
 const DEFAULT_IMAGE_STATE = {
-  lensSelection: 0,
+  lensSelection: [0, 0, 0, 0, 0, 0],
   colormap: "sRGB",
   fragmentShader: null,
   resolution: 0,
-  lensEnabled: false,
+  lensEnabled: true,
   zoomLock: false,
   panLock: false,
   isOverviewOn: false,
@@ -123,7 +123,9 @@ const DEFAULT_VIEWER_STATE = {
   source: {
     urlOrFile:
       "https://viv-demo.storage.googleapis.com/Vanderbilt-Spraggins-Kidney-MxIF.ome.tif",
-    description: getNameFromUrl("https://viv-demo.storage.googleapis.com/Vanderbilt-Spraggins-Kidney-MxIF.ome.tif"),
+    description: getNameFromUrl(
+      "https://viv-demo.storage.googleapis.com/Vanderbilt-Spraggins-Kidney-MxIF.ome.tif"
+    ),
   },
   pyramidResolution: 0,
 };
