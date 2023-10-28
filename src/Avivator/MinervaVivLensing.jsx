@@ -7,6 +7,7 @@ import {
   ScatterplotLayer,
   PolygonLayer,
   SolidPolygonLayer,
+  IconLayer,
 } from "@deck.gl/layers";
 import _ from "lodash";
 
@@ -167,6 +168,8 @@ const LensLayer = class extends CompositeLayer {
   renderLayers() {
     const { id, viewState } = this.props;
     const showLens = useImageSettingsStore.getState()?.lensEnabled;
+    const lensSelection = useImageSettingsStore.getState()?.lensSelection;
+    console.log("lensSelection", lensSelection);
     if (!showLens) return [];
     const mousePosition = this.context.userData.mousePosition || [
       Math.round((this.context.deck.width || 0) / 2),
@@ -370,7 +373,100 @@ const LensLayer = class extends CompositeLayer {
       getLineColor: [255, 255, 255],
     });
 
-    return [lensCircle, resizeCircle, arrowLayer, opacityLayer];
+    const contrastSemiCircle = new PolygonLayer({
+      id: `contrast-semi-layer-${id}`,
+      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      data: [this.lensPosition],
+      getPolygon: (d) => {
+        const angle = 0;
+        let multiplier = 1 / Math.pow(2, viewState.zoom);
+        const lensRadius = this.context.userData.lensRadius * multiplier;
+        const size = 20 * multiplier;
+        const innerRadius = size * 0.6;
+
+        const centerOfSemiCircle = [
+          d[0] + Math.cos((3 * Math.PI) / 4) * (lensRadius + size),
+          d[1] + Math.sin((3 * Math.PI) / 4) * (lensRadius + size),
+        ];
+
+        // Generate semicircle points
+        const semiCirclePoints = [];
+        for (
+          let theta = angle + Math.PI / 2;
+          theta <= (3 * Math.PI) / 2 + angle;
+          theta += Math.PI / 36
+        ) {
+          // Change the denominator for more or fewer points
+          semiCirclePoints.push([
+            centerOfSemiCircle[0] - innerRadius * Math.cos(theta),
+            centerOfSemiCircle[1] - innerRadius * Math.sin(theta),
+          ]);
+        }
+
+        // Add center of the semicircle to close the shape
+        // semiCirclePoints.push(centerOfSemiCircle);
+
+        return semiCirclePoints;
+      },
+      getFillColor: [255, 255, 255, 255],
+      getLineWidth: (d) => {
+        const multiplier = 1 / Math.pow(2, viewState.zoom);
+        return 3 * multiplier;
+      },
+      extruded: false,
+      pickable: true,
+      alphaCutoff: 0,
+      stroked: true,
+      getLineColor: [255, 255, 255],
+    });
+
+    const contrastCircle = new ScatterplotLayer({
+      id: `contrast-circle-${id}`,
+      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      data: [this.lensPosition],
+      pickable: true,
+      animate: true,
+      // opacity: 0.5,
+      stroked: true,
+      alphaCutoff: 0,
+      filled: true,
+      updateTriggers: {
+        getPosition: Date.now() % 2000,
+      },
+
+      getFillColor: (d) => [0, 0, 0, 0],
+      lineWidthMinPixels: 1,
+      getPosition: (d) => {
+        let multiplier = 1 / Math.pow(2, viewState.zoom);
+        const resizeRadius = 20 * multiplier;
+        const lensRadius = this.context.userData.lensRadius * multiplier;
+        const distanceFromCenter = lensRadius + resizeRadius; // Adjusts distance between lens and circle
+        const dx = Math.cos((3 * Math.PI) / 4) * distanceFromCenter;
+        const dy = Math.sin((3 * Math.PI) / 4) * distanceFromCenter;
+        return [d[0] + dx, d[1] + dy];
+      },
+      getRadius: (d) => {
+        let multiplier = 1 / Math.pow(2, viewState.zoom);
+        const resizeRadius = 20;
+
+        const size = resizeRadius * multiplier;
+        return size;
+      },
+      getLineColor: (d) => [255, 255, 255],
+      getLineWidth: (d) => {
+        const multiplier = 1 / Math.pow(2, viewState.zoom);
+        return 3 * multiplier;
+      },
+    });
+
+    return [
+      lensCircle,
+      resizeCircle,
+      arrowLayer,
+      contrastSemiCircle,
+      contrastCircle,
+      _.every(lensSelection, (num) => num === 0) ? null : opacityLayer,
+    ];
   }
   onDrag(pickingInfo, event) {
     // console.log("Drag", pickingInfo?.sourceLayer?.id);
@@ -391,7 +487,9 @@ const LensLayer = class extends CompositeLayer {
       const dy = yIntercept - lensCenter[1];
       const distance = Math.sqrt(dx * dx + dy * dy);
       const resizeRadius = 20;
-      const newRadius = distance - resizeRadius;
+      const newRadius =
+        distance - resizeRadius > 35 ? distance - resizeRadius : 35;
+
       this.context.userData.setLensRadius(newRadius);
     } else if (
       pickingInfo?.sourceLayer?.id === `opacity-layer-${this.props.id}`

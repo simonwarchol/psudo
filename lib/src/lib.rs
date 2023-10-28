@@ -25,9 +25,9 @@ pub fn greet() {
 #[wasm_bindgen]
 pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
     console::log_1(&"Starting GMM".into());
-    let sampled_array = if array.len() > 10_000 {
+    let sampled_array = if array.len() > 20_000 {
         let mut rng = rand::thread_rng();
-        array.choose_multiple(&mut rng, 10_000).cloned().collect::<Vec<_>>()
+        array.choose_multiple(&mut rng, 20_000).cloned().collect::<Vec<_>>()
     } else {
         array.to_vec()
     };
@@ -41,20 +41,31 @@ pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
 
     let vals_log = vals
         .iter()
-        .filter(|&&x| !x.is_nan()) // Remove NaN values
-        .map(|&x| if x < 0.0 { 0.0 } else { x.ln() }) // Apply natural logarithm, replace 0.0 with 0.0
-
+        .map(|&x| {
+            if x <= 0.0 || x.is_nan() { 0.0 } else { x.ln() }
+        })
         .collect::<Array1<f32>>();
 
-
+    // let min_log_val = vals_log.min().unwrap();
+    // let max_log_val = vals_log.max().unwrap();
+    // console::log_1(
+    //     &format!("Log-transformed data - Min: {}, Max: {}", min_log_val, max_log_val).into()
+    // );
+    // let mut print_str = String::new();
+    // for val in vals_log.iter() {
+    //     print_str += &val.to_string();
+    //     print_str.push(',');
+    // }
+    // console::log_1(&JsValue::from_str(&print_str));
 
     let dataset = Dataset::from(vals_log.insert_axis(Axis(1)));
 
     console::log_1(&"Created Dataset!".into());
     let gmm_result = GaussianMixtureModel::params(3)
-        .n_runs(3)
+        .n_runs(10)
         .tolerance(1e-4)
-        .max_n_iterations(2000)
+        .max_n_iterations(500)
+        .init_method(linfa_clustering::GmmInitMethod::Random)
         .fit(&dataset);
 
     let gmm = match gmm_result {

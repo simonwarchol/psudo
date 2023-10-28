@@ -108,7 +108,7 @@ function ChannelColorDisplay(props) {
   const paperRef = useRef(null);
   const loader = useLoader();
   useEffect(() => {
-    console.log(lensSelection, "xxx");
+    console.log(lensSelection, "lensSelection");
   }, [lensSelection]);
 
   const rgbColor = `rgb(${colors?.[channelIndex]})`;
@@ -136,8 +136,6 @@ function ChannelColorDisplay(props) {
     }
   }, [colors]);
 
-  // const lensIcon =
-  console.log("lensSelection[channelIndex]");
 
   const toggleVisibility = () => {
     let _tmpChannelsVisible = _.cloneDeep(channelsVisible);
@@ -155,7 +153,6 @@ function ChannelColorDisplay(props) {
       return;
     }
 
-    console.log("raster", raster);
     try {
       const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
       const intContrastLimits = [
