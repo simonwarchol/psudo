@@ -41,23 +41,19 @@ pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
 
     let vals_log = vals
         .iter()
-        .map(|&x| {
-            if x == 0.0 || x.is_nan() { 0.0 } else { x.ln() }
-        })
+        .filter(|&&x| !x.is_nan()) // Remove NaN values
+        .map(|&x| if x < 0.0 { 0.0 } else { x.ln() }) // Apply natural logarithm, replace 0.0 with 0.0
+
         .collect::<Array1<f32>>();
 
-    let min_log_val = vals_log.min().unwrap();
-    let max_log_val = vals_log.max().unwrap();
-    console::log_1(
-        &format!("Log-transformed data - Min: {}, Max: {}", min_log_val, max_log_val).into()
-    );
+
 
     let dataset = Dataset::from(vals_log.insert_axis(Axis(1)));
 
     console::log_1(&"Created Dataset!".into());
     let gmm_result = GaussianMixtureModel::params(3)
-        .n_runs(1)
-        .tolerance(1e-2)
+        .n_runs(3)
+        .tolerance(1e-4)
         .max_n_iterations(2000)
         .fit(&dataset);
 
