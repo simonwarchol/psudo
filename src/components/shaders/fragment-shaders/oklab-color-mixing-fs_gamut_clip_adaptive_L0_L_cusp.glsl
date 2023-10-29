@@ -1,4 +1,4 @@
-// lens bounds for ellipse
+´// lens bounds for ellipse
 uniform float majorLensAxis;
 uniform float minorLensAxis;
 uniform vec2 lensCenter;

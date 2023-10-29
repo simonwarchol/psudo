@@ -136,7 +136,6 @@ function ChannelColorDisplay(props) {
     }
   }, [colors]);
 
-
   const toggleVisibility = () => {
     let _tmpChannelsVisible = _.cloneDeep(channelsVisible);
     _tmpChannelsVisible[channelIndex] = !_tmpChannelsVisible[channelIndex];
@@ -145,25 +144,13 @@ function ChannelColorDisplay(props) {
     });
   };
 
-  const MAX_RETRIES = 3;
-
-  const runChannelGMM = (raster, attempt = 1) => {
-    if (attempt > MAX_RETRIES) {
-      console.error("Failed to run channel_gmm after", MAX_RETRIES, "attempts");
-      return;
-    }
-
-    try {
-      const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
-      const intContrastLimits = [
-        _.toInteger(conrastLimits[0]),
-        _.toInteger(conrastLimits[1]),
-      ];
-      setPropertiesForChannel(ind, { contrastLimits: intContrastLimits });
-    } catch (error) {
-      console.error("channel_gmm failed on attempt", attempt, ":", error);
-      runChannelGMM(raster, attempt + 1);
-    }
+  const runChannelGMM = (raster) => {
+    const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
+    const intContrastLimits = [
+      _.toInteger(conrastLimits[0]),
+      _.toInteger(conrastLimits[1]),
+    ];
+    setPropertiesForChannel(ind, { contrastLimits: intContrastLimits });
   };
 
   const calculateContrastLimits = () => {

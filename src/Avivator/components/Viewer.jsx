@@ -177,6 +177,7 @@ const Viewer = (props) => {
         pyramidResolution,
         channelsVisible,
         selections,
+        setIsLoading: context?.setIsLoading,
       },
     };
     hoverHooks = {
