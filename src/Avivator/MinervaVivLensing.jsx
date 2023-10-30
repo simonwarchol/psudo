@@ -3,10 +3,12 @@ import shallow from "zustand/shallow";
 import { LensExtension } from "@hms-dbmi/viv";
 import { VivView } from "@hms-dbmi/viv";
 import { CompositeLayer, COORDINATE_SYSTEM } from "@deck.gl/core";
+import { useContext } from "react";
 import {
   ScatterplotLayer,
   PolygonLayer,
   SolidPolygonLayer,
+  PathLayer,
   IconLayer,
 } from "@deck.gl/layers";
 import _ from "lodash";
@@ -287,6 +289,8 @@ const LensLayer = class extends CompositeLayer {
       point[1] - avgPoint[1],
     ]);
 
+    console.log("normalizedSvgPoints", normalizedSvgPoints);
+
     const arrowLayer = new SolidPolygonLayer({
       id: `arrow-layer-${id}`,
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
@@ -463,12 +467,158 @@ const LensLayer = class extends CompositeLayer {
       },
     });
 
+    const graphCircle = new ScatterplotLayer({
+      id: `graph-circle-${id}`,
+      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      data: [this.lensPosition],
+      pickable: true,
+      animate: true,
+      // opacity: 0.5,
+      stroked: true,
+      alphaCutoff: 0,
+      filled: true,
+      updateTriggers: {
+        getPosition: Date.now() % 2000,
+      },
+
+      getFillColor: (d) => [0, 0, 0, 0],
+      lineWidthMinPixels: 1,
+      getPosition: (d) => {
+        let multiplier = 1 / Math.pow(2, viewState.zoom);
+        const resizeRadius = 20 * multiplier;
+        const lensRadius = this.context.userData.lensRadius * multiplier;
+        const distanceFromCenter = lensRadius + resizeRadius; // Adjusts distance between lens and circle
+        const dx = Math.cos((2 * Math.PI) / 4) * distanceFromCenter;
+        const dy = Math.sin((2 * Math.PI) / 4) * distanceFromCenter;
+        return [d[0] + dx, d[1] + dy];
+      },
+      getRadius: (d) => {
+        let multiplier = 1 / Math.pow(2, viewState.zoom);
+        const resizeRadius = 20;
+
+        const size = resizeRadius * multiplier;
+        return size;
+      },
+      getLineColor: (d) => [255, 255, 255],
+      getLineWidth: (d) => {
+        const multiplier = 1 / Math.pow(2, viewState.zoom);
+        return 3 * multiplier;
+      },
+    });
+
+    // 25.5 24.58 37.32 4.77 50 24.65 50 20 39.42 3.42 37.25 0 35.17 3.48 24.38 21.57 13.18 17.83 12.05 17.45 11.03 18.1 0 25.25 0 28.22 12.4 20.2 25.5 24.58
+    const graphPoints1 = [
+      [25.5, 24.58],
+      [37.32, 4.77],
+      [50, 24.65],
+      [50, 20],
+      [39.42, 3.42],
+      [37.25, 0],
+      [35.17, 3.48],
+      [24.38, 21.57],
+      [13.18, 17.83],
+      [12.05, 17.45],
+      [11.03, 18.1],
+      [0, 25.25],
+      [0, 28.22],
+      [12.4, 20.2],
+      [25.5, 24.58],
+    ];
+    const graphPoints2 = [
+      [50, 28.27],
+      [37.38, 23.3],
+      [24.35, 30.95],
+      [12.1, 29.65],
+      [0, 32.85],
+      [0, 35.43],
+      [12.3, 32.18],
+      [24.9, 33.52],
+      [37.6, 26.08],
+      [50, 30.95],
+      [50, 28.27],
+    ];
+    const combinedGraphPoints = [...graphPoints1, ...graphPoints2];
+    const avgGraphPoint = combinedGraphPoints.reduce(
+      (acc, point) => [
+        acc[0] + point[0] / combinedGraphPoints.length,
+        acc[1] + point[1] / combinedGraphPoints.length,
+      ],
+      [0, 0]
+    );
+
+    console.log("normalizedGraph1Points", combinedGraphPoints,avgGraphPoint)
+
+    const normalizedGraph1Points = graphPoints1.map((point) => [
+      point[0] - avgGraphPoint[0],
+      point[1] - avgGraphPoint[1],
+    ]);
+    const normalizedGraph2Points = graphPoints2.map((point) => [
+      point[0] - avgGraphPoint[0],
+      point[1] - avgGraphPoint[1],
+    ]);
+
+    const graphIconLayers = [
+      new SolidPolygonLayer({
+        id: `graph-icon-1-layer-${id}`,
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        data: [this.lensPosition],
+        getPolygon: (d) => {
+          let multiplier = 1 / Math.pow(2, viewState.zoom);
+          const resizeRadius = 20 * multiplier;
+          const lensRadius = this.context.userData.lensRadius * multiplier;
+          const distanceFromCenter = lensRadius + resizeRadius;
+          const dx = Math.cos((2 * Math.PI) / 4) * distanceFromCenter;
+          const dy = Math.sin((2 * Math.PI) / 4) * distanceFromCenter;
+          const center = [d[0] + dx, d[1] + dy];
+
+          const scale = 0.5 * multiplier;
+
+          // Rotate each SVG point by 45 degrees about its center, then scale and position them
+          const transformedPoints = normalizedGraph1Points.map((point) => {
+            return [center[0] + point[0] * scale, center[1] + point[1] * scale];
+          });
+
+          return transformedPoints;
+        },
+        getFillColor: [53, 121, 246],
+        extruded: false,
+        pickable: false,
+      }),
+      new SolidPolygonLayer({
+        id: `graph-icon-2-layer-${id}`,
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        data: [this.lensPosition],
+        getPolygon: (d) => {
+          let multiplier = 1 / Math.pow(2, viewState.zoom);
+          const resizeRadius = 20 * multiplier;
+          const lensRadius = this.context.userData.lensRadius * multiplier;
+          const distanceFromCenter = lensRadius + resizeRadius;
+          const dx = Math.cos((2 * Math.PI) / 4) * distanceFromCenter;
+          const dy = Math.sin((2 * Math.PI) / 4) * distanceFromCenter;
+          const center = [d[0] + dx, d[1] + dy];
+
+          const scale = 0.5 * multiplier;
+
+          // Rotate each SVG point by 45 degrees about its center, then scale and position them
+          const transformedPoints = normalizedGraph2Points.map((point) => {
+            return [center[0] + point[0] * scale, center[1] + point[1] * scale];
+          });
+
+          return transformedPoints;
+        },
+        getFillColor: [53, 121, 246],
+        extruded: false,
+        pickable: false,
+      }),
+    ];
+
     return [
       lensCircle,
       resizeCircle,
       arrowLayer,
       contrastCircle,
-
+      graphCircle,
+      ...graphIconLayers,
       contrastSemiCircle,
       _.every(lensSelection, (num) => num === 0) ? null : opacityLayer,
     ];
@@ -543,8 +693,8 @@ const LensLayer = class extends CompositeLayer {
         loader,
         this.context.userData
       );
-      // If nothing is in the lens, apply to all channels
       this.context?.userData?.setIsLoading(true);
+      // If nothing is in the lens, apply to all channels
       if (_.every(lensSelection, (num) => num === 0)) {
         (this.context?.userData?.channelsVisible || []).forEach((d, i) => {
           if (d == true) {
@@ -560,25 +710,35 @@ const LensLayer = class extends CompositeLayer {
               _.toInteger(conrastLimits[0]),
               _.toInteger(conrastLimits[1]),
             ];
-            useChannelsStore
-              .getState()
-              ?.setPropertiesForChannel(i, {
-                contrastLimits: intContrastLimits,
-              });
+            useChannelsStore.getState()?.setPropertiesForChannel(i, {
+              contrastLimits: intContrastLimits,
+            });
             // setPropertiesForChannel(i, { contrastLimits: intContrastLimits });
           }
         });
       } else {
+        lensSelection.forEach((d, i) => {
+          if (d == 1) {
+            const selection = this.context?.userData?.selections[i];
+            let thisChannelsData = channelData.filter((d) => {
+              return _.isEqual(d.selection, selection);
+            })[0];
+            console.log("thisChannelsData", thisChannelsData);
+            const conrastLimits = psudoAnalysis.channel_gmm(
+              thisChannelsData.data
+            );
+            const intContrastLimits = [
+              _.toInteger(conrastLimits[0]),
+              _.toInteger(conrastLimits[1]),
+            ];
+            useChannelsStore.getState()?.setPropertiesForChannel(i, {
+              contrastLimits: intContrastLimits,
+            });
+            // setPropertiesForChannel(i, { contrastLimits: intContrastLimits });
+          }
+        });
       }
-      // this.context?.setIsLoading(true);
       this.context?.userData?.setIsLoading(false);
-
-      // console.log(
-      //   "Simon Click",
-      //   pickingInfo?.sourceLayer?.id,
-      //   this.context.userData,
-      //   lensSelection
-      // );
     }
   }
 
