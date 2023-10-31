@@ -30,6 +30,7 @@ const Viewer = (props) => {
   const [lensRadius, setLensRadius] = useState(100);
   const [movingLens, setMovingLens] = useState(false);
   const [lensOpacity, setLensOpacity] = useState(1);
+  const [graphData, setGraphData] = useState([]);
 
   const viewerRef = React.useRef(null);
 
@@ -178,6 +179,9 @@ const Viewer = (props) => {
         channelsVisible,
         selections,
         setIsLoading: context?.setIsLoading,
+        graphData,
+        setGraphData,
+        colors
       },
     };
     hoverHooks = {

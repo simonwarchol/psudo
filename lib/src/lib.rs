@@ -23,6 +23,26 @@ pub fn greet() {
 }
 
 #[wasm_bindgen]
+pub fn ln(array: &[u16]) -> Vec<f32> {
+    let array_vec = array.to_vec();
+    let vals = array_vec
+        .par_iter()
+        .map(|&x| x as f32)
+        .collect::<Vec<f32>>();
+    // take a random sample of 1000 values
+    // Iterate over vals, if value is 0 or nan, make it 0, otherwise take the log
+
+    let vals_log = vals
+        .iter()
+        .map(|&x| {
+            if x <= 0.0 || x.is_nan() { 0.0 } else { x.ln() }
+        })
+        .collect::<Array1<f32>>();
+    return vals_log.to_vec();
+
+}
+
+#[wasm_bindgen]
 pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
     console::log_1(&"Starting GMM".into());
     let sampled_array = if array.len() > 20_000 {

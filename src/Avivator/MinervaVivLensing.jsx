@@ -3,7 +3,8 @@ import shallow from "zustand/shallow";
 import { LensExtension } from "@hms-dbmi/viv";
 import { VivView } from "@hms-dbmi/viv";
 import { CompositeLayer, COORDINATE_SYSTEM } from "@deck.gl/core";
-import { useContext } from "react";
+import { bin } from "d3-array";
+
 import {
   ScatterplotLayer,
   PolygonLayer,
@@ -31,6 +32,7 @@ const defaultProps = {
   lensBorderRadius: { type: "number", value: 0.02, compare: true },
   colors: { type: "array", value: null, compare: true },
 };
+const numBins = 50;
 
 function getImageLayer(id, props) {
   const { loader } = props;
@@ -175,7 +177,7 @@ const LensLayer = class extends CompositeLayer {
     const { id, viewState } = this.props;
     const showLens = useImageSettingsStore.getState()?.lensEnabled;
     const lensSelection = useImageSettingsStore.getState()?.lensSelection;
-    console.log("lensSelection", lensSelection);
+    // console.log("lensSelection", lensSelection);
     if (!showLens) return [];
     const mousePosition = this.context.userData.mousePosition || [
       Math.round((this.context.deck.width || 0) / 2),
@@ -288,8 +290,6 @@ const LensLayer = class extends CompositeLayer {
       point[0] - avgPoint[0],
       point[1] - avgPoint[1],
     ]);
-
-    console.log("normalizedSvgPoints", normalizedSvgPoints);
 
     const arrowLayer = new SolidPolygonLayer({
       id: `arrow-layer-${id}`,
@@ -506,111 +506,143 @@ const LensLayer = class extends CompositeLayer {
       },
     });
 
-    // 25.5 24.58 37.32 4.77 50 24.65 50 20 39.42 3.42 37.25 0 35.17 3.48 24.38 21.57 13.18 17.83 12.05 17.45 11.03 18.1 0 25.25 0 28.22 12.4 20.2 25.5 24.58
-    const graphPoints1 = [
-      [25.5, 24.58],
-      [37.32, 4.77],
-      [50, 24.65],
-      [50, 20],
-      [39.42, 3.42],
-      [37.25, 0],
-      [35.17, 3.48],
-      [24.38, 21.57],
-      [13.18, 17.83],
-      [12.05, 17.45],
-      [11.03, 18.1],
-      [0, 25.25],
-      [0, 28.22],
-      [12.4, 20.2],
-      [25.5, 24.58],
-    ];
-    const graphPoints2 = [
-      [50, 28.27],
-      [37.38, 23.3],
-      [24.35, 30.95],
-      [12.1, 29.65],
-      [0, 32.85],
-      [0, 35.43],
-      [12.3, 32.18],
-      [24.9, 33.52],
-      [37.6, 26.08],
-      [50, 30.95],
-      [50, 28.27],
-    ];
-    const combinedGraphPoints = [...graphPoints1, ...graphPoints2];
-    const avgGraphPoint = combinedGraphPoints.reduce(
-      (acc, point) => [
-        acc[0] + point[0] / combinedGraphPoints.length,
-        acc[1] + point[1] / combinedGraphPoints.length,
+    const graphIconData = {
+      graph1: [
+        [25.5, 24.58],
+        [37.32, 4.77],
+        [50, 24.65],
+        [50, 16],
+        [37.25, -4],
+        [24.38, 17.57],
+        [12.05, 13.45],
+        [0, 21.25],
+        [0, 28.22],
+        [12.4, 20.2],
+        [25.5, 24.58],
       ],
-      [0, 0]
-    );
+      graph2: [
+        [50, 28.27],
+        [37.38, 23.3],
+        [24.35, 30.95],
+        [12.1, 29.65],
+        [0, 32.85],
+        [0, 39.43],
+        [12.3, 36.18],
+        [24.9, 37.52],
+        [37.6, 30.08],
+        [50, 34.95],
+        [50, 28.27],
+      ],
+    };
+    // Function to calculate average point
+    const calculateAveragePoint = (points) => {
+      const total = points.reduce(
+        (acc, [x, y]) => [acc[0] + x, acc[1] + y],
+        [0, 0]
+      );
+      return total.map((coord) => coord / points.length);
+    };
 
-    console.log("normalizedGraph1Points", combinedGraphPoints,avgGraphPoint)
+    // Function to normalize points
+    const normalizePoints = (points, averagePoint) => {
+      return points.map(([x, y]) => [x - averagePoint[0], y - averagePoint[1]]);
+    };
 
-    const normalizedGraph1Points = graphPoints1.map((point) => [
-      point[0] - avgGraphPoint[0],
-      point[1] - avgGraphPoint[1],
-    ]);
-    const normalizedGraph2Points = graphPoints2.map((point) => [
-      point[0] - avgGraphPoint[0],
-      point[1] - avgGraphPoint[1],
-    ]);
+    // Combined points from both graphs
+    const combinedPoints = [...graphIconData.graph1, ...graphIconData.graph2];
+    const averagePoint = calculateAveragePoint(combinedPoints);
 
+    // Normalized points for both graphs
+    const normalizedPoints = {
+      graph1: normalizePoints(graphIconData.graph1, averagePoint),
+      graph2: normalizePoints(graphIconData.graph2, averagePoint),
+    };
+
+    // Function to create a graph layer
+    const createGraphLayer = (id, graphKey, color) => {
+      return new SolidPolygonLayer({
+        id: `graph-icon-${graphKey}-layer-${id}`,
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        data: [this.lensPosition],
+        getPolygon: (d) => {
+          const multiplier = 1 / Math.pow(2, viewState.zoom);
+          const resizeRadius = 20 * multiplier;
+          const lensRadius = this.context.userData.lensRadius * multiplier;
+          const distanceFromCenter = lensRadius + resizeRadius;
+          const angle = (2 * Math.PI) / 4;
+          const dx = Math.cos(angle) * distanceFromCenter;
+          const dy = Math.sin(angle) * distanceFromCenter;
+          const center = [d[0] + dx, d[1] + dy];
+          const scale = 0.5 * multiplier;
+
+          return normalizedPoints[graphKey].map(([x, y]) => [
+            center[0] + x * scale,
+            center[1] + y * scale,
+          ]);
+        },
+        getFillColor: color,
+        extruded: false,
+        pickable: false,
+      });
+    };
+
+    // Graph icon layers
     const graphIconLayers = [
-      new SolidPolygonLayer({
-        id: `graph-icon-1-layer-${id}`,
-        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-        data: [this.lensPosition],
-        getPolygon: (d) => {
-          let multiplier = 1 / Math.pow(2, viewState.zoom);
-          const resizeRadius = 20 * multiplier;
-          const lensRadius = this.context.userData.lensRadius * multiplier;
-          const distanceFromCenter = lensRadius + resizeRadius;
-          const dx = Math.cos((2 * Math.PI) / 4) * distanceFromCenter;
-          const dy = Math.sin((2 * Math.PI) / 4) * distanceFromCenter;
-          const center = [d[0] + dx, d[1] + dy];
-
-          const scale = 0.5 * multiplier;
-
-          // Rotate each SVG point by 45 degrees about its center, then scale and position them
-          const transformedPoints = normalizedGraph1Points.map((point) => {
-            return [center[0] + point[0] * scale, center[1] + point[1] * scale];
-          });
-
-          return transformedPoints;
-        },
-        getFillColor: [53, 121, 246],
-        extruded: false,
-        pickable: false,
-      }),
-      new SolidPolygonLayer({
-        id: `graph-icon-2-layer-${id}`,
-        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-        data: [this.lensPosition],
-        getPolygon: (d) => {
-          let multiplier = 1 / Math.pow(2, viewState.zoom);
-          const resizeRadius = 20 * multiplier;
-          const lensRadius = this.context.userData.lensRadius * multiplier;
-          const distanceFromCenter = lensRadius + resizeRadius;
-          const dx = Math.cos((2 * Math.PI) / 4) * distanceFromCenter;
-          const dy = Math.sin((2 * Math.PI) / 4) * distanceFromCenter;
-          const center = [d[0] + dx, d[1] + dy];
-
-          const scale = 0.5 * multiplier;
-
-          // Rotate each SVG point by 45 degrees about its center, then scale and position them
-          const transformedPoints = normalizedGraph2Points.map((point) => {
-            return [center[0] + point[0] * scale, center[1] + point[1] * scale];
-          });
-
-          return transformedPoints;
-        },
-        getFillColor: [53, 121, 246],
-        extruded: false,
-        pickable: false,
-      }),
+      createGraphLayer(id, "graph1", [53, 121, 246]),
+      createGraphLayer(id, "graph2", [246, 121, 53]),
     ];
+
+    console.log("graphData", this.context.userData.graphData);
+    // if (_.size(this.context.userData.graphData) > 0){
+    const pathLayers = (this.context?.userData?.graphData || []).map(
+      (graphD) => {
+        return new PathLayer({
+          id: "path-layer",
+          data: [this.lensPosition],
+          pickable: true,
+          widthScale: 20,
+          widthMinPixels: 2,
+          getPath: (d) => {
+            console.log("ddddd", graphD);
+            let multiplier = 1 / Math.pow(2, viewState.zoom);
+            const resizeRadius = 20 * multiplier;
+            const lensRadius = this.context.userData.lensRadius;
+            const center = [d[0], d[1]];
+            const scale = multiplier * lensRadius * 0.6;
+
+            const freqPoints = graphD?.data?.frequencies || [];
+
+            const avgPoint = freqPoints.reduce(
+              (acc, point) => [
+                acc[0] + point[0] / freqPoints.length,
+                acc[1] + point[1] / freqPoints.length,
+              ],
+              [0, 0]
+            );
+
+            const normalizedGraphPoints = freqPoints.map((point) => [
+              (point[0] - avgPoint[0]) / 30,
+              (point[1] - avgPoint[1]) / 0.5,
+            ]);
+
+            // Rotate each SVG point by 45 degrees about its center, then scale and position them
+            const transformedPoints = normalizedGraphPoints.map((point) => {
+              return [
+                center[0] + point[0] * scale,
+                center[1] + point[1] * -scale * 0.5,
+              ];
+            });
+
+            return transformedPoints;
+          },
+          getColor: (d) => graphD.color,
+          getWidth: (d) => {
+            let multiplier = 1 / Math.pow(2, viewState.zoom);
+            return 0.1 * multiplier;
+          },
+        });
+      }
+    );
 
     return [
       lensCircle,
@@ -620,6 +652,7 @@ const LensLayer = class extends CompositeLayer {
       graphCircle,
       ...graphIconLayers,
       contrastSemiCircle,
+      pathLayers,
       _.every(lensSelection, (num) => num === 0) ? null : opacityLayer,
     ];
   }
@@ -627,6 +660,7 @@ const LensLayer = class extends CompositeLayer {
     // console.log("Drag", pickingInfo?.sourceLayer?.id);
     const { viewState } = this.props;
     this.context.userData.setMovingLens(true);
+    this.context.userData.setGraphData([]);
 
     if (pickingInfo?.sourceLayer?.id === `resize-circle-${this.props.id}`) {
       const lensCenter = this.context.userData.mousePosition;
@@ -739,6 +773,44 @@ const LensLayer = class extends CompositeLayer {
         });
       }
       this.context?.userData?.setIsLoading(false);
+    } else if (
+      pickingInfo?.sourceLayer?.id == `graph-circle-${this.props.id}`
+    ) {
+      const lensSelection = useImageSettingsStore.getState()?.lensSelection;
+      const colors = useChannelsStore.getState()?.colors;
+      const channelsVisible = this.context?.userData?.channelsVisible;
+      const channelData = await this.getLensIntensityValues(
+        coordinate,
+        viewState,
+        loader,
+        this.context.userData
+      );
+      let graphData = [];
+      console.log(channelData, colors, lensSelection, channelsVisible);
+      if (_.every(lensSelection, (num) => num === 0)) {
+        (this.context?.userData?.channelsVisible || []).forEach((d, i) => {
+          if (d == true) {
+            const selection = this.context?.userData?.selections[i];
+            let thisChannelsData = channelData.filter((d) => {
+              return _.isEqual(d.selection, selection);
+            })[0];
+            const color = colors[i];
+            graphData.push({ data: thisChannelsData, color: color });
+          }
+        });
+      } else {
+        lensSelection.forEach((d, i) => {
+          if (d == 1) {
+            const selection = this.context?.userData?.selections[i];
+            let thisChannelsData = channelData.filter((d) => {
+              return _.isEqual(d.selection, selection);
+            })[0];
+            const color = colors[i];
+            graphData.push({ data: thisChannelsData, color: color });
+          }
+        });
+      }
+      this.context.userData.setGraphData(graphData);
     }
   }
 
@@ -796,7 +868,7 @@ const LensLayer = class extends CompositeLayer {
         : y + sizeAtPyramidLevel
     );
     // get viewport
-    console.log("range", xMin, xMax, yMin, yMax, shapeAtThisLevel);
+    // console.log("range", xMin, xMax, yMin, yMax, shapeAtThisLevel);
     // Calculate the indices of the tiles
     const xMinIndex = Math.floor(xMin / tileSizeAtThisLevel[0]);
     const xMaxIndex = Math.ceil(xMax / tileSizeAtThisLevel[0]) - 1; // we subtract 1 because we want the index of the last tile, not the count
@@ -849,14 +921,25 @@ const LensLayer = class extends CompositeLayer {
             }
           }
         }
+        thisChannel.mean = _.mean(thisChannel.data);
+        thisChannel.data = psudoAnalysis.ln(thisChannel.data);
+
+        // Number of bins you want
+        const binF = bin()
+          .domain([0, Math.log(65535)]) // Setting the range of your data
+          .thresholds(numBins);
+        const binnedData = binF(thisChannel.data);
+        // Get the frequencies as fractions
+        const frequencies = binnedData.map((d, i) => [
+          i,
+          d.length / thisChannel.data.length,
+        ]);
+        thisChannel.frequencies = frequencies;
+        // console.log("freq", frequencies);
+
         channelData.push(thisChannel);
       }
     }
-    console.log("channelData", channelData);
-    // channelData.forEach((channel) => {
-    //   let mean = _.mean(channel.data);
-    //   // console.log("mean", mean, channel.selection.c);
-    // });
     userData.setMovingLens(false);
     return channelData;
   }
