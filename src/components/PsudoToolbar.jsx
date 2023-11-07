@@ -2,6 +2,8 @@ import React, { useContext, useEffect, useState } from "react";
 import { AppContext } from "../context/GlobalContext.jsx";
 import ColorNameSelect from "./ColorNameSelect.jsx";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import * as psudoAnalysis from "psudo-analysis";
+
 import {
   Grid,
   IconButton,
@@ -21,6 +23,7 @@ import {
   useChannelsStore,
   useViewerStore,
   useImageSettingsStore,
+  useLoader,
 } from "../Avivator/state.js";
 import { getNameFromUrl } from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
@@ -55,13 +58,34 @@ function PsudoToolbar() {
     (store) => [store.lensEnabled],
     shallow
   );
+  const [
+    globalSelection,
+    channelOptions,
+    source,
+    viewState,
+    pyramidResolution,
+  ] = useViewerStore(
+    (store) => [
+      store.globalSelection,
+      store.channelOptions,
+      store.source,
+      store.viewState,
+      store.pyramidResolution,
+    ],
+    shallow
+  );
 
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [showLinkInput, setShowLinkInput] = useState(false);
-  const [source] = useViewerStore((store) => [store.source], shallow);
   const [imageUrl, setImageUrl] = useState(source?.urlOrFile);
-  let [channelsVisible] = useChannelsStore(
-    (store) => [store.channelsVisible],
+  const loader = useLoader();
+  let [channelsVisible, colors, contrastLimits, selections] = useChannelsStore(
+    (store) => [
+      store.channelsVisible,
+      store.colors,
+      store.contrastLimits,
+      store.selections,
+    ],
     shallow
   );
   useEffect(() => {
@@ -180,9 +204,10 @@ function PsudoToolbar() {
     });
 
     let intensityList = new Float32Array([]);
-    let colorList = new Uint16Array([]);
+    let colorList = [];
     await Promise.all(
       channelsPayload.map(async (d, i) => {
+        colorList.push(...d.color);
         // const resolution = pyramidResolution;
         const raster = await loader?.[pyramidResolution]?.getRaster({
           selection: d.selection,
@@ -231,7 +256,21 @@ function PsudoToolbar() {
       colorListFloat[i] = d / 255;
     });
     console.log("colors", colorList, colorListFloat);
-    // const test = psudoAnalysis.optimize_palette(intensityList, colorList);
+    const optColors = psudoAnalysis.optimize(colorList);
+    console.log("optColors", optColors);
+    console.log("Colors Before", colors);
+    let colorCounter = 0;
+    let tmpColors = _.cloneDeep(colors);
+    channelsVisible.forEach((d, i) => {
+      if (d) {
+        tmpColors[i] = Array.from(
+          optColors.slice(colorCounter, colorCounter + 3).map((d) => d * 255)
+        );
+        colorCounter += 3;
+      }
+    });
+    useChannelsStore.setState({ colors: tmpColors, prevColors: tmpColors });
+
     // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`, test)
     // console.log('test', JSON.stringify({
     //     'intensityList': Array.from(intensityList),

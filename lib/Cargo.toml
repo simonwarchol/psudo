@@ -35,6 +35,8 @@ serde_json = "1.0.108"
 typenum = "1.17.0"
 kd-tree = "0.5.1"
 argmin = "0.8.1"
+instant = { version = "0.1", features = [ "wasm-bindgen"]}
+
 
 rand_xoshiro = "0.6.0"
 libc = "0.2.150"

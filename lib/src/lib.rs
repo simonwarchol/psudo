@@ -35,7 +35,122 @@ pub fn greet() {
     alert("Hello, lib!");
 }
 
+#[wasm_bindgen]
+pub fn ln(array: &[u16]) -> Vec<f32> {
+    let array_vec = array.to_vec();
+    let vals = array_vec
+        .par_iter()
+        .map(|&x| x as f32)
+        .collect::<Vec<f32>>();
+    // take a random sample of 1000 values
+    // Iterate over vals, if value is 0 or nan, make it 0, otherwise take the log
 
+    let vals_log = vals
+        .iter()
+        .map(|&x| {
+            if x <= 0.0 || x.is_nan() { 0.0 } else { x.ln() }
+        })
+        .collect::<Array1<f32>>();
+    return vals_log.to_vec();
+}
+
+#[wasm_bindgen]
+pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
+    console::log_1(&"Starting GMM".into());
+    let sampled_array = if array.len() > 20_000 {
+        let mut rng = rand::thread_rng();
+        array.choose_multiple(&mut rng, 20_000).cloned().collect::<Vec<_>>()
+    } else {
+        array.to_vec()
+    };
+
+    let vals = sampled_array
+        .par_iter()
+        .map(|&x| x as f32)
+        .collect::<Vec<f32>>();
+    // take a random sample of 1000 values
+    // Iterate over vals, if value is 0 or nan, make it 0, otherwise take the log
+
+    let vals_log = vals
+        .iter()
+        .map(|&x| {
+            if x <= 0.0 || x.is_nan() { 0.0 } else { x.ln() }
+        })
+        .collect::<Array1<f32>>();
+
+    // let min_log_val = vals_log.min().unwrap();
+    // let max_log_val = vals_log.max().unwrap();
+    // console::log_1(
+    //     &format!("Log-transformed data - Min: {}, Max: {}", min_log_val, max_log_val).into()
+    // );
+    // let mut print_str = String::new();
+    // for val in vals_log.iter() {
+    //     print_str += &val.to_string();
+    //     print_str.push(',');
+    // }
+    // console::log_1(&JsValue::from_str(&print_str));
+
+    let dataset = Dataset::from(vals_log.insert_axis(Axis(1)));
+
+    console::log_1(&"Created Dataset!".into());
+    let gmm_result = GaussianMixtureModel::params(3)
+        .n_runs(10)
+        .tolerance(1e-4)
+        .max_n_iterations(500)
+        .init_method(linfa_clustering::GmmInitMethod::Random)
+        .fit(&dataset);
+
+    let gmm = match gmm_result {
+        Ok(g) => g,
+        Err(e) => {
+            let error_message = format!("GMM fitting error: {:?}", e);
+            console::log_1(&error_message.into());
+            panic!("GMM fitting failed!");
+        }
+    };
+    let means = gmm.means();
+    let covariances = gmm.covariances();
+    let weights = gmm.weights();
+
+    let flattend_means = means.view().into_shape((means.len(),)).unwrap().to_owned().into_raw_vec();
+    let mut indexed_values: Vec<(usize, f32)> = flattend_means
+        .iter()
+        .enumerate()
+        .map(|(i, &val)| (i, val))
+        .collect();
+    indexed_values.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    // Extract indices from the sorted pairs.
+    let (_i0, i1, i2) = (indexed_values[0].0, indexed_values[1].0, indexed_values[2].0);
+    let (mean1, mean2) = (flattend_means[i1], flattend_means[i2]);
+    let (std1, std2) = (covariances[[i1, 0, 0]].sqrt(), covariances[[i2, 0, 0]].sqrt());
+    // Python code to implement
+    let x = Array1::linspace(mean1, mean2, 50);
+    let norm1 = Normal::new(mean1 as f64, std1 as f64).unwrap();
+    let norm2 = Normal::new(mean2 as f64, std2 as f64).unwrap();
+    let y1 = x.mapv(|v| norm1.pdf(v as f64) * (weights[i1] as f64));
+    let y2 = x.mapv(|v| norm2.pdf(v as f64) * (weights[i2] as f64));
+    let lmax = mean2 + 2.0 * std2;
+    // Calculate the differences between y1 and y2, take their absolute values, and get the index of the minimum value
+    let differences = (&y1 - &y2).mapv(|val| val.abs());
+    let mut min_diff_index: usize = 0;
+    let mut min_diff_value = f64::MAX;
+    for (i, &diff) in differences.iter().enumerate() {
+        if diff < min_diff_value {
+            min_diff_index = i;
+            min_diff_value = diff;
+        }
+    }
+    let mut lmin = x[min_diff_index];
+    // Apply the given condition
+    if lmin >= mean2 {
+        lmin = mean2 - 2.0 * std2;
+    }
+    let vals_array = Array1::from(vals);
+
+    let vmin = f32::max(lmin.exp(), f32::max(*vals_array.min().unwrap(), 0.0));
+    let vmax = f32::min(lmax.exp(), *vals_array.max().unwrap());
+    return vec![vmin, vmax];
+}
 
 fn euclidean_distance(a: &[f64], b: &[f64]) -> f64 {
     a.iter()
@@ -122,6 +237,24 @@ pub fn evaluate_palette(rgb_colors: &[u16]) -> f32 {
     (average_cosine_distance as f32) + (avergae_euc_distance as f32)
 }
 
+fn color_conversion_test() -> () {
+    let my_rgb = Srgb::new(0.1, 0.0, 0.0);
+
+    let mut my_okl = Oklab::from_color(my_rgb);
+    println!("my_okl: {:?}", my_okl.l);
+}
+
+#[wasm_bindgen]
+pub fn test_color_distance(array: &[u16]) -> f32 {
+    // Run this 100 times and take the average
+    let mut total_distance = 0.0;
+    for _ in 0..100 {
+        total_distance += evaluate_palette(array);
+    }
+    total_distance / 100.0
+}
+
+// ///////////////////////////////////////// Optimization /////////////////////////////////////
 struct Loss {
     rng: Arc<Mutex<Xoshiro256PlusPlus>>,
     intensities: Vec<f32>,
@@ -185,6 +318,22 @@ impl CostFunction for Loss {
         let average_cosine_distance = total_distance / (total_pairs as f64);
         let avergae_euc_distance = average_pairwise_euclidean_distance(&oklab_palette);
         Ok((-average_cosine_distance as f32) + (-avergae_euc_distance as f32))
+        // let init_param = vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        // let intensities = vec![1.0, 2.0, 3.0];
+        // let future_result = async {
+        //     vec![1.0]
+        // };
+        // // Console log
+        // let result: Vec<f32> = futures::executor::block_on(future_result);
+
+        // let future_result = diff_penalty(include_str!("diff.wgsl"), &intensities, init_param.clone());
+
+        // let future_result = diff_penalty(include_str!("diff.wgsl"), &self.intensities, param.clone());
+        // let result: Vec<f32> = futures::executor::block_on(future_result);
+        // let result: Vec<f32> = future_result.block_on();
+        // let result_sum: f32 = result.par_iter().sum();
+        // let mean: f32 = result_sum / result.len() as f32;
+        // Ok(0.1)
     }
 }
 
@@ -220,26 +369,44 @@ fn annealing(intensities: &Vec<f32>) -> Result<Vec<f32>, Error> {
     let cost_function = Loss::new(intensities.clone());
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
-        .configure(|state| { state.param(intensities.to_vec()).max_iters(1_000) })
-        // Optional: Attach an observer
+        .configure(|state| { state.param(intensities.to_vec()).max_iters(10_000) })
         .run()?;
     // Print result
     let best_param = res.state().get_best_param().unwrap().clone();
 
-    Ok(best_param) // Return the best parameters
+    Ok(best_param.clone()) // Return the best parameters
 }
 
 #[wasm_bindgen]
-pub fn optimize() {
-    let color_map = &[
-        127, 201, 127, 190, 174, 212, 253, 192, 134, 255, 255, 153, 56, 108, 176, 240, 2, 127,
-    ];
-    // Convert to float, divide each val by 255.0
-    let float_color_map: Vec<f32> = color_map
+pub fn optimize(colors: &[u16]) -> Vec<f32> {
+    utils::set_panic_hook();
+
+    let float_color_map: Vec<f32> = colors
         .iter()
         .map(|&x| (x as f32) / 255.0)
         .collect::<Vec<f32>>();
-    println!("color_map: {:?}", float_color_map);
-    let best_params = annealing(&float_color_map).unwrap();
-    println!("Best parameter: {:?}", best_params);
+    let optimized_colors = annealing(&float_color_map).unwrap();
+    optimized_colors
 }
+
+// #[wasm_bindgen]
+// pub fn test_optimize() -> Vec<f32> {
+//     let array = [
+//         127, 201, 127, 190, 174, 212, 253, 192, 134, 255, 255, 153, 56, 108, 176, 240, 2, 127,
+//     ];
+//     let array_vec = array.to_vec();
+//     let vals = array_vec
+//         .par_iter()
+//         .map(|&x| x as f32)
+//         .collect::<Vec<f32>>();
+//     // take a random sample of 1000 values
+//     // Iterate over vals, if value is 0 or nan, make it 0, otherwise take the log
+
+//     let vals_log = vals
+//         .iter()
+//         .map(|&x| {
+//             if x <= 0.0 || x.is_nan() { 0.0 } else { x.ln() }
+//         })
+//         .collect::<Array1<f32>>();
+//     return vals_log.to_vec();
+// }
