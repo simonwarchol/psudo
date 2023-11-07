@@ -26,15 +26,16 @@ import { getNameFromUrl } from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
 import JoinInnerIcon from "@mui/icons-material/JoinInner";
-import BarChartIcon from "@mui/icons-material/BarChart";
-
+import AutoGraphIcon from "@mui/icons-material/AutoGraph";
 import shallow from "zustand/shallow";
 import SingleChannelWrapper from "./SingleChannelWrapper.jsx";
 import { AttachFile, InsertLink } from "@mui/icons-material";
 import DropzoneButton from "../Avivator/components/Controller/components/DropzoneButton.jsx";
 import Footer from "../Avivator/components/Footer.jsx";
 import AddChannel from "../Avivator/components/Controller/components/AddChannel.jsx";
-import _ from 'lodash';
+import { VegaLite } from "react-vega";
+import LineChart from "./LineChart.jsx";
+import _ from "lodash";
 
 function PsudoToolbar() {
   const context = useContext(AppContext);
@@ -138,6 +139,31 @@ function PsudoToolbar() {
   };
   const toggleShowLens = () => {
     useImageSettingsStore.setState({ lensEnabled: !_.cloneDeep(lensEnabled) });
+  };
+
+  const spec = {
+    width: 400,
+    height: 200,
+    mark: "bar",
+    encoding: {
+      x: { field: "a", type: "ordinal" },
+      y: { field: "b", type: "quantitative" },
+    },
+    data: { name: "table" }, // note: vega-lite data attribute is a plain object instead of an array
+  };
+
+  const barData = {
+    table: [
+      { a: "A", b: 28 },
+      { a: "B", b: 55 },
+      { a: "C", b: 43 },
+      { a: "D", b: 91 },
+      { a: "E", b: 81 },
+      { a: "F", b: 53 },
+      { a: "G", b: 19 },
+      { a: "H", b: 87 },
+      { a: "I", b: 52 },
+    ],
   };
 
   const optimize = async () => {
@@ -273,10 +299,44 @@ function PsudoToolbar() {
             MenuListProps={{
               "aria-labelledby": "basic-button",
             }}
-            sx={{ marginTop: 5 }}
+            sx={{ marginTop: 1 }}
           >
             <PastPalettes />
           </Menu>
+        </Grid>
+        <Grid item xs={"auto"} sx={{ zIndex: 10000 }}>
+          <IconButton
+            id="graph-button"
+            aria-controls={openChart ? "basic-menu" : undefined}
+            aria-haspopup="true"
+            aria-expanded={openChart ? "true" : undefined}
+            onClick={handleChartClick}
+          >
+            <AutoGraphIcon sx={{ fontSize: 40 }} />
+          </IconButton>
+          <Menu
+            id="basic-menu"
+            anchorEl={anchorElChart}
+            open={openChart}
+            onClose={handleCloseChart}
+            MenuListProps={{
+              "aria-labelledby": "basic-button",
+            }}
+          >
+            <Grid
+              container
+              direction="column"
+              justifyContent="center"
+              alignItems="center"
+              item
+              p={0}
+              m={0}
+              sx={{ width: 370, height: 100 }}
+            >
+              <LineChart style={{ position: "relative", left: "50%" }} />
+            </Grid>
+          </Menu>
+          <Footer />
         </Grid>
       </Grid>
 
@@ -345,40 +405,7 @@ function PsudoToolbar() {
             </Icon>
           </IconButton>
         </Grid>
-        <Grid item xs={"auto"}>
-          <IconButton
-            id="source-button"
-            aria-controls={openChart ? "basic-menu" : undefined}
-            aria-haspopup="true"
-            aria-expanded={openChart ? "true" : undefined}
-            onClick={handleChartClick}
-          >
-            <BarChartIcon sx={{ fontSize: 40 }} />
-          </IconButton>
-          <Menu
-            id="basic-menu"
-            anchorEl={anchorElChart}
-            open={openChart}
-            onClose={handleCloseChart}
-            MenuListProps={{
-              "aria-labelledby": "basic-button",
-            }}
-          >
-            <Grid
-              container
-              direction="column"
-              justifyContent="center"
-              alignItems="center"
-              p={0}
-              m={0}
-            >
-              <Grid item p={0} m={0}>
-                <h4 style={{ margin: 0, padding: 0 }}>Chart</h4>
-              </Grid>
-            </Grid>
-          </Menu>
-          <Footer />
-        </Grid>
+
         <Grid item xs={"auto"}>
           {/* Increase size of icon */}
           <IconButton

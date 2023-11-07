@@ -30,6 +30,14 @@ getrandom = { version = "0.2", features = ["js"] }
 web-sys = { version = "0.3.64", features = ["console"]}
 ndarray-stats = "0.5.1"
 rand = "0.8.5"
+palette = "0.7.3"
+serde_json = "1.0.108"
+typenum = "1.17.0"
+kd-tree = "0.5.1"
+argmin = "0.8.1"
+
+rand_xoshiro = "0.6.0"
+libc = "0.2.150"
 
 
 [dev-dependencies]

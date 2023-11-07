@@ -181,35 +181,44 @@ function IndividualChannelsWrapper() {
     <>
       <ThemeProvider theme={darkTheme}>
         {/* Add a rounded white border to this */}
-          <div style={{ maxHeight: "85vh", overflowY: "auto", overflowX: 'hidden', marginTop:'8vh', marginBottom: '7vh', width:'100%', colorScheme:'dark' }}>
-            <Grid
-              container
-              direction="column"
-              item
-              justifyContent="center"
-              alignItems="center"
-              maxHeight="300vh"
-            >
-              {selections.map((d, i) => (
-                <Grid
-                  container
-                  item
-                  key={`mini__avivator_${i}_${JSON.stringify(i)}`}
-                  sx={{paddingRight:'20px', zIndex:1000, minHeight:'200px'}}
-                >
-                  <Grid item xs={6} sx={{paddingRight:'30px'}} >
-                    <MiniAvivator
-                      allowNavigation={false}
-                      showChannel={i}
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <ChannelColorDisplay channelIndex={i} />
-                  </Grid>
+        <div
+          style={{
+            maxHeight: "85vh",
+            overflowY: "auto",
+            overflowX: "hidden",
+            marginTop: "8vh",
+            marginBottom: "7vh",
+            width: "100%",
+            colorScheme: "dark",
+          }}
+        >
+          <Grid
+            container
+            direction="column"
+            item
+            justifyContent="center"
+            alignItems="center"
+            maxHeight="300vh"
+          >
+            {selections.map((d, i) => (
+              <Grid
+                container
+                item
+                key={`mini__avivator_${i}_${JSON.stringify(i)}`}
+                sx={{ paddingRight: "20px", zIndex: 1000, minHeight: "200px" }}
+              >
+                <Grid item xs={6} sx={{ paddingRight: "30px" }}>
+                  {channelsVisible?.[i] && (
+                    <MiniAvivator allowNavigation={false} showChannel={i} />
+                  )}
                 </Grid>
-              ))}
-            </Grid>
-          </div>
+                <Grid item xs={6}>
+                  <ChannelColorDisplay channelIndex={i} />
+                </Grid>
+              </Grid>
+            ))}
+          </Grid>
+        </div>
       </ThemeProvider>
     </>
   );

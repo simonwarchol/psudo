@@ -712,8 +712,10 @@ const LensLayer = class extends CompositeLayer {
       ]);
     }
   }
+
   async onClick(pickingInfo, event) {
-    const coordinate = pickingInfo?.coordinate;
+    const coordinate = this.context?.userData?.coordinate;
+    console.log("coordinate", coordinate);
     // Determine which tiles are displayed
     const { viewState } = this.props;
     const { loader } = this.props;
@@ -740,6 +742,7 @@ const LensLayer = class extends CompositeLayer {
             const conrastLimits = psudoAnalysis.channel_gmm(
               thisChannelsData.data
             );
+
             const intContrastLimits = [
               _.toInteger(conrastLimits[0]),
               _.toInteger(conrastLimits[1]),
@@ -811,22 +814,25 @@ const LensLayer = class extends CompositeLayer {
         });
       }
       this.context.userData.setGraphData(graphData);
+    } else if (
+      pickingInfo?.sourceLayer?.id == `resize-circle-${this.props.id}`
+    ) {
+      console.log("sourceLayer", pickingInfo?.sourceLayer?.id);
+      console.time("optimize");
+      const test = psudoAnalysis.optimize([
+        127, 201, 127, 190, 174, 212, 253, 192, 134, 255, 255, 153, 56, 108,
+        176, 240, 2, 127,
+      ]);
+      console.timeEnd("optimize");
+      console.log("test", test);
     }
   }
 
   async onDragEnd(pickingInfo, event, d, e) {
-    //
     const coordinate = pickingInfo?.coordinate;
-    // Determine which tiles are displayed
-    const { viewState } = this.props;
-    const { loader } = this.props;
-    const channelData = await this.getLensIntensityValues(
-      coordinate,
-      viewState,
-      loader,
-      this.context.userData
-    );
+    this.context.userData.setCoordinate(coordinate);
   }
+
   async getLensIntensityValues(coordinate, viewState, loader, userData) {
     let multiplier = 1 / Math.pow(2, viewState.zoom);
     const size = userData.lensRadius * multiplier;
@@ -887,6 +893,7 @@ const LensLayer = class extends CompositeLayer {
       Math.ceil(yAtThisLevel / tileSizeAtThisLevel[1])
     );
     let channelData = [];
+    let displayData = [];
     // Now that you have the indices, you can fetch the tiles that are in the range [xMinClamped, xMaxClamped] and [yMinClamped, yMaxClamped]
     for (const [i, visible] of (userData.channelsVisible || []).entries()) {
       if (visible) {
@@ -894,6 +901,7 @@ const LensLayer = class extends CompositeLayer {
         let channelSelection = userData.selections[i];
         thisChannel.selection = channelSelection;
         thisChannel.data = [];
+        let indexArray = [];
         const radiusSquared = sizeAtPyramidLevel * sizeAtPyramidLevel;
         for (let y = yMinClamped; y <= yMaxClamped; y++) {
           for (let x = xMinClamped; x <= xMaxClamped; x++) {
@@ -906,40 +914,43 @@ const LensLayer = class extends CompositeLayer {
               const xIndex = x * tileSizeAtThisLevel[0] + (j % tileData.width);
               const yIndex =
                 y * tileSizeAtThisLevel[1] + Math.floor(j / tileData.width);
-              // indexArray.push([xIndex, yIndex, j]);
-
               if (xIndex > xMin && xIndex <= xMax) {
                 if (yIndex >= yMin && yIndex <= yMax) {
                   const dx = xIndex - x_center;
                   const dy = yIndex - y_center;
                   const distanceSquared = dx * dx + dy * dy;
                   if (distanceSquared <= radiusSquared) {
+                    indexArray.push([xIndex, yIndex, tileData.data[j]]);
                     thisChannel.data.push(tileData.data[j]);
                   }
                 }
               }
             }
+            console.log("indexArray", JSON.stringify(indexArray));
           }
         }
         thisChannel.mean = _.mean(thisChannel.data);
-        thisChannel.data = psudoAnalysis.ln(thisChannel.data);
+        displayData.push(thisChannel.data);
+        thisChannel.logData = psudoAnalysis.ln(thisChannel.data);
+        console.log("thisChannelDat", JSON.stringify(thisChannel.data));
 
         // Number of bins you want
         const binF = bin()
           .domain([0, Math.log(65535)]) // Setting the range of your data
           .thresholds(numBins);
-        const binnedData = binF(thisChannel.data);
+        const binnedData = binF(thisChannel.logData);
         // Get the frequencies as fractions
         const frequencies = binnedData.map((d, i) => [
           i,
-          d.length / thisChannel.data.length,
+          d.length / thisChannel.logData.length,
         ]);
         thisChannel.frequencies = frequencies;
-        // console.log("freq", frequencies);
+        console.log("bd", binnedData);
 
         channelData.push(thisChannel);
       }
     }
+    console.log("display,", JSON.stringify(displayData));
     userData.setMovingLens(false);
     return channelData;
   }
