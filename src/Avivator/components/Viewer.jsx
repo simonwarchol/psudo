@@ -96,10 +96,11 @@ const Viewer = (props) => {
   };
 
   const onClick = () => {
-    const _coordinate = useViewerStore
-      .getState()
-      ?.coordinate?.map((x) => Math.round(x));
+    // const _coordinate = useViewerStore
+    //   .getState()
+    //   ?.coordinate?.map((x) => Math.round(x));
   };
+
 
   useEffect(() => {
     const viewState = getDefaultInitialViewState(

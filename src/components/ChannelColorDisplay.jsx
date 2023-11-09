@@ -139,6 +139,7 @@ function ChannelColorDisplay(props) {
       let rgbColor = { r: color?.[0], g: color?.[1], b: color?.[2] };
       setPickerColor(rgbColor);
     }
+
   }, [colors]);
 
   const toggleVisibility = () => {
@@ -177,6 +178,19 @@ function ChannelColorDisplay(props) {
   const handleChange = (color, e) => {
     setPickerColor(color.rgb);
     colors[channelIndex] = [pickerColor.r, pickerColor.g, pickerColor.b];
+    if (_.isEmpty(colors) || _.isEmpty(context?.graphData)) return;
+    let tmpGraphData = [];
+    let ii = 0;
+    for (const [i, visible] of (channelsVisible || []).entries()) {
+      if (visible) {
+        let channelGraphData = context?.graphData[ii];
+        channelGraphData.color = colors[i];
+        tmpGraphData.push(channelGraphData);
+        ii++;
+      }
+    }
+    context?.setGraphData(tmpGraphData);
+
     useChannelsStore.setState({ colors: colors, prevColors: colors });
   };
 
@@ -210,9 +224,8 @@ function ChannelColorDisplay(props) {
     getSingleSelectionStats({
       loader,
       selection,
-      pyramidResolution
+      pyramidResolution,
     }).then(({ domain, contrastLimits: newContrastLimit }) => {
-      console.log('ASDFASDFAFSDFADS')
       setPropertiesForChannel(ind, {
         contrastLimits: newContrastLimit,
         domains: domain,

@@ -9,6 +9,7 @@ import {
   loadOmeTiff,
   loadOmeZarr,
 } from "@hms-dbmi/viv";
+import { bin } from "d3-array";
 
 import { GLOBAL_SLIDER_DIMENSION_FIELDS } from "./constants";
 import * as psudoAnalysis from "psudo-analysis";
@@ -314,6 +315,27 @@ export async function getGMMContrastLimits({
   return intContrastLimits;
 }
 
+export function getChannelGraphData({ data, color, selection }) {
+  const numBins = 50;
+  let channelData = {};
+  channelData["data"] = data;
+  channelData["logData"] = psudoAnalysis.ln(data);
+  // Number of bins you want
+  const binF = bin()
+    .domain([0, Math.log(65535)]) // Setting the range of your data
+    .thresholds(numBins);
+  const binnedData = binF(channelData.logData);
+  // Get the frequencies as fractions
+  const frequencies = binnedData.map((d, i) => [
+    i,
+    d.length / channelData.logData.length,
+  ]);
+  channelData["frequencies"] = frequencies;
+  channelData["color"] = color;
+  channelData["selection"] = selection;
+  return channelData;
+}
+
 export const getSingleSelectionStats = async ({
   loader,
   selection,
@@ -323,10 +345,14 @@ export const getSingleSelectionStats = async ({
   return getStats({ loader, selection, pyramidResolution });
 };
 
-export const getMultiSelectionStats = async ({ loader, selections,pyramidResolution }) => {
+export const getMultiSelectionStats = async ({
+  loader,
+  selections,
+  pyramidResolution,
+}) => {
   const stats = await Promise.all(
     selections.map((selection) =>
-      getSingleSelectionStats({ loader, selection,pyramidResolution })
+      getSingleSelectionStats({ loader, selection, pyramidResolution })
     )
   );
   const domains = stats.map((stat) => stat.domain);

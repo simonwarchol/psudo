@@ -311,16 +311,22 @@ function PsudoToolbar() {
     <ThemeProvider theme={darkTheme}>
       <Grid
         container
-        sx={{ top: 0, left: 0, position: "absolute" }}
+        sx={{ top: 0, left: 0, position: "absolute"}}
         direction="row"
         justifyContent="flex-start"
-        alignItems="center"
+        alignItems="start"
+        // p={1}
       >
         <Grid item xs={"auto"} p={1}>
           <h1 className={"title-code color-gradient"}>psudo</h1>
         </Grid>
 
-        <Grid item xs={"auto"} sx={{ zIndex: 10000 }}>
+        <Grid
+          container
+          item
+          xs={"auto"}
+          sx={{ zIndex: 10000, display: "flex", alignItems: "center" }}
+        >
           <IconButton
             id="history-button"
             aria-controls={openHistory ? "basic-menu" : undefined}
@@ -343,16 +349,16 @@ function PsudoToolbar() {
             <PastPalettes />
           </Menu>
         </Grid>
-        <Grid item xs={"auto"} sx={{ zIndex: 10000 }}>
+        <Grid item xs={"auto"} p={0} m={0} sx={{ zIndex: 10000 }}>
           <Grid
             container
             direction="column"
-            justifyContent="center"
+            justifyContent="start"
             alignItems="center"
             item
             p={0}
             m={0}
-            sx={{ width: 370, height: 100 }}
+            sx={{ width: 370, height: 80 }}
           >
             <LineChart style={{ position: "relative", left: "50%" }} />
           </Grid>

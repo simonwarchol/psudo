@@ -1,15 +1,22 @@
 import React, { useContext, useEffect, useState } from "react";
 import { AppContext } from "../context/GlobalContext.jsx";
 import { VegaLite } from "react-vega";
+import {useImageSettingsStore} from "../Avivator/state.js";
+import shallow from "zustand/shallow";
 
 const LineChart = () => {
   const context = useContext(AppContext);
   const [lineChartData, setLineChartData] = useState([]);
+  const [lensEnabled] = useImageSettingsStore(
+    (store) => [store.lensEnabled],
+    shallow
+  );
 
   useEffect(() => {
     const dat = [];
+    console.log("context", context.graphData);
     (context.graphData || []).forEach((d, index) => {
-      (d?.data?.frequencies || []).forEach((f) => {
+      (d?.frequencies || []).forEach((f) => {
         dat.push({
           x: f[0],
           y: f[1],
@@ -26,6 +33,11 @@ const LineChart = () => {
   const spec = {
     data: { values: lineChartData }, // use the data state
     mark: "line", // specify the mark type as line
+    title: {
+      text: lensEnabled ? "Lens Marker Expression" : "Global Marker Expression",
+      color: "white", // set the title color to white
+      anchor: "middle", // to position the title; options are "start", "middle", or "end"
+    },
     encoding: {
       x: {
         field: "x",
@@ -42,6 +54,8 @@ const LineChart = () => {
       y: {
         field: "y",
         type: "quantitative",
+        scale: { domain: [0, 1] }, // set the scale domain to always be from 0
+
         axis: {
           labels: false,
           title: null,
@@ -69,9 +83,9 @@ const LineChart = () => {
         padding: 0, // this sets the view padding to 0
       },
     },
-    background: "#2e2e2e",
+    background: "black",
     width: 350,
-    height: 60,
+    height: 40,
   };
 
   return <VegaLite spec={spec} actions={false} />;

@@ -4,6 +4,7 @@ import { LensExtension } from "@hms-dbmi/viv";
 import { VivView } from "@hms-dbmi/viv";
 import { CompositeLayer, COORDINATE_SYSTEM } from "@deck.gl/core";
 import { bin } from "d3-array";
+import { getChannelGraphData } from "./viewerUtils.js";
 
 import {
   ScatterplotLayer,
@@ -660,7 +661,7 @@ const LensLayer = class extends CompositeLayer {
     // console.log("Drag", pickingInfo?.sourceLayer?.id);
     const { viewState } = this.props;
     this.context.userData.setMovingLens(true);
-    this.context.userData.setGraphData([]);
+    // this.context.userData.setGraphData([]);
 
     if (pickingInfo?.sourceLayer?.id === `resize-circle-${this.props.id}`) {
       const lensCenter = this.context.userData.mousePosition;
@@ -798,7 +799,11 @@ const LensLayer = class extends CompositeLayer {
               return _.isEqual(d.selection, selection);
             })[0];
             const color = colors[i];
-            graphData.push({ data: thisChannelsData, color: color });
+            let thisChannelsGraphData = getChannelGraphData({
+              ...thisChannelsData,
+              color: color,
+            });
+            graphData.push(thisChannelsGraphData);
           }
         });
       } else {
@@ -809,10 +814,15 @@ const LensLayer = class extends CompositeLayer {
               return _.isEqual(d.selection, selection);
             })[0];
             const color = colors[i];
-            graphData.push({ data: thisChannelsData, color: color });
+            let thisChannelsGraphData = getChannelGraphData({
+              ...thisChannelsData,
+              color: color,
+            });
+            graphData.push(thisChannelsGraphData);
           }
         });
       }
+
       this.context.userData.setGraphData(graphData);
     } else if (
       pickingInfo?.sourceLayer?.id == `resize-circle-${this.props.id}`
@@ -929,24 +939,6 @@ const LensLayer = class extends CompositeLayer {
             console.log("indexArray", JSON.stringify(indexArray));
           }
         }
-        thisChannel.mean = _.mean(thisChannel.data);
-        displayData.push(thisChannel.data);
-        thisChannel.logData = psudoAnalysis.ln(thisChannel.data);
-        console.log("thisChannelDat", JSON.stringify(thisChannel.data));
-
-        // Number of bins you want
-        const binF = bin()
-          .domain([0, Math.log(65535)]) // Setting the range of your data
-          .thresholds(numBins);
-        const binnedData = binF(thisChannel.logData);
-        // Get the frequencies as fractions
-        const frequencies = binnedData.map((d, i) => [
-          i,
-          d.length / thisChannel.logData.length,
-        ]);
-        thisChannel.frequencies = frequencies;
-        console.log("bd", binnedData);
-
         channelData.push(thisChannel);
       }
     }

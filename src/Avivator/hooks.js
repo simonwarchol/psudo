@@ -17,9 +17,11 @@ import {
   getMultiSelectionStats,
   guessRgb,
   isInterleaved,
+  getChannelGraphData,
 } from "./viewerUtils";
 import { FILL_PIXEL_VALUE } from "./constants";
 import { AppContext } from "../context/GlobalContext.jsx";
+import _ from "lodash";
 
 export const useImage = (source, history) => {
   const [toggleIsOffsetsSnackbarOn] = useViewerStore(
@@ -34,11 +36,47 @@ export const useImage = (source, history) => {
     ],
     shallow
   );
+  let [channelsVisible, colors, selections] = useChannelsStore((store) => [
+    store.channelsVisible,
+    store.colors,
+    store.selections,
+  ]);
   const loader = useLoader();
   const metadata = useMetadata();
   const context = useContext(AppContext);
 
   useEffect(() => {}, [colormap]);
+
+  const getGlobalGraphData = async (
+    channelsVisible,
+    loader,
+    selections,
+    colors
+  ) => {
+    let graphData = [];
+    for (const [i, visible] of (channelsVisible || []).entries()) {
+      if (visible) {
+        console.log("loader", loader);
+        let raster = await loader?.[_.size(loader) - 1]?.getRaster({
+          selection: selections[i],
+        });
+        let channelGraphData = getChannelGraphData({
+          data: raster.data,
+          color: colors[i],
+          selection: selections[i],
+        });
+        graphData.push(channelGraphData);
+      }
+    }
+    console.log("Graph Data", graphData);
+    context?.setGraphData(graphData);
+  };
+
+  useEffect(() => {
+    if (_.isEmpty(channelsVisible) || !loader || _.isEmpty(selections)) return;
+    console.log("CV", channelsVisible, colors);
+    getGlobalGraphData(channelsVisible, loader, selections, colors);
+  }, [channelsVisible, selections]);
 
   useEffect(() => {
     async function changeLoader() {
@@ -168,7 +206,6 @@ export const useImage = (source, history) => {
           return i < 3;
         }),
       });
-
       useViewerStore.setState({
         isChannelLoading: newSelections.map((i) => !i),
         isViewerLoading: false,
@@ -177,6 +214,7 @@ export const useImage = (source, history) => {
         globalSelection: newSelections[0],
         channelOptions,
       });
+      // Init Graph Data
       context?.setIsLoading(false);
     };
 
