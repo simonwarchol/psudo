@@ -85,8 +85,13 @@ export const useImage = (source, history) => {
 
     if (source) changeLoader();
   }, [source, history]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [pyramidResolution] = useViewerStore(
+    (store) => [store.pyramidResolution],
+    shallow
+  );
   useEffect(() => {
     const changeSettings = async () => {
+      context?.setIsLoading(true);
       // Placeholder
       useViewerStore.setState({ isChannelLoading: [true] });
       useViewerStore.setState({ isViewerLoading: true });
@@ -135,6 +140,7 @@ export const useImage = (source, history) => {
         const stats = await getMultiSelectionStats({
           loader,
           selections: newSelections,
+          pyramidResolution,
         });
 
         newDomains = stats.domains;
@@ -171,6 +177,7 @@ export const useImage = (source, history) => {
         globalSelection: newSelections[0],
         channelOptions,
       });
+      context?.setIsLoading(false);
     };
 
     if (metadata) changeSettings();

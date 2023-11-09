@@ -10,13 +10,15 @@ const AddChannel = () => {
         globalSelection,
         isViewerLoading,
         setIsChannelLoading,
-        addIsChannelLoading
+        addIsChannelLoading,
+        pyramidResolution
     ] = useViewerStore(
         store => [
             store.globalSelection,
             store.isViewerLoading,
             store.setIsChannelLoading,
-            store.addIsChannelLoading
+            store.addIsChannelLoading,
+            store.pyramidResolution
         ],
         shallow
     );
@@ -36,7 +38,8 @@ const AddChannel = () => {
         const numSelectionsBeforeAdd = selections.length;
         getSingleSelectionStats({
             loader,
-            selection
+            selection,
+            pyramidResolution
         }).then(({domain, contrastLimits}) => {
             console.log('domain', domain, 'contrastLimits', contrastLimits);
             setPropertiesForChannel(numSelectionsBeforeAdd, {

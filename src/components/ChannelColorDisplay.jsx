@@ -31,6 +31,7 @@ import _ from "lodash";
 import {
   getSingleSelectionStats,
   truncateDecimalNumber,
+  getGMMContrastLimits,
 } from "../Avivator/viewerUtils.js";
 import * as psudoAnalysis from "psudo-analysis";
 
@@ -111,6 +112,10 @@ function ChannelColorDisplay(props) {
     console.log(lensSelection, "lensSelection");
   }, [lensSelection]);
 
+  // useEffect(() => {
+  //   console.log("isChannelLoading", isChannelLoading);
+  // }, [isChannelLoading]);
+
   const rgbColor = `rgb(${colors?.[channelIndex]})`;
   let ind = channelIndex;
 
@@ -144,34 +149,19 @@ function ChannelColorDisplay(props) {
     });
   };
 
-  const runChannelGMM = (raster) => {
-    const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
-    const intContrastLimits = [
-      _.toInteger(conrastLimits[0]),
-      _.toInteger(conrastLimits[1]),
-    ];
-    setPropertiesForChannel(ind, { contrastLimits: intContrastLimits });
-  };
-
   const calculateContrastLimits = () => {
     context?.setIsLoading(true);
-    console.log("lsm", loader, selections);
-
-    loader?.[pyramidResolution]
-      ?.getRaster({
-        selection: selections[channelIndex],
-      })
-      .then((raster) => {
-        runChannelGMM(raster);
-      })
-      .catch((error) => {
-        console.error("Error getting raster:", error);
+    getGMMContrastLimits({
+      loader,
+      selection: selections[channelIndex],
+      pyramidResolution,
+    })
+      .then((intContrastLimits) => {
+        setPropertiesForChannel(ind, { contrastLimits: intContrastLimits });
       })
       .finally(() => {
         context?.setIsLoading(false);
       });
-
-    console.log("calculate contrast limits", channelIndex);
   };
 
   const addRemoveToLens = () => {
@@ -220,7 +210,9 @@ function ChannelColorDisplay(props) {
     getSingleSelectionStats({
       loader,
       selection,
+      pyramidResolution
     }).then(({ domain, contrastLimits: newContrastLimit }) => {
+      console.log('ASDFASDFAFSDFADS')
       setPropertiesForChannel(ind, {
         contrastLimits: newContrastLimit,
         domains: domain,

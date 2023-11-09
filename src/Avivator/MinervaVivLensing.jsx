@@ -652,7 +652,7 @@ const LensLayer = class extends CompositeLayer {
       graphCircle,
       ...graphIconLayers,
       contrastSemiCircle,
-      pathLayers,
+      // pathLayers,
       _.every(lensSelection, (num) => num === 0) ? null : opacityLayer,
     ];
   }

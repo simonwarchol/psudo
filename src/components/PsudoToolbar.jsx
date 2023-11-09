@@ -344,37 +344,18 @@ function PsudoToolbar() {
           </Menu>
         </Grid>
         <Grid item xs={"auto"} sx={{ zIndex: 10000 }}>
-          <IconButton
-            id="graph-button"
-            aria-controls={openChart ? "basic-menu" : undefined}
-            aria-haspopup="true"
-            aria-expanded={openChart ? "true" : undefined}
-            onClick={handleChartClick}
+          <Grid
+            container
+            direction="column"
+            justifyContent="center"
+            alignItems="center"
+            item
+            p={0}
+            m={0}
+            sx={{ width: 370, height: 100 }}
           >
-            <AutoGraphIcon sx={{ fontSize: 40 }} />
-          </IconButton>
-          <Menu
-            id="basic-menu"
-            anchorEl={anchorElChart}
-            open={openChart}
-            onClose={handleCloseChart}
-            MenuListProps={{
-              "aria-labelledby": "basic-button",
-            }}
-          >
-            <Grid
-              container
-              direction="column"
-              justifyContent="center"
-              alignItems="center"
-              item
-              p={0}
-              m={0}
-              sx={{ width: 370, height: 100 }}
-            >
-              <LineChart style={{ position: "relative", left: "50%" }} />
-            </Grid>
-          </Menu>
+            <LineChart style={{ position: "relative", left: "50%" }} />
+          </Grid>
           <Footer />
         </Grid>
       </Grid>
