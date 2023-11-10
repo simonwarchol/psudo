@@ -165,6 +165,10 @@ function PsudoToolbar() {
     useImageSettingsStore.setState({ lensEnabled: !_.cloneDeep(lensEnabled) });
   };
 
+  const toggleOverlapView = () => {
+    context?.setOverlapView(!_.cloneDeep(context?.overlapView));
+  };
+
   const spec = {
     width: 400,
     height: 200,
@@ -311,7 +315,7 @@ function PsudoToolbar() {
     <ThemeProvider theme={darkTheme}>
       <Grid
         container
-        sx={{ top: 0, left: 0, position: "absolute"}}
+        sx={{ top: 0, left: 0, position: "absolute" }}
         direction="row"
         justifyContent="flex-start"
         alignItems="start"
@@ -373,7 +377,7 @@ function PsudoToolbar() {
         justifyContent="space-between"
         // alignItems="center"
       >
-        <Grid item xs={"auto"}>
+        {/* <Grid item xs={"auto"}>
           <IconButton
             id="source-button"
             aria-controls={openSource ? "basic-menu" : undefined}
@@ -417,6 +421,15 @@ function PsudoToolbar() {
             </Grid>
           </Menu>
           <Footer />
+        </Grid> */}
+        <Grid item xs={"auto"}>
+          <IconButton
+            id="overlap-button"
+            onClick={toggleOverlapView}
+          >
+            {/* if context?.showOverlap, show at full opacity, otherwise at 0.5 opacity */}
+            <JoinInnerIcon sx={{ fontSize: 40 }} color={context?.overlapView ? "primary" : "white"} />
+          </IconButton>
         </Grid>
         <Grid item xs={"auto"}>
           <IconButton onClick={toggleShowLens}>

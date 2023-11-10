@@ -99,4 +99,16 @@ void mutate_color(inout vec3 rgb, float intensity0, float intensity1, float inte
     xyz += color_transfer(colors[5], intensity5, vTexCoord, 5);
     rgb = xyz_to_lrgb(xyz);
     rgb = lrgb_to_srgb(rgb);
+    // check if any values in rgb are 1 or greater
+    if (overlapView){
+        if ((lensEnabled && frag_in_lens_bounds(vTexCoord)) || !lensEnabled) {
+            if (rgb.r >= 1.0 || rgb.g >= 1.0 || rgb.b >= 1.0) {
+                rgb = vec3(1.0, 0.0, 0.0);
+            } else {
+              vec3 lab = xyz_to_oklab(xyz);
+              float luminance = lab[0];
+              rgb = vec3(luminance, luminance, luminance);
+            }
+        }
+    }
 }
