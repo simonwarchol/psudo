@@ -34,6 +34,7 @@ const defaultProps = {
   lensSelection: { type: "array", value: [0, 0, 0, 0, 0, 0], compare: true },
   lensRadius: { type: "number", value: 100, compare: true },
   lensOpacity: { type: "number", value: 1.0, compare: true },
+  overlapView: { type: "boolean", value: false, compare: true },
   lensBorderColor: { type: "array", value: [255, 255, 255], compare: true },
   lensBorderRadius: { type: "number", value: 0.02, compare: true },
   colors: { type: "array", value: null, compare: true },
@@ -116,6 +117,8 @@ const MinervaVivLensing = class extends LensExtension {
       this.parent.context.userData;
     const { lensOpacity = defaultProps.lensOpacity.value } =
       this.parent.context.userData;
+    const { overlapView = defaultProps.overlapView.value } =
+      this.parent.context.userData;
     // If there is no viewportId, don't try to do anything.
     if (!viewportId) {
       layer.setState({ unprojectLensBounds: [0, 0, 0, 0] });
@@ -158,7 +161,7 @@ const MinervaVivLensing = class extends LensExtension {
     } else {
       layer.setState({ unprojectLensBounds: [0, 0, 0, 0] });
     }
-    this.state.model?.setUniforms({ lensOpacity: lensOpacity });
+    this.state.model?.setUniforms({ lensOpacity: lensOpacity, overlapView: overlapView });
     super.draw();
   }
   updateState({ props, oldProps, changeFlags, ...rest }) {
@@ -856,6 +859,7 @@ class MinervaVivLensingDetailView extends VivView {
     this.mousePosition = props?.mousePosition || [null, null];
     this.lensRadius = props?.lensRadius;
     this.lensOpacity = props?.lensOpacity;
+    this.overlapView = props?.overlapView;
   }
   getLayers({ props, viewStates }) {
     const { loader } = props;
@@ -875,6 +879,7 @@ class MinervaVivLensingDetailView extends VivView {
           lensMousePosition: this.mousePosition,
           lensRadius: this.lensRadius,
           lensOpacity: this.lensOpacity,
+          overlapView: this.overlapView,
           viewState: { ...layerViewState, height, width },
         })
       );

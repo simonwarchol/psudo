@@ -3,10 +3,6 @@ import { getDefaultPalette, padColors } from "../utils";
 import srgbFs from "../fragment-shaders/rgb-color-mixing-fs.glsl";
 import oklabFs from "../fragment-shaders/oklab-color-mixing-fs.glsl";
 
-import labFs from "../fragment-shaders/lab-color-mixing-fs.glsl";
-import lrgbFs from "../fragment-shaders/linear-rgb-color-mixing-fs.glsl";
-import test1Fs from "../fragment-shaders/test-1-fs.glsl";
-import test2Fs from "../fragment-shaders/test-2-fs.glsl";
 import _ from "lodash";
 import { useContext } from "react";
 import { AppContext } from "../../../context/GlobalContext.jsx";
@@ -18,6 +14,7 @@ const defaultProps = {
   lensSelection: { type: "number", value: 1, compare: true },
   lensRadius: { type: "number", value: 100, compare: true },
   lensOpacity: { type: "number", value: 1.0, compare: true },
+  overlapView: { type: "boolean", value: false, compare: true },
   lensBorderColor: { type: "array", value: [255, 255, 255], compare: true },
   lensBorderRadius: { type: "number", value: 0.02, compare: true },
 };

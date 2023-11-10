@@ -184,6 +184,8 @@ const Viewer = (props) => {
       setGraphData: context?.setGraphData,
       coordinate,
       setCoordinate,
+      overlapView: context?.overlapView,
+      setOverlapView: context?.setOverlapView,
     };
     deckProps = {
       ...deckProps,
