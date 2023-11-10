@@ -336,6 +336,42 @@ export function getChannelGraphData({ data, color, selection }) {
   return channelData;
 }
 
+export function getGraphData(channelData,colors,lensSelection,channelsVisible,selections){
+  let graphData = [];
+  if (_.every(lensSelection, (num) => num === 0)) {
+    (channelsVisible || []).forEach((d, i) => {
+      if (d == true) {
+        const selection = selections[i];
+        let thisChannelsData = channelData.filter((d) => {
+          return _.isEqual(d.selection, selection);
+        })[0];
+        const color = colors[i];
+        let thisChannelsGraphData = getChannelGraphData({
+          ...thisChannelsData,
+          color: color,
+        });
+        graphData.push(thisChannelsGraphData);
+      }
+    });
+  } else {
+    lensSelection.forEach((d, i) => {
+      if (d == 1) {
+        const selection = selections[i];
+        let thisChannelsData = channelData.filter((d) => {
+          return _.isEqual(d.selection, selection);
+        })[0];
+        const color = colors[i];
+        let thisChannelsGraphData = getChannelGraphData({
+          ...thisChannelsData,
+          color: color,
+        });
+        graphData.push(thisChannelsGraphData);
+      }
+    });
+  }
+  return graphData;
+}
+
 export const getSingleSelectionStats = async ({
   loader,
   selection,
@@ -439,3 +475,113 @@ export const getSquare = (centerX, centerY, width, height) => {
   ];
   return data;
 };
+
+export async function getLensIntensityValues(
+  coordinate,
+  viewState,
+  loader,
+  pyramidResolution,
+  lensRadius,
+  channelsVisible,
+  selections,
+  setMovingLens
+) {
+  let multiplier = 1 / Math.pow(2, viewState.zoom);
+  const size = lensRadius * multiplier;
+  const sizeAtPyramidLevel = size / Math.pow(2, pyramidResolution);
+  const x = coordinate[0] / Math.pow(2, pyramidResolution);
+  const y = coordinate[1] / Math.pow(2, pyramidResolution);
+  const x_center = x;
+  const y_center = y;
+
+  const loaderAtThisLevel = loader[pyramidResolution];
+  const shapeAtThisLevel = loaderAtThisLevel.shape;
+  const tileSizeAtThisLevel = [
+    loaderAtThisLevel.tileSize < shapeAtThisLevel[shapeAtThisLevel.length - 1]
+      ? loaderAtThisLevel.tileSize
+      : shapeAtThisLevel[shapeAtThisLevel.length - 1],
+    loaderAtThisLevel.tileSize < shapeAtThisLevel[shapeAtThisLevel.length - 2]
+      ? loaderAtThisLevel.tileSize
+      : shapeAtThisLevel[shapeAtThisLevel.length - 2],
+  ];
+  // Shape is an array that ends with y,x
+  const xAtThisLevel = shapeAtThisLevel[shapeAtThisLevel.length - 1];
+  const yAtThisLevel = shapeAtThisLevel[shapeAtThisLevel.length - 2];
+  // Shape ends with y,x, make sure the follwing do not exceed the shape
+  const xMin = Math.floor(
+    x - sizeAtPyramidLevel < 0 ? 0 : x - sizeAtPyramidLevel
+  );
+  const xMax = Math.ceil(
+    x + sizeAtPyramidLevel > xAtThisLevel
+      ? xAtThisLevel
+      : x + sizeAtPyramidLevel
+  );
+  const yMin = Math.floor(
+    y - sizeAtPyramidLevel < 0 ? 0 : y - sizeAtPyramidLevel
+  );
+  const yMax = Math.ceil(
+    y + sizeAtPyramidLevel > yAtThisLevel
+      ? yAtThisLevel
+      : y + sizeAtPyramidLevel
+  );
+  // get viewport
+  // console.log("range", xMin, xMax, yMin, yMax, shapeAtThisLevel);
+  // Calculate the indices of the tiles
+  const xMinIndex = Math.floor(xMin / tileSizeAtThisLevel[0]);
+  const xMaxIndex = Math.ceil(xMax / tileSizeAtThisLevel[0]) - 1; // we subtract 1 because we want the index of the last tile, not the count
+  const yMinIndex = Math.floor(yMin / tileSizeAtThisLevel[1]);
+  const yMaxIndex = Math.ceil(yMax / tileSizeAtThisLevel[1]) - 1;
+
+  // Ensure the indices do not exceed the number of tiles in each dimension
+  const xMinClamped = Math.max(xMinIndex, 0);
+  const xMaxClamped = Math.min(
+    xMaxIndex,
+    Math.ceil(xAtThisLevel / tileSizeAtThisLevel[0])
+  );
+  const yMinClamped = Math.max(yMinIndex, 0);
+  const yMaxClamped = Math.min(
+    yMaxIndex,
+    Math.ceil(yAtThisLevel / tileSizeAtThisLevel[1])
+  );
+  let channelData = [];
+  let displayData = [];
+  // Now that you have the indices, you can fetch the tiles that are in the range [xMinClamped, xMaxClamped] and [yMinClamped, yMaxClamped]
+  for (const [i, visible] of (channelsVisible || []).entries()) {
+    if (visible) {
+      let thisChannel = {};
+      let channelSelection = selections[i];
+      thisChannel.selection = channelSelection;
+      thisChannel.data = [];
+      let indexArray = [];
+      const radiusSquared = sizeAtPyramidLevel * sizeAtPyramidLevel;
+      for (let y = yMinClamped; y <= yMaxClamped; y++) {
+        for (let x = xMinClamped; x <= xMaxClamped; x++) {
+          const tileData = await loaderAtThisLevel.getTile({
+            x,
+            y,
+            selection: channelSelection,
+          });
+          for (let j = 0; j < tileData.data.length; j++) {
+            const xIndex = x * tileSizeAtThisLevel[0] + (j % tileData.width);
+            const yIndex =
+              y * tileSizeAtThisLevel[1] + Math.floor(j / tileData.width);
+            if (xIndex > xMin && xIndex <= xMax) {
+              if (yIndex >= yMin && yIndex <= yMax) {
+                const dx = xIndex - x_center;
+                const dy = yIndex - y_center;
+                const distanceSquared = dx * dx + dy * dy;
+                if (distanceSquared <= radiusSquared) {
+                  indexArray.push([xIndex, yIndex, tileData.data[j]]);
+                  thisChannel.data.push(tileData.data[j]);
+                }
+              }
+            }
+          }
+        }
+      }
+      channelData.push(thisChannel);
+    }
+  }
+  setMovingLens(false);
+  return channelData;
+}

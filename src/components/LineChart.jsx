@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from "react";
 import { AppContext } from "../context/GlobalContext.jsx";
 import { VegaLite } from "react-vega";
-import {useImageSettingsStore} from "../Avivator/state.js";
+import { useImageSettingsStore } from "../Avivator/state.js";
 import shallow from "zustand/shallow";
 
 const LineChart = () => {
@@ -14,7 +14,6 @@ const LineChart = () => {
 
   useEffect(() => {
     const dat = [];
-    console.log("context", context.graphData);
     (context.graphData || []).forEach((d, index) => {
       (d?.frequencies || []).forEach((f) => {
         dat.push({
@@ -25,7 +24,6 @@ const LineChart = () => {
         });
       });
     });
-    console.log("dat", dat);
     setLineChartData(dat);
   }, [context.graphData]);
 

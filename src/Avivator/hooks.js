@@ -79,6 +79,17 @@ export const useImage = (source, history) => {
   }, [channelsVisible, selections]);
 
   useEffect(() => {
+    if (
+      _.isEmpty(channelsVisible) ||
+      !loader ||
+      _.isEmpty(selections) ||
+      lensEnabled
+    )
+      return;
+    getGlobalGraphData(channelsVisible, loader, selections, colors);
+  }, [lensEnabled]);
+
+  useEffect(() => {
     async function changeLoader() {
       // Placeholder
       useViewerStore.setState({ isChannelLoading: [true] });

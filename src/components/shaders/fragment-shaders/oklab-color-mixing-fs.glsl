@@ -5,6 +5,7 @@ uniform vec2 lensCenter;
 
 // lens uniforms
 uniform bool lensEnabled;
+uniform bool overlapView;
 // uniform int lensSelection;
 uniform vec3 lensBorderColor;
 uniform float lensOpacity;

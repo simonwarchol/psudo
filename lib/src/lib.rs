@@ -56,7 +56,7 @@ pub fn ln(array: &[u16]) -> Vec<f32> {
 
 #[wasm_bindgen]
 pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
-    console::log_1(&"Starting GMM".into());
+    // console::log_1(&"Starting GMM".into());
     let sampled_array = if array.len() > 20_000 {
         let mut rng = rand::thread_rng();
         array.choose_multiple(&mut rng, 20_000).cloned().collect::<Vec<_>>()
@@ -92,7 +92,7 @@ pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
 
     let dataset = Dataset::from(vals_log.insert_axis(Axis(1)));
 
-    console::log_1(&"Created Dataset!".into());
+    // console::log_1(&"Created Dataset!".into());
     let gmm_result = GaussianMixtureModel::params(3)
         .n_runs(10)
         .tolerance(1e-4)

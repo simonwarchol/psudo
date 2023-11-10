@@ -89,7 +89,7 @@ const DEFAULT_IMAGE_STATE = {
   colormap: "sRGB",
   fragmentShader: null,
   resolution: 0,
-  lensEnabled: false,
+  lensEnabled: true,
   zoomLock: false,
   panLock: false,
   isOverviewOn: false,

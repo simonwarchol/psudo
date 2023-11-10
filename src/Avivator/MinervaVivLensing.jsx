@@ -4,7 +4,11 @@ import { LensExtension } from "@hms-dbmi/viv";
 import { VivView } from "@hms-dbmi/viv";
 import { CompositeLayer, COORDINATE_SYSTEM } from "@deck.gl/core";
 import { bin } from "d3-array";
-import { getChannelGraphData } from "./viewerUtils.js";
+import {
+  getChannelGraphData,
+  getLensIntensityValues,
+  getGraphData,
+} from "./viewerUtils.js";
 
 import {
   ScatterplotLayer,
@@ -26,6 +30,7 @@ import {
 
 const defaultProps = {
   lensEnabled: { type: "boolean", value: true, compare: true },
+  overlapView: { type: "boolean", value: true, compare: true },
   lensSelection: { type: "array", value: [0, 0, 0, 0, 0, 0], compare: true },
   lensRadius: { type: "number", value: 100, compare: true },
   lensOpacity: { type: "number", value: 1.0, compare: true },
@@ -33,7 +38,6 @@ const defaultProps = {
   lensBorderRadius: { type: "number", value: 0.02, compare: true },
   colors: { type: "array", value: null, compare: true },
 };
-const numBins = 50;
 
 function getImageLayer(id, props) {
   const { loader } = props;
@@ -178,12 +182,22 @@ const LensLayer = class extends CompositeLayer {
     const { id, viewState } = this.props;
     const showLens = useImageSettingsStore.getState()?.lensEnabled;
     const lensSelection = useImageSettingsStore.getState()?.lensSelection;
-    // console.log("lensSelection", lensSelection);
-    if (!showLens) return [];
     const mousePosition = this.context.userData.mousePosition || [
       Math.round((this.context.deck.width || 0) / 2),
       Math.round((this.context.deck.height || 0) / 2),
     ];
+    this.lensPosition =
+      this.context.deck.pickObject({
+        x: mousePosition[0],
+        y: mousePosition[1],
+        radius: 1,
+      })?.coordinate || viewState.target;
+    if (_.isEmpty(this.context.userData.coordinate)) {
+      this.context.userData.setCoordinate(this.lensPosition);
+    }
+    // console.log("lensSelection", lensSelection);
+    if (!showLens) return [];
+
     this.lensPosition =
       this.context.deck.pickObject({
         x: mousePosition[0],
@@ -593,7 +607,6 @@ const LensLayer = class extends CompositeLayer {
       createGraphLayer(id, "graph2", [246, 121, 53]),
     ];
 
-    console.log("graphData", this.context.userData.graphData);
     // if (_.size(this.context.userData.graphData) > 0){
     const pathLayers = (this.context?.userData?.graphData || []).map(
       (graphD) => {
@@ -715,7 +728,9 @@ const LensLayer = class extends CompositeLayer {
   }
 
   async onClick(pickingInfo, event) {
-    const coordinate = this.context?.userData?.coordinate;
+    this.context.userData.setMovingLens(false);
+    const showLens = useImageSettingsStore.getState()?.lensEnabled;
+
     console.log("coordinate", coordinate);
     // Determine which tiles are displayed
     const { viewState } = this.props;
@@ -724,11 +739,16 @@ const LensLayer = class extends CompositeLayer {
 
     if (pickingInfo?.sourceLayer?.id == `contrast-circle-${this.props.id}`) {
       const lensSelection = useImageSettingsStore.getState()?.lensSelection;
-      const channelData = await this.getLensIntensityValues(
+
+      const channelData = await getLensIntensityValues(
         coordinate,
         viewState,
         loader,
-        this.context.userData
+        this.context.userData?.pyramidResolution,
+        this.context.userData?.lensRadius,
+        this.context.userData?.channelsVisible,
+        this.context.userData?.selections,
+        this.context.userData?.setMovingLens
       );
       this.context?.userData?.setIsLoading(true);
       // If nothing is in the lens, apply to all channels
@@ -780,50 +800,6 @@ const LensLayer = class extends CompositeLayer {
     } else if (
       pickingInfo?.sourceLayer?.id == `graph-circle-${this.props.id}`
     ) {
-      const lensSelection = useImageSettingsStore.getState()?.lensSelection;
-      const colors = useChannelsStore.getState()?.colors;
-      const channelsVisible = this.context?.userData?.channelsVisible;
-      const channelData = await this.getLensIntensityValues(
-        coordinate,
-        viewState,
-        loader,
-        this.context.userData
-      );
-      let graphData = [];
-      console.log(channelData, colors, lensSelection, channelsVisible);
-      if (_.every(lensSelection, (num) => num === 0)) {
-        (this.context?.userData?.channelsVisible || []).forEach((d, i) => {
-          if (d == true) {
-            const selection = this.context?.userData?.selections[i];
-            let thisChannelsData = channelData.filter((d) => {
-              return _.isEqual(d.selection, selection);
-            })[0];
-            const color = colors[i];
-            let thisChannelsGraphData = getChannelGraphData({
-              ...thisChannelsData,
-              color: color,
-            });
-            graphData.push(thisChannelsGraphData);
-          }
-        });
-      } else {
-        lensSelection.forEach((d, i) => {
-          if (d == 1) {
-            const selection = this.context?.userData?.selections[i];
-            let thisChannelsData = channelData.filter((d) => {
-              return _.isEqual(d.selection, selection);
-            })[0];
-            const color = colors[i];
-            let thisChannelsGraphData = getChannelGraphData({
-              ...thisChannelsData,
-              color: color,
-            });
-            graphData.push(thisChannelsGraphData);
-          }
-        });
-      }
-
-      this.context.userData.setGraphData(graphData);
     } else if (
       pickingInfo?.sourceLayer?.id == `resize-circle-${this.props.id}`
     ) {
@@ -837,114 +813,38 @@ const LensLayer = class extends CompositeLayer {
       console.log("test", test);
     }
   }
+  
 
   async onDragEnd(pickingInfo, event, d, e) {
+    const { viewState } = this.props;
+    const { loader } = this.props;
     const coordinate = pickingInfo?.coordinate;
+    console.log("coordinate", coordinate);
     this.context.userData.setCoordinate(coordinate);
-  }
+    this.context.userData.setMovingLens(false);
+    const lensSelection = useImageSettingsStore.getState()?.lensSelection;
+    const colors = useChannelsStore.getState()?.colors;
+    const channelsVisible = this.context?.userData?.channelsVisible;
+    const selections = this.context?.userData?.selections;
+    const channelData = await getLensIntensityValues(
+      coordinate,
+      viewState,
+      loader,
+      this.context.userData?.pyramidResolution,
+      this.context.userData?.lensRadius,
+      this.context.userData?.channelsVisible,
+      this.context.userData?.selections,
+      this.context.userData?.setMovingLens
+    );
+    let graphData = getGraphData(
+      channelData,
+      colors,
+      lensSelection,
+      channelsVisible,
+      selections
+    );
 
-  async getLensIntensityValues(coordinate, viewState, loader, userData) {
-    let multiplier = 1 / Math.pow(2, viewState.zoom);
-    const size = userData.lensRadius * multiplier;
-    const pyramidLevel = userData.pyramidResolution;
-    const sizeAtPyramidLevel = size / Math.pow(2, pyramidLevel);
-    const x = coordinate[0] / Math.pow(2, pyramidLevel);
-    const y = coordinate[1] / Math.pow(2, pyramidLevel);
-    const x_center = x;
-    const y_center = y;
-
-    const loaderAtThisLevel = loader[pyramidLevel];
-    const shapeAtThisLevel = loaderAtThisLevel.shape;
-    const tileSizeAtThisLevel = [
-      loaderAtThisLevel.tileSize < shapeAtThisLevel[shapeAtThisLevel.length - 1]
-        ? loaderAtThisLevel.tileSize
-        : shapeAtThisLevel[shapeAtThisLevel.length - 1],
-      loaderAtThisLevel.tileSize < shapeAtThisLevel[shapeAtThisLevel.length - 2]
-        ? loaderAtThisLevel.tileSize
-        : shapeAtThisLevel[shapeAtThisLevel.length - 2],
-    ];
-    // Shape is an array that ends with y,x
-    const xAtThisLevel = shapeAtThisLevel[shapeAtThisLevel.length - 1];
-    const yAtThisLevel = shapeAtThisLevel[shapeAtThisLevel.length - 2];
-    // Shape ends with y,x, make sure the follwing do not exceed the shape
-    const xMin = Math.floor(
-      x - sizeAtPyramidLevel < 0 ? 0 : x - sizeAtPyramidLevel
-    );
-    const xMax = Math.ceil(
-      x + sizeAtPyramidLevel > xAtThisLevel
-        ? xAtThisLevel
-        : x + sizeAtPyramidLevel
-    );
-    const yMin = Math.floor(
-      y - sizeAtPyramidLevel < 0 ? 0 : y - sizeAtPyramidLevel
-    );
-    const yMax = Math.ceil(
-      y + sizeAtPyramidLevel > yAtThisLevel
-        ? yAtThisLevel
-        : y + sizeAtPyramidLevel
-    );
-    // get viewport
-    // console.log("range", xMin, xMax, yMin, yMax, shapeAtThisLevel);
-    // Calculate the indices of the tiles
-    const xMinIndex = Math.floor(xMin / tileSizeAtThisLevel[0]);
-    const xMaxIndex = Math.ceil(xMax / tileSizeAtThisLevel[0]) - 1; // we subtract 1 because we want the index of the last tile, not the count
-    const yMinIndex = Math.floor(yMin / tileSizeAtThisLevel[1]);
-    const yMaxIndex = Math.ceil(yMax / tileSizeAtThisLevel[1]) - 1;
-
-    // Ensure the indices do not exceed the number of tiles in each dimension
-    const xMinClamped = Math.max(xMinIndex, 0);
-    const xMaxClamped = Math.min(
-      xMaxIndex,
-      Math.ceil(xAtThisLevel / tileSizeAtThisLevel[0])
-    );
-    const yMinClamped = Math.max(yMinIndex, 0);
-    const yMaxClamped = Math.min(
-      yMaxIndex,
-      Math.ceil(yAtThisLevel / tileSizeAtThisLevel[1])
-    );
-    let channelData = [];
-    let displayData = [];
-    // Now that you have the indices, you can fetch the tiles that are in the range [xMinClamped, xMaxClamped] and [yMinClamped, yMaxClamped]
-    for (const [i, visible] of (userData.channelsVisible || []).entries()) {
-      if (visible) {
-        let thisChannel = {};
-        let channelSelection = userData.selections[i];
-        thisChannel.selection = channelSelection;
-        thisChannel.data = [];
-        let indexArray = [];
-        const radiusSquared = sizeAtPyramidLevel * sizeAtPyramidLevel;
-        for (let y = yMinClamped; y <= yMaxClamped; y++) {
-          for (let x = xMinClamped; x <= xMaxClamped; x++) {
-            const tileData = await loaderAtThisLevel.getTile({
-              x,
-              y,
-              selection: channelSelection,
-            });
-            for (let j = 0; j < tileData.data.length; j++) {
-              const xIndex = x * tileSizeAtThisLevel[0] + (j % tileData.width);
-              const yIndex =
-                y * tileSizeAtThisLevel[1] + Math.floor(j / tileData.width);
-              if (xIndex > xMin && xIndex <= xMax) {
-                if (yIndex >= yMin && yIndex <= yMax) {
-                  const dx = xIndex - x_center;
-                  const dy = yIndex - y_center;
-                  const distanceSquared = dx * dx + dy * dy;
-                  if (distanceSquared <= radiusSquared) {
-                    indexArray.push([xIndex, yIndex, tileData.data[j]]);
-                    thisChannel.data.push(tileData.data[j]);
-                  }
-                }
-              }
-            }
-            console.log("indexArray", JSON.stringify(indexArray));
-          }
-        }
-        channelData.push(thisChannel);
-      }
-    }
-    console.log("display,", JSON.stringify(displayData));
-    userData.setMovingLens(false);
-    return channelData;
+    this.context.userData.setGraphData(graphData);
   }
 };
 LensLayer.layerName = "LensLayer";

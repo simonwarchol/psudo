@@ -7,6 +7,8 @@ import {
   useLoader,
   useViewerStore,
 } from "../state";
+import { getLensIntensityValues, getGraphData } from "../viewerUtils.js";
+import _ from "lodash";
 import {
   DetailView,
   getDefaultInitialViewState,
@@ -26,6 +28,7 @@ const Viewer = (props) => {
   const deckRef = useRef(null);
   const context = useContext(AppContext);
   const showChannel = props?.showChannel;
+  const mainViewer = props?.mainViewer;
   const [mousePosition, setMousePosition] = useState([null, null]);
   const [lensRadius, setLensRadius] = useState(100);
   const [movingLens, setMovingLens] = useState(false);
@@ -36,8 +39,8 @@ const Viewer = (props) => {
 
   const [overlayLayers, setOverlayLayers] = useState([]);
 
-  const [pyramidResolution] = useViewerStore(
-    (store) => [store.pyramidResolution],
+  const [pyramidResolution, viewState] = useViewerStore(
+    (store) => [store.pyramidResolution, store.viewState],
     shallow
   );
 
@@ -84,6 +87,7 @@ const Viewer = (props) => {
     ],
     shallow
   );
+  let userData = {};
 
   const svgSize = 512;
 
@@ -100,7 +104,6 @@ const Viewer = (props) => {
     //   .getState()
     //   ?.coordinate?.map((x) => Math.round(x));
   };
-
 
   useEffect(() => {
     const viewState = getDefaultInitialViewState(
@@ -164,40 +167,46 @@ const Viewer = (props) => {
       lensRadius: 100,
       extensions: [new MinervaVivLensing(colormap)],
     };
+    userData = {
+      mousePosition,
+      setMousePosition,
+      movingLens,
+      setMovingLens,
+      lensRadius,
+      setLensRadius,
+      lensOpacity,
+      setLensOpacity,
+      pyramidResolution,
+      channelsVisible,
+      selections,
+      setIsLoading: context?.setIsLoading,
+      graphData: context?.graphData,
+      setGraphData: context?.setGraphData,
+      coordinate,
+      setCoordinate,
+    };
     deckProps = {
       ...deckProps,
       ref: deckRef,
-      userData: {
-        mousePosition,
-        setMousePosition,
-        movingLens,
-        setMovingLens,
-        lensRadius,
-        setLensRadius,
-        lensOpacity,
-        setLensOpacity,
-        pyramidResolution,
-        channelsVisible,
-        selections,
-        setIsLoading: context?.setIsLoading,
-        graphData: context?.graphData,
-        setGraphData: context?.setGraphData,
-        coordinate,
-        setCoordinate,
-      },
+      userData: userData,
     };
     hoverHooks = {
       handleValue: (v) => useViewerStore.setState({ pixelValues: v }),
       handleCoordinate: (v) => useViewerStore.setState({ coordinate: v }),
     };
     onViewStateChange = ({ oldViewState, viewState: newViewState, viewId }) => {
-      useViewerStore.setState({
-        viewState: { ...newViewState, id: viewId },
-        pyramidResolution: Math.min(
-          Math.max(Math.round(-newViewState?.zoom), 0),
-          loader.length - 1
-        ),
-      });
+      if (mainViewer) {
+        console.log("VSCH")
+        // console.log("onViewStateChange", oldViewState, newViewState, viewId);
+        useViewerStore.setState({
+          viewState: { ...newViewState, id: viewId },
+          pyramidResolution: Math.min(
+            Math.max(Math.round(-newViewState?.zoom), 0),
+            loader.length - 1
+          ),
+        });
+      }
+
       return movingLens ? oldViewState : newViewState;
     };
     onHover = (v, d, e) => {
@@ -220,6 +229,36 @@ const Viewer = (props) => {
   const views = [detailView];
   const layerProps = [layerConfig];
   const viewStates = [{ ...baseViewState, id: DETAIL_VIEW_ID }];
+  const getLensGraphData = async () => {
+    let lensData = await getLensIntensityValues(
+      coordinate,
+      useViewerStore.getState()?.viewState,
+      loader,
+      pyramidResolution,
+      lensRadius,
+      channelsVisible,
+      selections,
+      setMovingLens
+    );
+    let graphData = getGraphData(
+      lensData,
+      colors,
+      lensSelection,
+      channelsVisible,
+      selections
+    );
+    context?.setGraphData(graphData);
+    console.log("lensData", lensData);
+    // coordinate, viewState, loader, userData;
+  };
+
+  useEffect(() => {
+    console.log("lensEnabled", lensEnabled);
+
+    if (lensEnabled) {
+      getLensGraphData();
+    }
+  }, [lensEnabled]);
 
   return (
     <div className={"viewerWrapper"} onClick={onClick}>
