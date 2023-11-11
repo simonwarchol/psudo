@@ -30,6 +30,7 @@ import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
 import JoinInnerIcon from "@mui/icons-material/JoinInner";
 import AutoGraphIcon from "@mui/icons-material/AutoGraph";
+import LinkedCameraIcon from "@mui/icons-material/LinkedCamera";
 import shallow from "zustand/shallow";
 import SingleChannelWrapper from "./SingleChannelWrapper.jsx";
 import { AttachFile, InsertLink } from "@mui/icons-material";
@@ -47,7 +48,6 @@ function PsudoToolbar() {
   const [anchorElHistory, setAnchorElHistory] = useState(null);
   const openHistory = Boolean(anchorElHistory);
   const [anchorElOverlap, setAnchorElOverlap] = useState(null);
-  const openOverlap = Boolean(anchorElOverlap);
   const [anchorElOptimization, setAnchorElOptimization] = useState(null);
   const openOptimization = Boolean(anchorElOptimization);
   const [anchorElChart, setAnchorElChart] = useState(null);
@@ -169,6 +169,10 @@ function PsudoToolbar() {
     context?.setOverlapView(!_.cloneDeep(context?.overlapView));
   };
 
+  const toggleLinkedViews = () => {
+    context?.setLinkedViews(!_.cloneDeep(context?.linkedViews));
+  };
+
   const spec = {
     width: 400,
     height: 200,
@@ -195,6 +199,7 @@ function PsudoToolbar() {
   };
 
   const optimize = async () => {
+    console.log("lcc", context?.lockedChannelColors);
     const channelsPayload = [];
     channelsVisible.forEach((d, i) => {
       if (d) {
@@ -260,7 +265,17 @@ function PsudoToolbar() {
       colorListFloat[i] = d / 255;
     });
     console.log("colors", colorList, colorListFloat);
-    const optColors = psudoAnalysis.optimize(colorList);
+    let lockedList = [];
+    // Iterate over colorList // 3 length
+    for (let i = 0; i < colorList.length / 3; i += 1) {
+      if (context?.lockedChannelColors[i]) {
+        lockedList.push(1);
+      } else {
+        lockedList.push(0);
+      }
+    }
+    console.log("lockedList", lockedList);
+    const optColors = psudoAnalysis.optimize(colorList, lockedList);
     console.log("optColors", optColors);
     console.log("Colors Before", colors);
     let colorCounter = 0;
@@ -423,12 +438,21 @@ function PsudoToolbar() {
           <Footer />
         </Grid> */}
         <Grid item xs={"auto"}>
-          <IconButton
-            id="overlap-button"
-            onClick={toggleOverlapView}
-          >
+          <IconButton id="overlap-button" onClick={toggleOverlapView}>
             {/* if context?.showOverlap, show at full opacity, otherwise at 0.5 opacity */}
-            <JoinInnerIcon sx={{ fontSize: 40 }} color={context?.overlapView ? "primary" : "white"} />
+            <JoinInnerIcon
+              sx={{ fontSize: 40 }}
+              color={context?.overlapView ? "primary" : "white"}
+            />
+          </IconButton>
+        </Grid>
+        <Grid item xs={"auto"}>
+          <IconButton id="linked-views-button" onClick={toggleLinkedViews}>
+            {/* if context?.showOverlap, show at full opacity, otherwise at 0.5 opacity */}
+            <LinkedCameraIcon
+              sx={{ fontSize: 40 }}
+              color={context?.linkedViews ? "primary" : "white"}
+            />
           </IconButton>
         </Grid>
         <Grid item xs={"auto"}>

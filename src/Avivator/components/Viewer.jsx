@@ -1,5 +1,6 @@
 /* eslint-disable no-nested-ternary */
 import shallow from "zustand/shallow";
+
 import React, { useContext, useEffect, useState, useRef } from "react";
 import {
   useChannelsStore,
@@ -198,9 +199,7 @@ const Viewer = (props) => {
       handleCoordinate: (v) => useViewerStore.setState({ coordinate: v }),
     };
     onViewStateChange = ({ oldViewState, viewState: newViewState, viewId }) => {
-      if (mainViewer) {
-        // console.log("VSCH");
-        // console.log("onViewStateChange", oldViewState, newViewState, viewId);
+      if (mainViewer && !movingLens) {
         useViewerStore.setState({
           viewState: { ...newViewState, id: viewId },
           pyramidResolution: Math.min(
@@ -232,7 +231,19 @@ const Viewer = (props) => {
   }
   const views = [detailView];
   const layerProps = [layerConfig];
-  const viewStates = [{ ...baseViewState, id: DETAIL_VIEW_ID }];
+  const [viewStates, setViewStates] = useState([
+    { ...baseViewState, id: DETAIL_VIEW_ID },
+  ]);
+
+  // if (!mainViewer) {
+  //   viewStates = [useViewerStore.getState()?.viewState] || viewStates;
+  // }
+  useEffect(() => {
+    if (context?.mainViewStateChanged && !mainViewer && context?.linkedViews) {
+      console.log("Context changed", context?.mainViewStateChanged);
+      setViewStates([useViewerStore.getState()?.viewState]);
+    }
+  }, [context?.mainViewStateChanged]);
   const getLensGraphData = async () => {
     let lensData = await getLensIntensityValues(
       coordinate,

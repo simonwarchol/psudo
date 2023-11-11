@@ -33,7 +33,6 @@ import {
 
 const defaultProps = {
   lensEnabled: { type: "boolean", value: true, compare: true },
-  overlapView: { type: "boolean", value: true, compare: true },
   lensSelection: { type: "array", value: [0, 0, 0, 0, 0, 0], compare: true },
   lensRadius: { type: "number", value: 100, compare: true },
   lensOpacity: { type: "number", value: 1.0, compare: true },

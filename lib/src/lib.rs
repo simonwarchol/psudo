@@ -78,18 +78,6 @@ pub fn channel_gmm(array: &[u16]) -> Vec<f32> {
         })
         .collect::<Array1<f32>>();
 
-    // let min_log_val = vals_log.min().unwrap();
-    // let max_log_val = vals_log.max().unwrap();
-    // console::log_1(
-    //     &format!("Log-transformed data - Min: {}, Max: {}", min_log_val, max_log_val).into()
-    // );
-    // let mut print_str = String::new();
-    // for val in vals_log.iter() {
-    //     print_str += &val.to_string();
-    //     print_str.push(',');
-    // }
-    // console::log_1(&JsValue::from_str(&print_str));
-
     let dataset = Dataset::from(vals_log.insert_axis(Axis(1)));
 
     // console::log_1(&"Created Dataset!".into());
@@ -257,15 +245,15 @@ pub fn test_color_distance(array: &[u16]) -> f32 {
 // ///////////////////////////////////////// Optimization /////////////////////////////////////
 struct Loss {
     rng: Arc<Mutex<Xoshiro256PlusPlus>>,
-    intensities: Vec<f32>,
     c3_instance: c3::C3,
+    locked_colors: Vec<bool>,
 }
 
 impl Loss {
-    pub fn new(intensities: Vec<f32>) -> Self {
+    pub fn new(locked_colors: Vec<bool>) -> Self {
         Self {
             rng: Arc::new(Mutex::new(Xoshiro256PlusPlus::from_entropy())),
-            intensities,
+            locked_colors: locked_colors,
             c3_instance: c3::C3::new(),
         }
     }
@@ -318,25 +306,8 @@ impl CostFunction for Loss {
         let average_cosine_distance = total_distance / (total_pairs as f64);
         let avergae_euc_distance = average_pairwise_euclidean_distance(&oklab_palette);
         Ok((-average_cosine_distance as f32) + (-avergae_euc_distance as f32))
-        // let init_param = vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
-        // let intensities = vec![1.0, 2.0, 3.0];
-        // let future_result = async {
-        //     vec![1.0]
-        // };
-        // // Console log
-        // let result: Vec<f32> = futures::executor::block_on(future_result);
-
-        // let future_result = diff_penalty(include_str!("diff.wgsl"), &intensities, init_param.clone());
-
-        // let future_result = diff_penalty(include_str!("diff.wgsl"), &self.intensities, param.clone());
-        // let result: Vec<f32> = futures::executor::block_on(future_result);
-        // let result: Vec<f32> = future_result.block_on();
-        // let result_sum: f32 = result.par_iter().sum();
-        // let mean: f32 = result_sum / result.len() as f32;
-        // Ok(0.1)
     }
 }
-
 impl Anneal for Loss {
     type Param = Vec<f32>;
     type Output = Vec<f32>;
@@ -346,67 +317,54 @@ impl Anneal for Loss {
     fn anneal(&self, param: &Vec<f32>, temp: f32) -> Result<Vec<f32>, Error> {
         let mut param_n = param.clone();
         let mut rng = self.rng.lock().unwrap();
-        let distr = Uniform::from(0..param.len());
-        // Perform modifications to a degree proportional to the current temperature `temp`.
-        for _ in 0..(temp.floor() as u64) + 1 {
-            // Compute random index of the parameter vector using the supplied random number
-            // generator.
-            let idx = rng.sample(distr);
-            // Compute random number in [0.1, 0.1].
-            let val = rng.sample(Uniform::new_inclusive(-0.1, 0.1));
-            // modify previous parameter value at random position `idx` by `val`
-            param_n[idx] += val;
 
-            // check if bounds are violated. If yes, project onto bound.
-            param_n[idx] = param_n[idx].clamp(0.0, 1.0);
+        // Iterate over each color (assuming each color is represented by 3 values in the vector)
+        for color_idx in 0..param.len() / 3 {
+            if self.locked_colors[color_idx] {
+                continue; // Skip this color if it is locked
+            }
+
+            // Modify each component of the color
+            for i in 0..3 {
+                let idx = color_idx * 3 + i; // Calculate the index in the parameter vector
+                let val = rng.sample(Uniform::new_inclusive(-0.1, 0.1));
+                param_n[idx] += val;
+                // Clamp the value to ensure it stays within bounds
+                param_n[idx] = param_n[idx].clamp(0.0, 1.0);
+            }
         }
+
         Ok(param_n)
     }
 }
-
-fn annealing(intensities: &Vec<f32>) -> Result<Vec<f32>, Error> {
+fn annealing(colors: &Vec<f32>, locked_colors: &Vec<bool>) -> Result<Vec<f32>, Error> {
     let solver = SimulatedAnnealing::new(15.0)?;
-    let cost_function = Loss::new(intensities.clone());
+    let cost_function = Loss::new(locked_colors.clone());
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
-        .configure(|state| { state.param(intensities.to_vec()).max_iters(10_000) })
+        .configure(|state| { state.param(colors.to_vec()).max_iters(1_000) })
+        // Optional: Attach an observer
         .run()?;
     // Print result
     let best_param = res.state().get_best_param().unwrap().clone();
 
-    Ok(best_param.clone()) // Return the best parameters
+    Ok(best_param) // Return the best parameters
 }
 
 #[wasm_bindgen]
-pub fn optimize(colors: &[u16]) -> Vec<f32> {
+pub fn optimize(colors: &[u16], locked_colors: &[u8]) -> Vec<f32> {
     utils::set_panic_hook();
 
     let float_color_map: Vec<f32> = colors
         .iter()
         .map(|&x| (x as f32) / 255.0)
         .collect::<Vec<f32>>();
-    let optimized_colors = annealing(&float_color_map).unwrap();
+    // Convert to Oklab
+    // let mut oklab_colors: Vec<Vec<f32>> = Vec::new();
+    let locked_colors_vec = locked_colors
+        .iter()
+        .map(|&x| x == 1)
+        .collect::<Vec<bool>>();
+    let optimized_colors = annealing(&float_color_map, &locked_colors_vec).unwrap();
     optimized_colors
 }
-
-// #[wasm_bindgen]
-// pub fn test_optimize() -> Vec<f32> {
-//     let array = [
-//         127, 201, 127, 190, 174, 212, 253, 192, 134, 255, 255, 153, 56, 108, 176, 240, 2, 127,
-//     ];
-//     let array_vec = array.to_vec();
-//     let vals = array_vec
-//         .par_iter()
-//         .map(|&x| x as f32)
-//         .collect::<Vec<f32>>();
-//     // take a random sample of 1000 values
-//     // Iterate over vals, if value is 0 or nan, make it 0, otherwise take the log
-
-//     let vals_log = vals
-//         .iter()
-//         .map(|&x| {
-//             if x <= 0.0 || x.is_nan() { 0.0 } else { x.ln() }
-//         })
-//         .collect::<Array1<f32>>();
-//     return vals_log.to_vec();
-// }
