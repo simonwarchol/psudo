@@ -1,5 +1,8 @@
 // @ts-nocheck
 import shallow from "zustand/shallow";
+import { debounce } from 'lodash';
+
+
 import { LensExtension } from "@hms-dbmi/viv";
 import { VivView } from "@hms-dbmi/viv";
 import { CompositeLayer, COORDINATE_SYSTEM } from "@deck.gl/core";
@@ -60,6 +63,44 @@ function getImageLayer(id, props) {
 function getVivId(id) {
   return `-#${id}#`;
 }
+
+const updateLensGraphValues = async (
+  coordinate,
+  viewState,
+  loader,
+  pyramidResolution,
+  lensRadius,
+  channelsVisible,
+  selections,
+  setMovingLens,
+  colors,
+  lensSelection,
+  setGraphData
+) => {
+  const channelData = await getLensIntensityValues(
+    coordinate,
+    viewState,
+    loader,
+    pyramidResolution,
+    lensRadius,
+    channelsVisible,
+    selections,
+    setMovingLens
+  );
+
+  let graphData = getGraphData(
+    channelData,
+    colors,
+    lensSelection,
+    channelsVisible,
+    selections
+  );
+
+  setGraphData(graphData);
+};
+
+const debouncedUpdateLensGraphValues = debounce(updateLensGraphValues, 1000);
+
 
 const MinervaVivLensing = class extends LensExtension {
   getShaders() {
@@ -161,7 +202,10 @@ const MinervaVivLensing = class extends LensExtension {
     } else {
       layer.setState({ unprojectLensBounds: [0, 0, 0, 0] });
     }
-    this.state.model?.setUniforms({ lensOpacity: lensOpacity, overlapView: overlapView });
+    this.state.model?.setUniforms({
+      lensOpacity: lensOpacity,
+      overlapView: overlapView,
+    });
     super.draw();
   }
   updateState({ props, oldProps, changeFlags, ...rest }) {
@@ -182,7 +226,7 @@ const LensLayer = class extends CompositeLayer {
   }
 
   renderLayers() {
-    const { id, viewState } = this.props;
+    const { id, viewState, loader } = this.props;
     const showLens = useImageSettingsStore.getState()?.lensEnabled;
     const lensSelection = useImageSettingsStore.getState()?.lensSelection;
     const mousePosition = this.context.userData.mousePosition || [
@@ -198,7 +242,6 @@ const LensLayer = class extends CompositeLayer {
     if (_.isEmpty(this.context.userData.coordinate)) {
       this.context.userData.setCoordinate(this.lensPosition);
     }
-    // console.log("lensSelection", lensSelection);
     if (!showLens) return [];
 
     this.lensPosition =
@@ -207,6 +250,24 @@ const LensLayer = class extends CompositeLayer {
         y: mousePosition[1],
         radius: 1,
       })?.coordinate || viewState.target;
+    //     const colors = useChannelsStore.getState()?.colors;
+
+    if (this.context.userData?.mainViewStateChanged) {
+      debouncedUpdateLensGraphValues(
+        this.lensPosition,
+        viewState,
+        loader,
+        this.context.userData?.pyramidResolution,
+        this.context.userData?.lensRadius,
+        this.context.userData?.channelsVisible,
+        this.context.userData?.selections,
+        this.context.userData?.setMovingLens,
+        useChannelsStore.getState()?.colors,
+        lensSelection,
+        this.context.userData?.setGraphData
+      );
+      this.context.userData?.setMainViewStateChanged(false);
+    }
 
     const lensCircle = new ScatterplotLayer({
       id: `lens-circle-${id}`,
@@ -816,7 +877,6 @@ const LensLayer = class extends CompositeLayer {
       console.log("test", test);
     }
   }
-  
 
   async onDragEnd(pickingInfo, event, d, e) {
     const { viewState } = this.props;
@@ -827,9 +887,7 @@ const LensLayer = class extends CompositeLayer {
     this.context.userData.setMovingLens(false);
     const lensSelection = useImageSettingsStore.getState()?.lensSelection;
     const colors = useChannelsStore.getState()?.colors;
-    const channelsVisible = this.context?.userData?.channelsVisible;
-    const selections = this.context?.userData?.selections;
-    const channelData = await getLensIntensityValues(
+    await updateLensGraphValues(
       coordinate,
       viewState,
       loader,
@@ -837,17 +895,11 @@ const LensLayer = class extends CompositeLayer {
       this.context.userData?.lensRadius,
       this.context.userData?.channelsVisible,
       this.context.userData?.selections,
-      this.context.userData?.setMovingLens
-    );
-    let graphData = getGraphData(
-      channelData,
+      this.context.userData?.setMovingLens,
       colors,
       lensSelection,
-      channelsVisible,
-      selections
+      this.context.userData?.setGraphData
     );
-
-    this.context.userData.setGraphData(graphData);
   }
 };
 LensLayer.layerName = "LensLayer";

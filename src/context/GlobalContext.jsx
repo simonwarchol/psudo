@@ -14,6 +14,7 @@ export const ContextWrapper = (props) => {
   const [graphData, setGraphData] = useState([]);
   const [optimizationScope, setOptimizationScope] = useState("global");
   const [overlapView, setOverlapView] = useState(false);
+  const [mainViewStateChanged, setMainViewStateChanged] = useState(false);
 
   const rgb2hex = (rgb) => {
     try {
@@ -66,6 +67,9 @@ export const ContextWrapper = (props) => {
         setGraphData,
         overlapView,
         setOverlapView,
+        setGraphData,
+        mainViewStateChanged,
+        setMainViewStateChanged,
       }}
     >
       {props.children}

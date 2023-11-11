@@ -127,7 +127,6 @@ const Viewer = (props) => {
 
   // // If showChannel is false, do not include
   // extensions: [getColorSpace(colormap)],
-
   let deckProps = {
     layers: [],
   };
@@ -186,6 +185,8 @@ const Viewer = (props) => {
       setCoordinate,
       overlapView: context?.overlapView,
       setOverlapView: context?.setOverlapView,
+      mainViewStateChanged: context?.mainViewStateChanged,
+      setMainViewStateChanged: context?.setMainViewStateChanged,
     };
     deckProps = {
       ...deckProps,
@@ -198,7 +199,7 @@ const Viewer = (props) => {
     };
     onViewStateChange = ({ oldViewState, viewState: newViewState, viewId }) => {
       if (mainViewer) {
-        console.log("VSCH")
+        // console.log("VSCH");
         // console.log("onViewStateChange", oldViewState, newViewState, viewId);
         useViewerStore.setState({
           viewState: { ...newViewState, id: viewId },
@@ -207,6 +208,7 @@ const Viewer = (props) => {
             loader.length - 1
           ),
         });
+        context?.setMainViewStateChanged(true);
       }
 
       return movingLens ? oldViewState : newViewState;
