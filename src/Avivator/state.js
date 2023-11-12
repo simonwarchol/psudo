@@ -96,12 +96,12 @@ const DEFAULT_IMAGE_STATE = {
   useFixedAxis: true,
 };
 
-const filePath = "/src/assets/exemplar-001.ome.tif";
-const response = await fetch(filePath);
-const data = await response.blob();
-const fetchedFile = new File([data], "exemplar-001.ome.tif", {
-  type: "image/tiff",
-});
+// const filePath = "/src/assets/exemplar-001.ome.tif";
+// const response = await fetch(filePath);
+// const data = await response.blob();
+// const fetchedFile = new File([data], "exemplar-001.ome.tif", {
+//   type: "image/tiff",
+// });
 
 export const useImageSettingsStore = create((set) => ({
   ...DEFAULT_IMAGE_STATE,
@@ -126,20 +126,22 @@ const DEFAULT_VIEWER_STATE = {
   metadata: null,
   viewState: null,
   zoom: null,
-  source: {
-    urlOrFile:fetchedFile,
-    description: 'exemplar-001.ome.tif',
-  },
   // source: {
-  //   urlOrFile:
-  //     "https://viv-demo.storage.googleapis.com/Vanderbilt-Spraggins-Kidney-MxIF.ome.tif",
-  //   description: getNameFromUrl(
-  //     "https://viv-demo.storage.googleapis.com/Vanderbilt-Spraggins-Kidney-MxIF.ome.tif"
-  //   ),
+  //   urlOrFile:fetchedFile,
+  //   description: 'exemplar-001.ome.tif',
   // },
-  // pyramidResolution: 0,
-  pyramidResolution: 0,
-};
+  //   source: {
+  //     urlOrFile:
+  //       "https://viv-demo.storage.googleapis.com/Vanderbilt-Spraggins-Kidney-MxIF.ome.tif",
+  //     description: getNameFromUrl(
+  //       "https://viv-demo.storage.googleapis.com/Vanderbilt-Spraggins-Kidney-MxIF.ome.tif"
+  //     ),
+  //   },
+  //   // pyramidResolution: 0,
+  //   pyramidResolution: 0,
+  // };
+  source: {},
+};  
 
 export const useViewerStore = create((set) => ({
   ...DEFAULT_VIEWER_STATE,

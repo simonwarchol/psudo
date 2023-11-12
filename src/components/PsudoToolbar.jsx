@@ -271,9 +271,6 @@ function PsudoToolbar() {
     }
     console.log("lockedList", lockedList);
     const optColors = psudoAnalysis.optimize(colorList, lockedList);
-    let testOls = psudoAnalysis.test_ols();
-    console.log("testOls", testOls);
-
     console.log("optColors", optColors);
     console.log("Colors Before", colors);
     let colorCounter = 0;
