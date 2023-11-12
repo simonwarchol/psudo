@@ -277,6 +277,43 @@ export function useWindowSize(scaleWidth = 1, scaleHeight = 1, elem = null) {
   return windowSize;
 }
 
+export async function calculatePaletteLoss(channelsVisible, loader, selections,contrastLimits,colors,pyramidResolution) {
+  const channelsPayload = [];
+  channelsVisible.forEach((d, i) => {
+    if (d) {
+      const channelPayload = {
+        color: colors[i],
+        contrastLimits: contrastLimits[i],
+        selection: selections[i],
+      };
+      channelsPayload.push(channelPayload);
+    }
+  });
+
+  let colorList = [];
+  await Promise.all(
+    channelsPayload.map(async (d, i) => {
+      colorList.push(...d.color);
+      // const resolution = pyramidResolution;
+      const raster = await loader?.[pyramidResolution]?.getRaster({
+        selection: d.selection,
+      });
+     
+    })
+  );
+
+  
+  // convert Uint16Array to Float32 Array, where each value is /255
+  const colorListFloat = new Float32Array(colorList.length);
+  colorList.forEach((d, i) => {
+    colorListFloat[i] = d / 255;
+  });
+
+  let paletteCost = psudoAnalysis.calculate_palette_loss(colorList);
+  // console.log("paletteCost", paletteCost);
+  return paletteCost;
+}
+
 export async function getSingleSelectionStats2D(
   { loader, selection, pyramidResolution },
   computeStats = false
@@ -336,7 +373,13 @@ export function getChannelGraphData({ data, color, selection }) {
   return channelData;
 }
 
-export function getGraphData(channelData,colors,lensSelection,channelsVisible,selections){
+export function getGraphData(
+  channelData,
+  colors,
+  lensSelection,
+  channelsVisible,
+  selections
+) {
   let graphData = [];
   if (_.every(lensSelection, (num) => num === 0)) {
     (channelsVisible || []).forEach((d, i) => {

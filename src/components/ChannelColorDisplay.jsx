@@ -32,6 +32,7 @@ import {
   getSingleSelectionStats,
   truncateDecimalNumber,
   getGMMContrastLimits,
+  calculatePaletteLoss
 } from "../Avivator/viewerUtils.js";
 import * as psudoAnalysis from "psudo-analysis";
 
@@ -175,7 +176,7 @@ function ChannelColorDisplay(props) {
     return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
   }
 
-  const handleChange = (color, e) => {
+  const handleChange = async (color, e) => {
     setPickerColor(color.rgb);
     colors[channelIndex] = [pickerColor.r, pickerColor.g, pickerColor.b];
     if (_.isEmpty(colors) || _.isEmpty(context?.graphData)) return;
@@ -190,6 +191,9 @@ function ChannelColorDisplay(props) {
       }
     }
     context?.setGraphData(tmpGraphData);
+    let paletteLoss = await calculatePaletteLoss(channelsVisible, loader, selections, contrastLimits, colors, pyramidResolution);
+
+    context?.setPaletteLoss(paletteLoss);
 
     useChannelsStore.setState({ colors: colors, prevColors: colors });
   };

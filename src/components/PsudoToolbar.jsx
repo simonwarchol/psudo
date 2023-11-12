@@ -25,7 +25,10 @@ import {
   useImageSettingsStore,
   useLoader,
 } from "../Avivator/state.js";
-import { getNameFromUrl } from "../Avivator/viewerUtils.js";
+import {
+  getNameFromUrl,
+  calculatePaletteLoss,
+} from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
 import JoinInnerIcon from "@mui/icons-material/JoinInner";
@@ -40,6 +43,7 @@ import AddChannel from "../Avivator/components/Controller/components/AddChannel.
 import { VegaLite } from "react-vega";
 import LineChart from "./LineChart.jsx";
 import _ from "lodash";
+import GaugeCharts from "./GaugeCharts.jsx";
 
 function PsudoToolbar() {
   const context = useContext(AppContext);
@@ -238,11 +242,8 @@ function PsudoToolbar() {
     // Length of each channel's intensity list.
     const channelLength = intensityList.length / channelsPayload.length;
 
-    console.log("intensityList", channelLength, intensityList);
-
     // New intensityList
     const newIntensityList = new Float32Array(intensityList.length);
-    console.time("Code execution time");
 
     // Iterate for channelLength
     _.range(channelLength).map((i) => {
@@ -251,13 +252,6 @@ function PsudoToolbar() {
           intensityList[i + j * channelLength];
       });
     });
-
-    console.timeEnd("Code execution time");
-
-    console.log(
-      "newIntensityList",
-      JSON.stringify(Array.from(newIntensityList))
-    );
 
     // convert Uint16Array to Float32 Array, where each value is /255
     const colorListFloat = new Float32Array(colorList.length);
@@ -275,7 +269,9 @@ function PsudoToolbar() {
       }
     }
     console.log("lockedList", lockedList);
-    const optColors = psudoAnalysis.optimize(colorList, lockedList);
+   
+    console.log("paletteLoss3", paletteLoss);
+    context.setPaletteLoss(paletteLoss);
     console.log("optColors", optColors);
     console.log("Colors Before", colors);
     let colorCounter = 0;
@@ -290,39 +286,30 @@ function PsudoToolbar() {
     });
     useChannelsStore.setState({ colors: tmpColors, prevColors: tmpColors });
 
-    // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`, test)
-    // console.log('test', JSON.stringify({
-    //     'intensityList': Array.from(intensityList),
-    //     'colorList': Array.from(colorList)
-    // }))
-    //
-    //
-    // psudoAnalysis.optimize_palette(newIntensityList).then(result => {
-    //     console.log('TESULT', JSON.stringify(Array.from(result)));
-    // });/**/
-    // psudoAnalysis.optimize_palette(newIntensityList).then((result) => {
-    //   console.log("TESULT", result);
-    // }); /**/
-    let startTime = performance.now();
+    let tmpGraphData = [];
+    let ii = 0;
+    for (const [i, visible] of (channelsVisible || []).entries()) {
+      if (visible) {
+        let channelGraphData = context?.graphData[ii];
+        channelGraphData.color = tmpColors[i];
+        tmpGraphData.push(channelGraphData);
+        ii++;
+      }
+    }
+    context?.setGraphData(tmpGraphData);
 
-    // let tes = psudoAnalysis.optimize_palette(newIntensityList);
-    // console.log(tes);
-    // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
-    // // console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
-    //
-    // //
-    //
-    // _.range(10).map(() => {
-    //
-    //         const test = psudoAnalysis.color_test(new Float32Array([0.5, 0.2]));
-    //         console.log(`Call to doSomething took ${performance.now() - startTime} milliseconds`)
-    //     }
-    // )
-    //
-    // // console.log('test', JSON.stringify({'arr': Array.from(test)}))
-    // // console.log('Adding one', psudoAnalysis.add_one(444))
-    // // console.log('uint16Colors', uint16Colors, uint16ContrastLimits, uint16ChannelRaster)
+    let paletteLoss = await calculatePaletteLoss(
+      channelsVisible,
+      loader,
+      selections,
+      contrastLimits,
+      tmpColors,
+      pyramidResolution
+    );
+    console.log("paletteLoss3", paletteLoss);
+    context.setPaletteLoss(paletteLoss);
   };
+
   const handleChangeOptimizationScope = (event) => {
     context.setOptimizationScope(event.target.value);
   };
@@ -336,8 +323,23 @@ function PsudoToolbar() {
         alignItems="start"
         // p={1}
       >
-        <Grid item xs={"auto"} p={1}>
-          <h1 className={"title-code color-gradient"}>psudo</h1>
+        <Grid
+          item
+          xs={"auto"}
+          p={1}
+          container
+          direction="column"
+          sx={{ zIndex: 10000, display: "flex", alignItems: "center" }}
+        >
+          <Grid item>
+            <h1 className={"title-code color-gradient"}>psudo</h1>
+          </Grid>
+          <Grid item>
+            <GaugeCharts
+              paletteLoss={context?.paletteLoss}
+              style={{ position: "relative", left: "50%" }}
+            />
+          </Grid>
         </Grid>
 
         <Grid
@@ -381,6 +383,7 @@ function PsudoToolbar() {
           >
             <LineChart style={{ position: "relative", left: "50%" }} />
           </Grid>
+
           <Footer />
         </Grid>
       </Grid>

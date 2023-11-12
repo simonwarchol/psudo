@@ -416,6 +416,7 @@ dependencies = [
  "rand",
  "rand_xoshiro",
  "rayon",
+ "serde",
  "serde_json",
  "statrs",
  "typenum",
@@ -1184,6 +1185,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7daec296f25a1bae309c0cd5c29c4b260e510e6d813c286b19eaadf409d40fce"
 dependencies = [
  "cfg-if",
+ "serde",
+ "serde_json",
  "wasm-bindgen-macro",
 ]
 

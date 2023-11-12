@@ -173,73 +173,63 @@ fn average_pairwise_euclidean_distance(matrix: &Array2<f64>) -> f64 {
     }
 }
 
-pub fn evaluate_palette(rgb_colors: &[u16]) -> f32 {
-    //
-    let c3_instance = c3::C3::new();
+// pub fn evaluate_palette(rgb_colors: &[u16]) -> f32 {
+//     //
+//     let c3_instance = c3::C3::new();
 
-    let mut cielab_colors: Vec<Vec<f32>> = Vec::new();
-    let mut oklab_colors: Vec<Vec<f32>> = Vec::new();
-    for color in rgb_colors.chunks(3) {
-        let rgb = Srgb::new(
-            (color[0] as f32) / 255.0,
-            (color[1] as f32) / 255.0,
-            (color[2] as f32) / 255.0
-        );
-        let lab: Lab = Lab::from_color(rgb);
-        cielab_colors.push(vec![lab.l, lab.a, lab.b]);
-        let oklab: Oklab = Oklab::from_color(rgb);
-        oklab_colors.push(vec![oklab.l, oklab.a, oklab.b]);
-    }
-    let mut lab_palette = Array2::from_shape_vec(
-        (rgb_colors.len() / 3, 3),
-        cielab_colors
-            .iter()
-            .flatten()
-            .map(|&x| x as f64)
-            .collect::<Vec<f64>>()
-    ).unwrap();
-    let mut oklab_palette = Array2::from_shape_vec(
-        (rgb_colors.len() / 3, 3),
-        oklab_colors
-            .iter()
-            .flatten()
-            .map(|&x| x as f64)
-            .collect::<Vec<f64>>()
-    ).unwrap();
-    let analyzed_palette: Vec<HashMap<&str, f64>> = c3_instance.analyze_palette(
-        lab_palette.clone()
-    );
-    let cosine_matrix = c3_instance.compute_color_name_distance_matrix(analyzed_palette);
-    // Calculate average distance between colors
-    let mut total_distance = 0.0;
-    let mut total_pairs = 0;
-    // Iterate over lower triangle of matrix
-    for i in 0..cosine_matrix.shape()[0] {
-        for j in 0..i {
-            total_distance += cosine_matrix[[i, j]];
-            total_pairs += 1;
-        }
-    }
-    let average_cosine_distance = total_distance / (total_pairs as f64);
-    let avergae_euc_distance = average_pairwise_euclidean_distance(&lab_palette);
-    (average_cosine_distance as f32) + (avergae_euc_distance as f32)
-}
+//     let mut cielab_colors: Vec<Vec<f32>> = Vec::new();
+//     let mut oklab_colors: Vec<Vec<f32>> = Vec::new();
+//     for color in rgb_colors.chunks(3) {
+//         let rgb = Srgb::new(
+//             (color[0] as f32) / 255.0,
+//             (color[1] as f32) / 255.0,
+//             (color[2] as f32) / 255.0
+//         );
+//         let lab: Lab = Lab::from_color(rgb);
+//         cielab_colors.push(vec![lab.l, lab.a, lab.b]);
+//         let oklab: Oklab = Oklab::from_color(rgb);
+//         oklab_colors.push(vec![oklab.l, oklab.a, oklab.b]);
+//     }
+//     let mut lab_palette = Array2::from_shape_vec(
+//         (rgb_colors.len() / 3, 3),
+//         cielab_colors
+//             .iter()
+//             .flatten()
+//             .map(|&x| x as f64)
+//             .collect::<Vec<f64>>()
+//     ).unwrap();
+//     let mut oklab_palette = Array2::from_shape_vec(
+//         (rgb_colors.len() / 3, 3),
+//         oklab_colors
+//             .iter()
+//             .flatten()
+//             .map(|&x| x as f64)
+//             .collect::<Vec<f64>>()
+//     ).unwrap();
+//     let analyzed_palette: Vec<HashMap<&str, f64>> = c3_instance.analyze_palette(
+//         lab_palette.clone()
+//     );
+//     let cosine_matrix = c3_instance.compute_color_name_distance_matrix(analyzed_palette);
+//     // Calculate average distance between colors
+//     let mut total_distance = 0.0;
+//     let mut total_pairs = 0;
+//     // Iterate over lower triangle of matrix
+//     for i in 0..cosine_matrix.shape()[0] {
+//         for j in 0..i {
+//             total_distance += cosine_matrix[[i, j]];
+//             total_pairs += 1;
+//         }
+//     }
+//     let average_cosine_distance = total_distance / (total_pairs as f64);
+//     let avergae_euc_distance = average_pairwise_euclidean_distance(&lab_palette);
+//     (average_cosine_distance as f32) + (avergae_euc_distance as f32)
+// }
 
 fn color_conversion_test() -> () {
     let my_rgb = Srgb::new(0.1, 0.0, 0.0);
 
     let mut my_okl = Oklab::from_color(my_rgb);
     println!("my_okl: {:?}", my_okl.l);
-}
-
-#[wasm_bindgen]
-pub fn test_color_distance(array: &[u16]) -> f32 {
-    // Run this 100 times and take the average
-    let mut total_distance = 0.0;
-    for _ in 0..100 {
-        total_distance += evaluate_palette(array);
-    }
-    total_distance / 100.0
 }
 
 // ///////////////////////////////////////// Optimization /////////////////////////////////////
@@ -265,13 +255,11 @@ impl CostFunction for Loss {
 
     fn cost(&self, param: &Self::Param) -> Result<Self::Output, Error> {
         let mut cielab_colors: Vec<Vec<f32>> = Vec::new();
-        let mut oklab_colors: Vec<Vec<f32>> = Vec::new();
+        let oklab_colors = param;
         for color in param.chunks(3) {
-            let rgb = Srgb::new(color[0] as f32, color[1] as f32, color[2] as f32);
-            let lab: Lab = Lab::from_color(rgb);
+            let okl = Oklab::new(color[0] as f32, color[1] as f32, color[2] as f32);
+            let lab: Lab = Lab::from_color(okl);
             cielab_colors.push(vec![lab.l, lab.a, lab.b]);
-            let oklab: Oklab = Oklab::from_color(rgb);
-            oklab_colors.push(vec![oklab.l, oklab.a, oklab.b]);
         }
         let mut lab_palette = Array2::from_shape_vec(
             (param.len() / 3, 3),
@@ -285,7 +273,6 @@ impl CostFunction for Loss {
             (param.len() / 3, 3),
             oklab_colors
                 .iter()
-                .flatten()
                 .map(|&x| x as f64)
                 .collect::<Vec<f64>>()
         ).unwrap();
@@ -329,8 +316,13 @@ impl Anneal for Loss {
                 let idx = color_idx * 3 + i; // Calculate the index in the parameter vector
                 let val = rng.sample(Uniform::new_inclusive(-0.1, 0.1));
                 param_n[idx] += val;
-                // Clamp the value to ensure it stays within bounds
-                param_n[idx] = param_n[idx].clamp(0.0, 1.0);
+                // Scale luminance between 0.5 and 1
+                if i == 0 {
+                    param_n[idx] = (param_n[idx] / 2.0 + 0.5).clamp(0.5, 1.0);
+                } else {
+                    // Clamp the value to ensure it stays within bounds
+                    param_n[idx] = param_n[idx].clamp(-0.4, 0.4);
+                }
             }
         }
 
@@ -342,7 +334,7 @@ fn annealing(colors: &Vec<f32>, locked_colors: &Vec<bool>) -> Result<Vec<f32>, E
     let cost_function = Loss::new(locked_colors.clone());
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
-        .configure(|state| { state.param(colors.to_vec()).max_iters(1_000) })
+        .configure(|state| { state.param(colors.to_vec()).max_iters(10_000) })
         // Optional: Attach an observer
         .run()?;
     // Print result
@@ -360,11 +352,103 @@ pub fn optimize(colors: &[u16], locked_colors: &[u8]) -> Vec<f32> {
         .map(|&x| (x as f32) / 255.0)
         .collect::<Vec<f32>>();
     // Convert to Oklab
-    // let mut oklab_colors: Vec<Vec<f32>> = Vec::new();
     let locked_colors_vec = locked_colors
         .iter()
         .map(|&x| x == 1)
         .collect::<Vec<bool>>();
-    let optimized_colors = annealing(&float_color_map, &locked_colors_vec).unwrap();
-    optimized_colors
+
+    let oklab_color_map: Vec<f32> = float_color_map
+        .chunks(3)
+        .map(|color| {
+            let rgb = Srgb::new(color[0] as f32, color[1] as f32, color[2] as f32);
+            let oklab: Oklab = Oklab::from_color(rgb);
+            vec![oklab.l, oklab.a, oklab.b]
+        })
+        .flatten()
+        .collect::<Vec<f32>>();
+    let optimized_colors = annealing(&oklab_color_map, &locked_colors_vec).unwrap();
+    let optimized_srgb = optimized_colors
+        .chunks(3)
+        .map(|color| {
+            let okl = Oklab::new(color[0] as f32, color[1] as f32, color[2] as f32);
+            let rgb: Srgb = Srgb::from_color(okl);
+            vec![rgb.red.clamp(0.0, 1.0), rgb.green.clamp(0.0, 1.0), rgb.blue.clamp(0.0, 1.0)]
+        })
+        .flatten()
+        .collect::<Vec<f32>>();
+    optimized_srgb
+}
+
+fn annealing_cost(
+    param: &Vec<f32>,
+) -> Result<HashMap<String, f32>, Error> {
+    let mut cielab_colors: Vec<Vec<f32>> = Vec::new();
+    let oklab_colors = param;
+    let c3_instance = c3::C3::new();
+    for color in oklab_colors.chunks(3) {
+        let okl = Oklab::new(color[0] as f32, color[1] as f32, color[2] as f32);
+        let lab: Lab = Lab::from_color(okl);
+        cielab_colors.push(vec![lab.l, lab.a, lab.b]);
+    }
+    let mut lab_palette = Array2::from_shape_vec(
+        (oklab_colors.len() / 3, 3),
+        cielab_colors
+            .iter()
+            .flatten()
+            .map(|&x| x as f64)
+            .collect::<Vec<f64>>()
+    ).unwrap();
+    let mut oklab_palette = Array2::from_shape_vec(
+        (param.len() / 3, 3),
+        oklab_colors
+            .iter()
+            .map(|&x| x as f64)
+            .collect::<Vec<f64>>()
+    ).unwrap();
+    let analyzed_palette: Vec<HashMap<&str, f64>> = c3_instance.analyze_palette(
+        lab_palette.clone()
+    );
+    let cosine_matrix = c3_instance.compute_color_name_distance_matrix(analyzed_palette);
+    // Calculate average distance between colors
+    let mut total_distance = 0.0;
+    let mut total_pairs = 0;
+    // Iterate over lower triangle of matrix
+    for i in 0..cosine_matrix.shape()[0] {
+        for j in 0..i {
+            total_distance += cosine_matrix[[i, j]];
+            total_pairs += 1;
+        }
+    }
+    let average_cosine_distance = total_distance / (total_pairs as f64);
+    let avergae_euc_distance = average_pairwise_euclidean_distance(&oklab_palette);
+    let mut loss_components = HashMap::new();
+    loss_components.insert("perceptural_distance".to_string(), -average_cosine_distance as f32);
+    loss_components.insert("name_distance".to_string(), -avergae_euc_distance as f32);
+
+    Ok(loss_components)
+}
+
+#[wasm_bindgen]
+pub fn calculate_palette_loss(colors: &[u16]) -> JsValue {
+    let float_color_map: Vec<f32> = colors
+        .iter()
+        .map(|&x| (x as f32) / 255.0)
+        .collect::<Vec<f32>>();
+    // Convert to Oklab
+
+
+    let oklab_color_map: Vec<f32> = float_color_map
+        .chunks(3)
+        .map(|color| {
+            let rgb = Srgb::new(color[0] as f32, color[1] as f32, color[2] as f32);
+            let oklab: Oklab = Oklab::from_color(rgb);
+            vec![oklab.l, oklab.a, oklab.b]
+        })
+        .flatten()
+        .collect::<Vec<f32>>();
+    let loss = annealing_cost(&oklab_color_map);
+    match loss {
+        Ok(loss_components) => JsValue::from_serde(&loss_components).unwrap(),
+        Err(_) => JsValue::from_str("Error calculating loss"),
+    }
 }

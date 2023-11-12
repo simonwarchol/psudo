@@ -16,6 +16,7 @@ export const ContextWrapper = (props) => {
   const [overlapView, setOverlapView] = useState(false);
   const [linkedViews, setLinkedViews] = useState(false);
   const [mainViewStateChanged, setMainViewStateChanged] = useState(false);
+  const [paletteLoss, setPaletteLoss] = useState({});
 
   const rgb2hex = (rgb) => {
     try {
@@ -72,6 +73,8 @@ export const ContextWrapper = (props) => {
         setMainViewStateChanged,
         linkedViews,
         setLinkedViews,
+        paletteLoss,
+        setPaletteLoss,
       }}
     >
       {props.children}

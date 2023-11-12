@@ -18,6 +18,7 @@ import {
   guessRgb,
   isInterleaved,
   getChannelGraphData,
+  calculatePaletteLoss,
 } from "./viewerUtils";
 import { FILL_PIXEL_VALUE } from "./constants";
 import { AppContext } from "../context/GlobalContext.jsx";
@@ -36,10 +37,11 @@ export const useImage = (source, history) => {
     ],
     shallow
   );
-  let [channelsVisible, colors, selections] = useChannelsStore((store) => [
+  let [channelsVisible, colors, selections, contrastLimits] = useChannelsStore((store) => [
     store.channelsVisible,
     store.colors,
     store.selections,
+    store.contrastLimits,
   ]);
   const loader = useLoader();
   const metadata = useMetadata();
@@ -72,10 +74,25 @@ export const useImage = (source, history) => {
     context?.setGraphData(graphData);
   };
 
+  const getPaletteLoss = async (channelsVisible, loader, selections, colors,contrastLimits, pyramidResolution) => {
+    let paletteLoss = await calculatePaletteLoss(
+      channelsVisible,
+      loader,
+      selections,
+      contrastLimits,
+      colors,
+      pyramidResolution
+    );
+    console.log("Palette Loss 1", paletteLoss);
+
+    context?.setPaletteLoss(paletteLoss);
+  };
+
   useEffect(() => {
     if (_.isEmpty(channelsVisible) || !loader || _.isEmpty(selections)) return;
     console.log("CV", channelsVisible, colors);
     getGlobalGraphData(channelsVisible, loader, selections, colors);
+    getPaletteLoss(channelsVisible, loader, selections, colors, contrastLimits, pyramidResolution);
   }, [channelsVisible, selections]);
 
   useEffect(() => {
@@ -225,6 +242,7 @@ export const useImage = (source, history) => {
         globalSelection: newSelections[0],
         channelOptions,
       });
+
       // Init Graph Data
       context?.setIsLoading(false);
     };

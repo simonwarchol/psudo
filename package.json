@@ -55,6 +55,7 @@
     "react-color": "^2.19.3",
     "react-dom": "^16.8.0 || ^17.0.0",
     "react-dropzone": "^14.2.2",
+    "react-gauge-chart": "^0.4.1",
     "react-perfect-scrollbar": "^1.5.8",
     "react-router-dom": "^5.2.0",
     "react-scrollbars-custom": "^4.1.1",

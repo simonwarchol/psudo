@@ -3,13 +3,14 @@ import {AppContext} from "../context/GlobalContext.jsx";
 import {Grid, MenuItem} from "@mui/material";
 import {createTheme, ThemeProvider} from "@mui/material/styles";
 import PngCanvas from "./PngCanvas.jsx";
-import {useChannelsStore, useImageSettingsStore, useViewerStore} from "../Avivator/state.js";
+import {useChannelsStore, useImageSettingsStore, useViewerStore,useLoader} from "../Avivator/state.js";
 import shallow from "zustand/shallow";
 import {makeBoundingBox} from "@vivjs/layers";
 
 const PastPalettes = props => {
     const context = useContext(AppContext);
     const darkTheme = createTheme({palette: {mode: 'dark'}});
+    const loader = useLoader();
 
     let [channelsVisible, colors, contrastLimits, selections] =
         useChannelsStore(
@@ -24,7 +25,7 @@ const PastPalettes = props => {
         );
     const colormap = useImageSettingsStore(store => store.colormap);
 
-    const [viewState] = useViewerStore(store => [store.viewState], shallow);
+    const [viewState,pyramidResolution] = useViewerStore(store => [store.viewState,store.pyramidResolution], shallow);
 
 
     useEffect(() => {
@@ -49,6 +50,10 @@ const PastPalettes = props => {
         // })
         console.log('Old Palette Colors', newdata)
         useChannelsStore.setState({colors: newdata})
+        
+        let paletteLoss = await calculatePaletteLoss(channelsVisible, loader, selections, contrastLimits, colors, pyramidResolution)
+        context.setPaletteLoss(paletteLoss)
+
     }
     const savePastPalette = async () => {
         const visibleIndices = selections.map(s => s.c).filter((d, i) => channelsVisible[i]);
