@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "adler"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
+
+[[package]]
 name = "anyhow"
 version = "1.0.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -57,6 +63,7 @@ checksum = "a8798ca7447753fcb3dd98d9095335b1564812a68c6e7c3d1926e1d5cf094e37"
 dependencies = [
  "anyhow",
  "cfg-if",
+ "ndarray",
  "num-complex",
  "num-integer",
  "num-traits",
@@ -95,12 +102,6 @@ checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
 dependencies = [
  "serde",
 ]
-
-[[package]]
-name = "bit-vec"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f59bbe95d4e52a6398ec21238d31577f2b28a9d86807f06ca59d191d8440d0bb"
 
 [[package]]
 name = "bitflags"
@@ -176,6 +177,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crc32fast"
+version = "1.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b540bd8bc810d3885c6ea91e2018302f68baba2129ab3e88f32389ee9370880d"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -216,6 +226,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a22b2d63d4d1dc0b7f1b6b2747dd0088008a9be28b6ddf0b1e7d335e3037294"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "csv"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac574ff4d437a7b5ad237ef331c17ccca63c46479e5b5453eb8e10bb99a759fe"
+dependencies = [
+ "csv-core",
+ "itoa",
+ "ryu",
+ "serde",
+]
+
+[[package]]
+name = "csv-core"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5efa2b3d7902f4b634a20cae3c9c4e6209dc4779feb6863329607560143efa70"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -274,6 +305,16 @@ name = "fast-srgb8"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd2e7510819d6fbf51a5545c8f922716ecfb14df168a3242f7d33e0239efe6a1"
+
+[[package]]
+name = "flate2"
+version = "1.0.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46303f565772937ffe1d394a4fac6f411c6013172fadde9dcdb1e147a086940e"
+dependencies = [
+ "crc32fast",
+ "miniz_oxide",
+]
 
 [[package]]
 name = "generic-array"
@@ -410,6 +451,8 @@ dependencies = [
  "libc",
  "linfa",
  "linfa-clustering",
+ "linfa-datasets",
+ "linfa-linear",
  "ndarray",
  "ndarray-stats",
  "palette",
@@ -450,22 +493,23 @@ dependencies = [
 
 [[package]]
 name = "linfa"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d65d0d9f86f65485b3a9fc6dad8620b67394d102aa3c4088628a9a1accda008"
+checksum = "1cab423110bc374e4cfa915da88952e2c6a4a5a6300ac0a0e68022bff2ace0b3"
 dependencies = [
  "approx 0.4.0",
  "ndarray",
  "num-traits",
  "rand",
+ "sprs",
  "thiserror",
 ]
 
 [[package]]
 name = "linfa-clustering"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad919153347d20184e8b53786df559ae46fab429976046084d6b8c79f3adbb30"
+checksum = "6aef28a433e8cf5301a878b8bb36d5de6d6ff9895245b358dc6039bf9cf4438b"
 dependencies = [
  "linfa",
  "linfa-linalg",
@@ -475,10 +519,22 @@ dependencies = [
  "ndarray-stats",
  "noisy_float",
  "num-traits",
- "partitions",
  "rand_xoshiro",
  "space",
  "thiserror",
+]
+
+[[package]]
+name = "linfa-datasets"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64dae01fe9bdd87d3e40e469ebd7cf1bedde8f37b584ea8356ea06f063dfc4bf"
+dependencies = [
+ "csv",
+ "flate2",
+ "linfa",
+ "ndarray",
+ "ndarray-csv",
 ]
 
 [[package]]
@@ -493,10 +549,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "linfa-nn"
-version = "0.6.1"
+name = "linfa-linear"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5183e7d3b291e28fd23c965c95207471cbc71399fd83b942096df463cabdd43"
+checksum = "6de3901a9283cb0f5403c9d6fc9b4045cef5c98df2ad9efcb13b5875b734e2df"
+dependencies = [
+ "argmin",
+ "argmin-math",
+ "linfa",
+ "linfa-linalg",
+ "ndarray",
+ "num-traits",
+ "thiserror",
+]
+
+[[package]]
+name = "linfa-nn"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1945b1a1435e885b4743dad94f9676c0bf65d6cce102e96c753f93b4cfe68d0"
 dependencies = [
  "kdtree",
  "linfa",
@@ -525,12 +596,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "memchr"
+version = "2.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
+
+[[package]]
 name = "memoffset"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a634b1c61a95585bd15607c6ab0c4e5b226e695ff2800ba0cdccddf208c406c"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "miniz_oxide"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7810e0be55b428ada41041c41f32c9f1a42817901b4ccf45fa3d4b6561e74c7"
+dependencies = [
+ "adler",
 ]
 
 [[package]]
@@ -575,6 +661,19 @@ dependencies = [
  "num-traits",
  "rawpointer",
  "rayon",
+ "serde",
+]
+
+[[package]]
+name = "ndarray-csv"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f7c71981ebc5a541b64a8af9db36502669932550d23c0e5e8e5a873d11902b4"
+dependencies = [
+ "csv",
+ "either",
+ "ndarray",
+ "serde",
 ]
 
 [[package]]
@@ -709,16 +808,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.38",
-]
-
-[[package]]
-name = "partitions"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9249745fe5a60e2ebd69cc649af1baf28fa3f4606b24146490124405401510d8"
-dependencies = [
- "bit-vec",
- "rayon",
 ]
 
 [[package]]
@@ -1042,10 +1131,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "smallvec"
+version = "1.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
+
+[[package]]
 name = "space"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e990cc6cb89a82d70fe722cd7811dbce48a72bbfaebd623e58f142b6db28428f"
+
+[[package]]
+name = "sprs"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88bab60b0a18fb9b3e0c26e92796b3c3a278bf5fa4880f5ad5cc3bdfb843d0b1"
+dependencies = [
+ "ndarray",
+ "num-complex",
+ "num-traits",
+ "smallvec",
+]
 
 [[package]]
 name = "statrs"

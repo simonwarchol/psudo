@@ -203,6 +203,7 @@ function PsudoToolbar() {
   };
 
   const optimize = async () => {
+    context?.setIsLoading(true);
     console.log("lcc", context?.lockedChannelColors);
     const channelsPayload = [];
     channelsVisible.forEach((d, i) => {
@@ -269,9 +270,10 @@ function PsudoToolbar() {
       }
     }
     console.log("lockedList", lockedList);
-   
-    console.log("paletteLoss3", paletteLoss);
-    context.setPaletteLoss(paletteLoss);
+    const optColors = psudoAnalysis.optimize(colorList, lockedList);
+    let testOls = psudoAnalysis.test_ols();
+    console.log("testOls", testOls);
+
     console.log("optColors", optColors);
     console.log("Colors Before", colors);
     let colorCounter = 0;
@@ -306,8 +308,9 @@ function PsudoToolbar() {
       tmpColors,
       pyramidResolution
     );
-    console.log("paletteLoss3", paletteLoss);
     context.setPaletteLoss(paletteLoss);
+    context?.setIsLoading(false);
+
   };
 
   const handleChangeOptimizationScope = (event) => {

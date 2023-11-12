@@ -1,6 +1,12 @@
 mod utils;
 use ndarray::{ Array1, Array2, s };
 use web_sys::console;
+use linfa::traits::Fit; // Import the Fit trait
+
+use linfa_linear::LinearRegression;
+use linfa::prelude::MultiTargetRegression;
+use linfa::prelude::Predict; // Continue to include linfa prelude for other necessary traits and structures
+use linfa_linear;
 use ndarray::Axis;
 use rayon::{ prelude::*, vec };
 use linfa::prelude::*;
@@ -172,7 +178,6 @@ fn average_pairwise_euclidean_distance(matrix: &Array2<f64>) -> f64 {
         0.0
     }
 }
-
 
 fn color_conversion_test() -> () {
     let my_rgb = Srgb::new(0.1, 0.0, 0.0);
@@ -400,4 +405,50 @@ pub fn calculate_palette_loss(colors: &[u16]) -> JsValue {
         Ok(loss_components) => JsValue::from_serde(&loss_components).unwrap(),
         Err(_) => JsValue::from_str("Error calculating loss"),
     }
+}
+
+fn calculate_ols_mse(dataset: Dataset<f64, f64>) -> Result<f64, Box<dyn std::error::Error>> {
+    let num_targets = dataset.targets().dim().1;
+    let mut total_mse = 0.0;
+
+    // Fit a model on each target individually
+    for i in 0..num_targets {
+        let target_column = dataset.targets().column(i).to_owned();
+
+        let dataset_with_single_target = Dataset::new(
+            dataset.records().to_owned(),
+            target_column.clone()
+        );
+        let model = LinearRegression::new();
+        let fitted_model = model.fit(&dataset_with_single_target)?;
+        let predictions = fitted_model.predict(&dataset_with_single_target);
+
+        let mse = (predictions - target_column)
+            .mapv(|x| x.powi(2))
+            .mean()
+            .unwrap();
+        total_mse += mse;
+    }
+
+    // Calculate Avg MSE
+    let avg_mse = total_mse / (num_targets as f64);
+
+    Ok(avg_mse)
+}
+
+#[wasm_bindgen]
+pub fn test_ols() -> f32 {
+    let iris_dataset = linfa_datasets::iris();
+    let targets = iris_dataset.targets();
+    let mut one_hot_targets = Array2::zeros((targets.len(), 3));
+    for (i, target) in targets.iter().enumerate() {
+        one_hot_targets[(i, *target as usize)] = 1.0;
+    }
+    
+    // Create a dataset with owned records and targets
+    let dataset = Dataset::new(iris_dataset.records().to_owned(), one_hot_targets);
+
+    let avg_mse = calculate_ols_mse(dataset);
+    console::log_1(&format!("avg_mse: {:?}", avg_mse).into());
+    avg_mse.unwrap() as f32
 }
