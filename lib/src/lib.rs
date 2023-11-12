@@ -173,57 +173,6 @@ fn average_pairwise_euclidean_distance(matrix: &Array2<f64>) -> f64 {
     }
 }
 
-// pub fn evaluate_palette(rgb_colors: &[u16]) -> f32 {
-//     //
-//     let c3_instance = c3::C3::new();
-
-//     let mut cielab_colors: Vec<Vec<f32>> = Vec::new();
-//     let mut oklab_colors: Vec<Vec<f32>> = Vec::new();
-//     for color in rgb_colors.chunks(3) {
-//         let rgb = Srgb::new(
-//             (color[0] as f32) / 255.0,
-//             (color[1] as f32) / 255.0,
-//             (color[2] as f32) / 255.0
-//         );
-//         let lab: Lab = Lab::from_color(rgb);
-//         cielab_colors.push(vec![lab.l, lab.a, lab.b]);
-//         let oklab: Oklab = Oklab::from_color(rgb);
-//         oklab_colors.push(vec![oklab.l, oklab.a, oklab.b]);
-//     }
-//     let mut lab_palette = Array2::from_shape_vec(
-//         (rgb_colors.len() / 3, 3),
-//         cielab_colors
-//             .iter()
-//             .flatten()
-//             .map(|&x| x as f64)
-//             .collect::<Vec<f64>>()
-//     ).unwrap();
-//     let mut oklab_palette = Array2::from_shape_vec(
-//         (rgb_colors.len() / 3, 3),
-//         oklab_colors
-//             .iter()
-//             .flatten()
-//             .map(|&x| x as f64)
-//             .collect::<Vec<f64>>()
-//     ).unwrap();
-//     let analyzed_palette: Vec<HashMap<&str, f64>> = c3_instance.analyze_palette(
-//         lab_palette.clone()
-//     );
-//     let cosine_matrix = c3_instance.compute_color_name_distance_matrix(analyzed_palette);
-//     // Calculate average distance between colors
-//     let mut total_distance = 0.0;
-//     let mut total_pairs = 0;
-//     // Iterate over lower triangle of matrix
-//     for i in 0..cosine_matrix.shape()[0] {
-//         for j in 0..i {
-//             total_distance += cosine_matrix[[i, j]];
-//             total_pairs += 1;
-//         }
-//     }
-//     let average_cosine_distance = total_distance / (total_pairs as f64);
-//     let avergae_euc_distance = average_pairwise_euclidean_distance(&lab_palette);
-//     (average_cosine_distance as f32) + (avergae_euc_distance as f32)
-// }
 
 fn color_conversion_test() -> () {
     let my_rgb = Srgb::new(0.1, 0.0, 0.0);
@@ -379,9 +328,7 @@ pub fn optimize(colors: &[u16], locked_colors: &[u8]) -> Vec<f32> {
     optimized_srgb
 }
 
-fn annealing_cost(
-    param: &Vec<f32>,
-) -> Result<HashMap<String, f32>, Error> {
+fn annealing_cost(param: &Vec<f32>) -> Result<HashMap<String, f32>, Error> {
     let mut cielab_colors: Vec<Vec<f32>> = Vec::new();
     let oklab_colors = param;
     let c3_instance = c3::C3::new();
@@ -398,6 +345,7 @@ fn annealing_cost(
             .map(|&x| x as f64)
             .collect::<Vec<f64>>()
     ).unwrap();
+    // console log the lab palette
     let mut oklab_palette = Array2::from_shape_vec(
         (param.len() / 3, 3),
         oklab_colors
@@ -419,11 +367,13 @@ fn annealing_cost(
             total_pairs += 1;
         }
     }
+
     let average_cosine_distance = total_distance / (total_pairs as f64);
+    console::log_1(&format!("average_cosine_distance: {:?}", average_cosine_distance).into());
     let avergae_euc_distance = average_pairwise_euclidean_distance(&oklab_palette);
     let mut loss_components = HashMap::new();
-    loss_components.insert("perceptural_distance".to_string(), -average_cosine_distance as f32);
-    loss_components.insert("name_distance".to_string(), -avergae_euc_distance as f32);
+    loss_components.insert("name_distance".to_string(), -average_cosine_distance as f32);
+    loss_components.insert("perceptural_distance".to_string(), -avergae_euc_distance as f32);
 
     Ok(loss_components)
 }
@@ -435,7 +385,6 @@ pub fn calculate_palette_loss(colors: &[u16]) -> JsValue {
         .map(|&x| (x as f32) / 255.0)
         .collect::<Vec<f32>>();
     // Convert to Oklab
-
 
     let oklab_color_map: Vec<f32> = float_color_map
         .chunks(3)

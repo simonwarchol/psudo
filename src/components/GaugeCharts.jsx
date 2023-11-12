@@ -35,17 +35,13 @@ const GaugeCharts = () => {
       <Grid item>
         <Grid container alignItems="center" justifyContent="center">
           <Grid item>
-            <ThumbUpIcon style={iconStyle} />
-          </Grid>
-          <Grid item>
             <GaugeChart
               id="gauge-chart-perceptual"
+              colors={["#fee0d2", "#fc9272", "#de2d26"]}
               percent={perceptualDistance}
+              animate={false}
               style={chartStyle}
             />
-          </Grid>
-          <Grid item>
-            <ThumbDownIcon style={iconStyle} />
           </Grid>
         </Grid>
         <Grid container justifyContent="center">
@@ -59,17 +55,13 @@ const GaugeCharts = () => {
       <Grid item>
         <Grid container alignItems="center" justifyContent="center">
           <Grid item>
-            <ThumbUpIcon style={iconStyle} />
-          </Grid>
-          <Grid item>
             <GaugeChart
               id="gauge-chart-name"
               percent={nameDistance}
+              colors={["#fee0d2", "#fc9272", "#de2d26"]}
               style={chartStyle}
+              animate={false}
             />
-          </Grid>
-          <Grid item>
-            <ThumbDownIcon style={iconStyle} />
           </Grid>
         </Grid>
         <Grid container justifyContent="center">
