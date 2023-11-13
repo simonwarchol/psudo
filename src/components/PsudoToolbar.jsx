@@ -28,6 +28,7 @@ import {
 import {
   getNameFromUrl,
   calculatePaletteLoss,
+  getGMMContrastLimits
 } from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
@@ -223,20 +224,27 @@ function PsudoToolbar() {
       channelsPayload.map(async (d, i) => {
         colorList.push(...d.color);
         // const resolution = pyramidResolution;
-        const raster = await loader?.[pyramidResolution]?.getRaster({
-          selection: d.selection,
-        });
-        // Print the size of raster.data
-        console.log("raster.data size", raster.data.length, raster.data.length);
-        // Subsample
-        // time the next line
-        console.time("channel_gmm");
-        const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
-        console.timeEnd("channel_gmm");
-        let floatArr = new Float32Array([...conrastLimits]);
-        // Make Javascript Array
-        floatArr = Array.from(floatArr);
-        console.log("conrastLimits", floatArr);
+
+        // async function getGMMContrastLimits({
+        //   loader,
+        //   selection,
+        //   pyramidResolution,
+        // })
+        // const contrastLimits = await getGMMContrastLimits({loader, selection: d.selection, pyramidResolution});
+        // const raster = await loader?.[pyramidResolution]?.getRaster({
+        //   selection: d.selection,
+        // });
+        // // Print the size of raster.data
+        // console.log("raster.data size", raster.data.length, raster.data.length);
+        // // Subsample
+        // // time the next line
+        // console.time("channel_gmm");
+        // const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
+        // console.timeEnd("channel_gmm");
+        // let floatArr = new Float32Array([...conrastLimits]);
+        // // Make Javascript Array
+        // floatArr = Array.from(floatArr);
+        // console.log("conrastLimits", floatArr);
       })
     );
 

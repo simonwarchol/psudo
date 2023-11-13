@@ -265,7 +265,6 @@ const LensLayer = class extends CompositeLayer {
         lensSelection,
         this.context.userData?.setGraphData
       );
-      this.context.userData?.setMainViewStateChanged(false);
     }
 
     const lensCircle = new ScatterplotLayer({
@@ -792,8 +791,6 @@ const LensLayer = class extends CompositeLayer {
 
   async onClick(pickingInfo, event) {
     this.context.userData.setMovingLens(false);
-    const showLens = useImageSettingsStore.getState()?.lensEnabled;
-
     console.log("coordinate", coordinate);
     // Determine which tiles are displayed
     const { viewState } = this.props;

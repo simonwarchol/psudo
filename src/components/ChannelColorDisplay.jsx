@@ -32,7 +32,7 @@ import {
   getSingleSelectionStats,
   truncateDecimalNumber,
   getGMMContrastLimits,
-  calculatePaletteLoss
+  calculatePaletteLoss,
 } from "../Avivator/viewerUtils.js";
 import * as psudoAnalysis from "psudo-analysis";
 
@@ -126,6 +126,7 @@ function ChannelColorDisplay(props) {
   const isFloat = dtype === "Float32" || dtype === "Float64";
   const step = max - min < 500 && isFloat ? (max - min) / 500 : 1;
 
+
   const handleSliderChange = (e, v) => {
     setPropertiesForChannel(ind, { contrastLimits: v });
   };
@@ -140,7 +141,6 @@ function ChannelColorDisplay(props) {
       let rgbColor = { r: color?.[0], g: color?.[1], b: color?.[2] };
       setPickerColor(rgbColor);
     }
-
   }, [colors]);
 
   const toggleVisibility = () => {
@@ -191,7 +191,14 @@ function ChannelColorDisplay(props) {
       }
     }
     context?.setGraphData(tmpGraphData);
-    let paletteLoss = await calculatePaletteLoss(channelsVisible, loader, selections, contrastLimits, colors, pyramidResolution);
+    let paletteLoss = await calculatePaletteLoss(
+      channelsVisible,
+      loader,
+      selections,
+      contrastLimits,
+      colors,
+      pyramidResolution
+    );
 
     context?.setPaletteLoss(paletteLoss);
 
@@ -245,10 +252,15 @@ function ChannelColorDisplay(props) {
         <>
           <Grid
             container
-            sx={{ height: "100%" }}
+            sx={{
+              height: "100%",
+              opacity: channelsVisible?.[channelIndex] ? 1 : 0.5,
+            }}
             direction="row"
             justifyContent="space-evenly"
             alignItems="center"
+            // If !channelsVisible?.[channelIndex], set opacity to 0.5
+
             ref={ref}
           >
             <Grid
@@ -322,7 +334,7 @@ function ChannelColorDisplay(props) {
             <Grid item xs={1}>
               <IconButton color="white" onClick={calculateContrastLimits}>
                 <Icon sx={{ fontSize: 30 }}>
-                  <img src="/public/auto-contrast-icon.svg" />
+                  <img src="/auto-contrast-icon.svg" />
                 </Icon>
               </IconButton>
             </Grid>
@@ -342,23 +354,24 @@ function ChannelColorDisplay(props) {
             {/* <Grid item xs={4} sx={{ paddingLeft: "15px" }}>
               
             </Grid> */}
-
-            <Grid item xs={8}>
-              <Slider
-                value={contrastLimits[ind]}
-                onChange={handleSliderChange}
-                valueLabelDisplay="auto"
-                valueLabelFormat={(v) => displayValueFunction(v)}
-                min={min}
-                max={max}
-                step={step}
-                orientation="horizontal"
-                style={{
-                  color: rgbColor,
-                  //   margin: "0 20px",
-                }}
-              />
-            </Grid>
+            {channelsVisible?.[channelIndex] && (
+              <Grid item xs={8}>
+                <Slider
+                  value={contrastLimits[ind]}
+                  onChange={handleSliderChange}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={(v) => displayValueFunction(v)}
+                  min={min}
+                  max={max}
+                  step={step}
+                  orientation="horizontal"
+                  style={{
+                    color: rgbColor,
+                    //   margin: "0 20px",
+                  }}
+                />
+              </Grid>
+            )}
           </Grid>
         </>
       )}

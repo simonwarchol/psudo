@@ -207,8 +207,9 @@ const Viewer = (props) => {
             loader.length - 1
           ),
         });
-        context?.setMainViewStateChanged(true);
+        
       }
+      if (mainViewer) context?.setMainViewStateChanged(true);
 
       return movingLens ? oldViewState : newViewState;
     };
@@ -239,9 +240,11 @@ const Viewer = (props) => {
   //   viewStates = [useViewerStore.getState()?.viewState] || viewStates;
   // }
   useEffect(() => {
+    console.log("linkedviews", context?.linkedViews);
     if (context?.mainViewStateChanged && !mainViewer && context?.linkedViews) {
-      console.log("Context changed", context?.mainViewStateChanged);
+      console.log("Updating",useViewerStore.getState()?.viewState);
       setViewStates([useViewerStore.getState()?.viewState]);
+      context?.setMainViewStateChanged(false);
     }
   }, [context?.mainViewStateChanged]);
   const getLensGraphData = async () => {

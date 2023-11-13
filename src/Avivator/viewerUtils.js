@@ -277,7 +277,14 @@ export function useWindowSize(scaleWidth = 1, scaleHeight = 1, elem = null) {
   return windowSize;
 }
 
-export async function calculatePaletteLoss(channelsVisible, loader, selections,contrastLimits,colors,pyramidResolution) {
+export async function calculatePaletteLoss(
+  channelsVisible,
+  loader,
+  selections,
+  contrastLimits,
+  colors,
+  pyramidResolution
+) {
   const channelsPayload = [];
   channelsVisible.forEach((d, i) => {
     if (d) {
@@ -298,11 +305,9 @@ export async function calculatePaletteLoss(channelsVisible, loader, selections,c
       const raster = await loader?.[pyramidResolution]?.getRaster({
         selection: d.selection,
       });
-     
     })
   );
 
-  
   // convert Uint16Array to Float32 Array, where each value is /255
   const colorListFloat = new Float32Array(colorList.length);
   colorList.forEach((d, i) => {
@@ -331,6 +336,8 @@ export async function getSingleSelectionStats2D(
       pyramidResolution,
     });
     // In the future do some logic to determine the dtype and return accordingly\
+    console.log("Selection", selection);
+    // return { domain: [0, 65535], contrastLimits: [0, 65535] };
     return { domain: [0, 65535], contrastLimits: contrastLimits };
   }
 }
@@ -343,11 +350,13 @@ export async function getGMMContrastLimits({
   let raster = await loader?.[pyramidResolution]?.getRaster({
     selection: selection,
   });
+  console.log("raster", raster);
   const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
   const intContrastLimits = [
     _.toInteger(conrastLimits[0]),
     _.toInteger(conrastLimits[1]),
   ];
+  delete raster.data;
   console.log("contrastLimits", intContrastLimits);
   return intContrastLimits;
 }
