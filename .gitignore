@@ -108,3 +108,6 @@ dist
 .tern-port
 
 notebooks/
+
+# any file named exemplar-001.ome.tif
+**/exemplar-001.ome.tif

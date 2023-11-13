@@ -276,7 +276,7 @@ const Viewer = (props) => {
     if (lensEnabled) {
       getLensGraphData();
     }
-  }, [lensEnabled]);
+  } , [lensEnabled]);
 
   return (
     <div className={"viewerWrapper"} onClick={onClick}>

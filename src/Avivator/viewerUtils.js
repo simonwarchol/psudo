@@ -276,14 +276,11 @@ export function useWindowSize(scaleWidth = 1, scaleHeight = 1, elem = null) {
   });
   return windowSize;
 }
-
-export async function calculatePaletteLoss(
+function getChannelPayload(
   channelsVisible,
-  loader,
-  selections,
-  contrastLimits,
   colors,
-  pyramidResolution
+  selections,
+  contrastLimits
 ) {
   const channelsPayload = [];
   channelsVisible.forEach((d, i) => {
@@ -296,6 +293,23 @@ export async function calculatePaletteLoss(
       channelsPayload.push(channelPayload);
     }
   });
+  return channelsPayload;
+}
+
+export async function calculatePaletteLoss(
+  channelsVisible,
+  loader,
+  selections,
+  contrastLimits,
+  colors,
+  pyramidResolution
+) {
+  const channelsPayload = getChannelPayload(
+    channelsVisible,
+    colors,
+    selections,
+    contrastLimits
+  );
 
   let colorList = [];
   await Promise.all(
@@ -317,6 +331,37 @@ export async function calculatePaletteLoss(
   let paletteCost = psudoAnalysis.calculate_palette_loss(colorList);
   // console.log("paletteCost", paletteCost);
   return paletteCost;
+}
+
+export async function calculateConfusionLoss(
+  channelsVisible,
+  loader,
+  selections,
+  contrastLimits,
+  colors,
+  pyramidResolution
+) {
+  const subsample_size = 10000;
+  let sample_indices = null;
+  const channelsPayload = getChannelPayload(
+    channelsVisible,
+    colors,
+    selections,
+    contrastLimits
+  );
+  let colorList = [];
+
+  await Promise.map(
+    channelsPayload.map(async (d, i) => {
+      colorList.push(...d.color);
+      // const resolution = pyramidResolution;
+      const raster = await loader?.[pyramidResolution]?.getRaster({
+        selection: d.selection,
+      });
+      console.log('raster', raster, raster.data.length);
+      // raster size
+    })
+  );
 }
 
 export async function getSingleSelectionStats2D(

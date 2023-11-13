@@ -33,6 +33,7 @@ import {
   truncateDecimalNumber,
   getGMMContrastLimits,
   calculatePaletteLoss,
+  calculateConfusionLoss,
 } from "../Avivator/viewerUtils.js";
 import * as psudoAnalysis from "psudo-analysis";
 
@@ -192,6 +193,15 @@ function ChannelColorDisplay(props) {
     }
     context?.setGraphData(tmpGraphData);
     let paletteLoss = await calculatePaletteLoss(
+      channelsVisible,
+      loader,
+      selections,
+      contrastLimits,
+      colors,
+      pyramidResolution
+    );
+
+    let confusionLoss =  await calculateConfusionLoss(
       channelsVisible,
       loader,
       selections,
