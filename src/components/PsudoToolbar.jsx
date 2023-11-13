@@ -464,8 +464,8 @@ function PsudoToolbar() {
               <img
                 src={
                   lensEnabled
-                    ? "/src/assets/add-lens-icon.svg"
-                    : "/src/assets/remove-lens-icon.svg"
+                    ? "/add-lens-icon.svg"
+                    : "/remove-lens-icon.svg"
                 }
               />
             </Icon>
@@ -483,7 +483,7 @@ function PsudoToolbar() {
             style={{ borderRadius: 10 }}
           >
             <Icon sx={{ fontSize: 40 }}>
-              <img src="/src/assets/color-palette-icon.svg" />
+              <img src="/color-palette-icon.svg" />
             </Icon>
           </IconButton>
           <Menu

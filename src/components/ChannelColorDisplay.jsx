@@ -322,7 +322,7 @@ function ChannelColorDisplay(props) {
             <Grid item xs={1}>
               <IconButton color="white" onClick={calculateContrastLimits}>
                 <Icon sx={{ fontSize: 30 }}>
-                  <img src="/src/assets/auto-contrast-icon.svg" />
+                  <img src="/public/auto-contrast-icon.svg" />
                 </Icon>
               </IconButton>
             </Grid>
@@ -332,8 +332,8 @@ function ChannelColorDisplay(props) {
                   <img
                     src={
                       lensSelection[channelIndex] == 0
-                        ? "/src/assets/add-to-lens-icon.svg"
-                        : "/src/assets/remove-from-lens-icon.svg"
+                        ? "/add-to-lens-icon.svg"
+                        : "/remove-from-lens-icon.svg"
                     }
                   />
                 </Icon>

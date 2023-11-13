@@ -130,18 +130,17 @@ const DEFAULT_VIEWER_STATE = {
   //   urlOrFile:fetchedFile,
   //   description: 'exemplar-001.ome.tif',
   // },
-  //   source: {
-  //     urlOrFile:
-  //       "https://viv-demo.storage.googleapis.com/Vanderbilt-Spraggins-Kidney-MxIF.ome.tif",
-  //     description: getNameFromUrl(
-  //       "https://viv-demo.storage.googleapis.com/Vanderbilt-Spraggins-Kidney-MxIF.ome.tif"
-  //     ),
-  //   },
-  //   // pyramidResolution: 0,
-  //   pyramidResolution: 0,
-  // };
-  source: {},
-};  
+  source: {
+    urlOrFile: "https://exemplar-001.s3.amazonaws.com/exemplar-001.ome.tif",
+    description: getNameFromUrl(
+      "https://exemplar-001.s3.amazonaws.com/exemplar-001.ome.tif"
+    ),
+  },
+  // pyramidResolution: 0,
+  pyramidResolution: 0,
+  // },
+  // source: {},
+};
 
 export const useViewerStore = create((set) => ({
   ...DEFAULT_VIEWER_STATE,
