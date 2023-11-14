@@ -201,14 +201,7 @@ function ChannelColorDisplay(props) {
       pyramidResolution
     );
 
-    let confusionLoss =  await calculateConfusionLoss(
-      channelsVisible,
-      loader,
-      selections,
-      contrastLimits,
-      colors,
-      pyramidResolution
-    );
+  
 
     context?.setPaletteLoss(paletteLoss);
 

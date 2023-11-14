@@ -12,6 +12,7 @@ export const ContextWrapper = (props) => {
   const [showOptimizedColor, setShowOptimizedColor] = useState(false);
   const [pastPalettes, setPastPalettes] = useState([]);
   const [graphData, setGraphData] = useState([]);
+  const [lensData, setLensData] = useState([]);
   const [optimizationScope, setOptimizationScope] = useState("global");
   const [overlapView, setOverlapView] = useState(false);
   const [linkedViews, setLinkedViews] = useState(false);
@@ -67,6 +68,8 @@ export const ContextWrapper = (props) => {
         setOptimizationScope,
         graphData,
         setGraphData,
+        lensData,
+        setLensData,
         overlapView,
         setOverlapView,
         mainViewStateChanged,

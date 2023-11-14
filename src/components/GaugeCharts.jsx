@@ -10,6 +10,7 @@ const GaugeCharts = () => {
   const context = useContext(AppContext);
   const [nameDistance, setNameDistance] = useState(0);
   const [perceptualDistance, setPerceptualDistance] = useState(0);
+  const [confusion, setConfusion] = useState(0);
   const chartStyle = {
     zoom: 0.4,
   };
@@ -20,8 +21,10 @@ const GaugeCharts = () => {
       let nameDist = 1 - (context?.paletteLoss?.name_distance || 0) * -1;
       let perceptDist =
         1 - (context?.paletteLoss?.perceptural_distance || 0) * -1;
+      let conf = 1 - (context?.paletteLoss?.confusion || 0) * -1;
       setNameDistance(nameDist);
       setPerceptualDistance(perceptDist);
+      setConfusion(conf);
     }
   }, [context.paletteLoss]);
 
@@ -67,6 +70,25 @@ const GaugeCharts = () => {
         <Grid container justifyContent="center">
           <Grid item>
             <label>Name Similarity</label>
+          </Grid>
+        </Grid>
+      </Grid>
+      {/* Name Distance Section */}
+      <Grid item>
+        <Grid container alignItems="center" justifyContent="center">
+          <Grid item>
+            <GaugeChart
+              id="gauge-chart-name"
+              percent={confusion}
+              colors={["#fee0d2", "#fc9272", "#de2d26"]}
+              style={chartStyle}
+              animate={false}
+            />
+          </Grid>
+        </Grid>
+        <Grid container justifyContent="center">
+          <Grid item>
+            <label>Confusion</label>
           </Grid>
         </Grid>
       </Grid>

@@ -96,7 +96,7 @@ const DEFAULT_IMAGE_STATE = {
   useFixedAxis: true,
 };
 
-const filePath = "/public/exemplar-001.ome.tif";
+const filePath = "/exemplar-001.ome.tif";
 const response = await fetch(filePath);
 const data = await response.blob();
 const fetchedFile = new File([data], "exemplar-001.ome.tif", {

@@ -276,24 +276,80 @@ export function useWindowSize(scaleWidth = 1, scaleHeight = 1, elem = null) {
   });
   return windowSize;
 }
-function getChannelPayload(
+async function getChannelPayload(
   channelsVisible,
   colors,
   selections,
-  contrastLimits
+  contrastLimits,
+  loader,
+  pyramidResolution,
+  sampleSize = null
 ) {
   const channelsPayload = [];
-  channelsVisible.forEach((d, i) => {
-    if (d) {
-      const channelPayload = {
-        color: colors[i],
-        contrastLimits: contrastLimits[i],
-        selection: selections[i],
-      };
-      channelsPayload.push(channelPayload);
-    }
-  });
+  let indices = null;
+
+  await Promise.all(
+    channelsVisible.map(async (d, i) => {
+      if (d) {
+        const raster = await loader?.[pyramidResolution]?.getRaster({
+          selection: selections[i],
+        });
+        let rasterArray = raster.data;
+        if (sampleSize != null && indices == null) {
+          indices = _.times(sampleSize, () =>
+            _.random(0, rasterArray.length - 1)
+          );
+        }
+        if (sampleSize != null) {
+          rasterArray = new Uint16Array(sampleSize);
+          indices.forEach((d, ii) => {
+            rasterArray[ii] = raster.data[d];
+          });
+        }
+        const channelPayload = {
+          color: colors[i],
+          contrastLimits: contrastLimits[i],
+          selection: selections[i],
+          data: rasterArray,
+        };
+        channelsPayload.push(channelPayload);
+      }
+    })
+  );
   return channelsPayload;
+}
+
+function createContiguousArrays(channelList) {
+  let dataLength = channelList[0]?.data?.length || 0;
+  let intensityArray = new Uint16Array(dataLength * channelList.length);
+  let colorArray = new Uint16Array(3 * channelList.length);
+  let contrastLimitsArray = new Uint16Array(2 * channelList.length);
+  channelList.forEach((d, i) => {
+    intensityArray.set(d.data, i * dataLength);
+    colorArray.set(d.color, i * 3);
+    contrastLimitsArray.set(d.contrastLimits, i * 2);
+  });
+  return { intensityArray, colorArray, contrastLimitsArray };
+}
+
+export async function calculateLensPaletteLoss(channelsPayload) {
+  console.log("lensPayload", channelsPayload);
+  const { intensityArray, colorArray, contrastLimitsArray } =
+    createContiguousArrays(channelsPayload);
+  console.log(
+    "lensintensityArray",
+    intensityArray,
+    colorArray,
+    contrastLimitsArray
+  );
+  if (intensityArray.length == 0) return null;
+  let paletteCost = psudoAnalysis.calculate_palette_loss(
+    intensityArray,
+    colorArray,
+    contrastLimitsArray
+  );
+  console.log("paletteCost", paletteCost);
+  return paletteCost;
 }
 
 export async function calculatePaletteLoss(
@@ -304,32 +360,30 @@ export async function calculatePaletteLoss(
   colors,
   pyramidResolution
 ) {
-  const channelsPayload = getChannelPayload(
+  const channelsPayload = await getChannelPayload(
     channelsVisible,
     colors,
     selections,
-    contrastLimits
+    contrastLimits,
+    loader,
+    pyramidResolution,
+    10000
   );
-
-  let colorList = [];
-  await Promise.all(
-    channelsPayload.map(async (d, i) => {
-      colorList.push(...d.color);
-      // const resolution = pyramidResolution;
-      const raster = await loader?.[pyramidResolution]?.getRaster({
-        selection: d.selection,
-      });
-    })
+  console.log("channelsPayload", channelsPayload);
+  const { intensityArray, colorArray, contrastLimitsArray } =
+    createContiguousArrays(channelsPayload);
+  console.log(
+    "intensityArray",
+    intensityArray,
+    colorArray,
+    contrastLimitsArray
   );
-
-  // convert Uint16Array to Float32 Array, where each value is /255
-  const colorListFloat = new Float32Array(colorList.length);
-  colorList.forEach((d, i) => {
-    colorListFloat[i] = d / 255;
-  });
-
-  let paletteCost = psudoAnalysis.calculate_palette_loss(colorList);
-  // console.log("paletteCost", paletteCost);
+  let paletteCost = psudoAnalysis.calculate_palette_loss(
+    intensityArray,
+    colorArray,
+    contrastLimitsArray
+  );
+  console.log("paletteCost", paletteCost);
   return paletteCost;
 }
 
@@ -341,39 +395,43 @@ export async function calculateConfusionLoss(
   colors,
   pyramidResolution
 ) {
-  const subsample_size = 10000;
+  const subsampleSize = 10000;
   let sample_indices = null;
-  const channelsPayload = getChannelPayload(
+  const channelsPayload = await getChannelPayload(
     channelsVisible,
     colors,
     selections,
-    contrastLimits
+    contrastLimits,
+    loader,
+    pyramidResolution,
+    subsampleSize
   );
   let colorList = [];
   // create a uint16array of length len(channelsPayload) * subsample_size
-  const rasterArray = new Uint16Array(subsample_size * channelsPayload.length);
+  const rasterArray = new Uint16Array(subsampleSize * channelsPayload.length);
+  console.log("channelsPayload", channelsPayload);
 
-  await Promise.all(
-    channelsPayload.map(async (d, i) => {
-      colorList.push(...d.color);
-      // const resolution = pyramidResolution;
-      const raster = await loader?.[pyramidResolution]?.getRaster({
-        selection: d.selection,
-      });
-      // If sample_indices is null, then create a subsample of the raster
-      if (sample_indices == null)
-        sample_indices = _.times(subsample_size, () =>
-          _.random(0, raster.data.length)
-        );
-      // Write the data at these indices to the rasterArray
-      sample_indices.forEach((d, ii) => {
-        rasterArray[ii + i * subsample_size] = raster.data[d];
-      });
+  // await Promise.all(
+  //   channelsPayload.map(async (d, i) => {
+  //     colorList.push(...d.color);
+  //     // const resolution = pyramidResolution;
+  //     const raster = await loader?.[pyramidResolution]?.getRaster({
+  //       selection: d.selection,
+  //     });
+  //     // If sample_indices is null, then create a subsample of the raster
+  //     if (sample_indices == null)
+  //       sample_indices = _.times(subsample_size, () =>
+  //         _.random(0, raster.data.length)
+  //       );
+  //     // Write the data at these indices to the rasterArray
+  //     sample_indices.forEach((d, ii) => {
+  //       rasterArray[ii + i * subsample_size] = raster.data[d];
+  //     });
 
-      console.log("raster", rasterArray);
-      // raster size
-    })
-  );
+  //     console.log("raster", rasterArray);
+  //     // raster size
+  //   })
+  // );
 }
 
 export async function getSingleSelectionStats2D(

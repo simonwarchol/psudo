@@ -28,7 +28,7 @@ import {
 import {
   getNameFromUrl,
   calculatePaletteLoss,
-  getGMMContrastLimits
+  getGMMContrastLimits,
 } from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
@@ -310,12 +310,13 @@ function PsudoToolbar() {
       loader,
       selections,
       contrastLimits,
-      tmpColors,
+      colors,
       pyramidResolution
     );
-    context.setPaletteLoss(paletteLoss);
-    context?.setIsLoading(false);
 
+    context?.setPaletteLoss(paletteLoss);
+
+    context?.setIsLoading(false);
   };
 
   const handleChangeOptimizationScope = (event) => {
@@ -471,9 +472,7 @@ function PsudoToolbar() {
             <Icon sx={{ fontSize: 30 }}>
               <img
                 src={
-                  lensEnabled
-                    ? "/add-lens-icon.svg"
-                    : "/remove-lens-icon.svg"
+                  lensEnabled ? "/add-lens-icon.svg" : "/remove-lens-icon.svg"
                 }
               />
             </Icon>

@@ -11,6 +11,7 @@ import {
   getLensIntensityValues,
   getGraphData,
   optimizeInLens,
+  calculateLensPaletteLoss,
 } from "./viewerUtils.js";
 
 import {
@@ -74,7 +75,8 @@ const updateLensGraphValues = async (
   setMovingLens,
   colors,
   lensSelection,
-  setGraphData
+  setGraphData,
+  setPaletteLoss
 ) => {
   const channelData = await getLensIntensityValues(
     coordinate,
@@ -98,6 +100,9 @@ const updateLensGraphValues = async (
   );
 
   setGraphData(graphData);
+  console.log("getLensIntensityValues", channelData);
+  let paletteLoss = await calculateLensPaletteLoss(channelData);
+  setPaletteLoss(paletteLoss);
 };
 
 const debouncedUpdateLensGraphValues = debounce(updateLensGraphValues, 1000);
@@ -253,6 +258,7 @@ const LensLayer = class extends CompositeLayer {
     //     const colors = useChannelsStore.getState()?.colors;
 
     if (this.context.userData?.mainViewStateChanged) {
+      console.log("Setpal", this.context.userData?.paletteLoss);
       debouncedUpdateLensGraphValues(
         this.lensPosition,
         viewState,
@@ -264,8 +270,10 @@ const LensLayer = class extends CompositeLayer {
         this.context.userData?.setMovingLens,
         useChannelsStore.getState()?.colors,
         lensSelection,
-        this.context.userData?.setGraphData
+        this.context.userData?.setGraphData,
+        this.context.userData?.setPaletteLoss
       );
+      this.context.userData.setMainViewStateChanged(false);
     }
 
     const lensCircle = new ScatterplotLayer({
@@ -915,7 +923,8 @@ const LensLayer = class extends CompositeLayer {
       this.context.userData?.setMovingLens,
       colors,
       lensSelection,
-      this.context.userData?.setGraphData
+      this.context.userData?.setGraphData,
+      this.context.userData?.setPaletteLoss,
     );
   }
 };

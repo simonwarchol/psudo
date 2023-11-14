@@ -37,12 +37,14 @@ export const useImage = (source, history) => {
     ],
     shallow
   );
-  let [channelsVisible, colors, selections, contrastLimits] = useChannelsStore((store) => [
-    store.channelsVisible,
-    store.colors,
-    store.selections,
-    store.contrastLimits,
-  ]);
+  let [channelsVisible, colors, selections, contrastLimits] = useChannelsStore(
+    (store) => [
+      store.channelsVisible,
+      store.colors,
+      store.selections,
+      store.contrastLimits,
+    ]
+  );
   const loader = useLoader();
   const metadata = useMetadata();
   const context = useContext(AppContext);
@@ -74,7 +76,14 @@ export const useImage = (source, history) => {
     context?.setGraphData(graphData);
   };
 
-  const getPaletteLoss = async (channelsVisible, loader, selections, colors,contrastLimits, pyramidResolution) => {
+  const getPaletteLoss = async (
+    channelsVisible,
+    loader,
+    selections,
+    colors,
+    contrastLimits,
+    pyramidResolution
+  ) => {
     let paletteLoss = await calculatePaletteLoss(
       channelsVisible,
       loader,
@@ -92,7 +101,14 @@ export const useImage = (source, history) => {
     if (_.isEmpty(channelsVisible) || !loader || _.isEmpty(selections)) return;
     console.log("CV", channelsVisible, colors);
     getGlobalGraphData(channelsVisible, loader, selections, colors);
-    getPaletteLoss(channelsVisible, loader, selections, colors, contrastLimits, pyramidResolution);
+    getPaletteLoss(
+      channelsVisible,
+      loader,
+      selections,
+      colors,
+      contrastLimits,
+      pyramidResolution
+    );
   }, [channelsVisible, selections]);
 
   useEffect(() => {
@@ -104,6 +120,15 @@ export const useImage = (source, history) => {
     )
       return;
     getGlobalGraphData(channelsVisible, loader, selections, colors);
+    if (!lensEnabled)
+      getPaletteLoss(
+        channelsVisible,
+        loader,
+        selections,
+        colors,
+        contrastLimits,
+        pyramidResolution
+      );
   }, [lensEnabled]);
 
   useEffect(() => {

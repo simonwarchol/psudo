@@ -384,7 +384,11 @@ fn annealing_cost(param: &Vec<f32>) -> Result<HashMap<String, f32>, Error> {
 }
 
 #[wasm_bindgen]
-pub fn calculate_palette_loss(colors: &[u16]) -> JsValue {
+pub fn calculate_palette_loss(
+    intensities: &[u16],
+    colors: &[u16],
+    contrast_limits: &[u16]
+) -> JsValue {
     let float_color_map: Vec<f32> = colors
         .iter()
         .map(|&x| (x as f32) / 255.0)
@@ -400,11 +404,10 @@ pub fn calculate_palette_loss(colors: &[u16]) -> JsValue {
         })
         .flatten()
         .collect::<Vec<f32>>();
-    let loss = annealing_cost(&oklab_color_map);
-    match loss {
-        Ok(loss_components) => JsValue::from_serde(&loss_components).unwrap(),
-        Err(_) => JsValue::from_str("Error calculating loss"),
-    }
+    let mut loss: HashMap<String, f32> = annealing_cost(&oklab_color_map).unwrap();
+    let confusion = optimize_for_confusion(intensities, colors, contrast_limits);
+    loss.insert("confusion".to_string(), confusion - (1.0 as f32));
+    JsValue::from_serde(&loss).unwrap()
 }
 
 fn calculate_ols_mse(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::error::Error>> {
@@ -604,6 +607,7 @@ fn optimize_for_confusion(intensities: &[u16], colors: &[u16], contrast_limits: 
     let rmse = calculate_ols_msre(dataset);
     let time = now.elapsed();
     console::log_1(&format!("time: {:?}", time).into());
+    console::log_1(&format!("rmse: {:?}", rmse).into());
     rmse.unwrap()
 }
 

@@ -8,7 +8,11 @@ import {
   useLoader,
   useViewerStore,
 } from "../state";
-import { getLensIntensityValues, getGraphData } from "../viewerUtils.js";
+import {
+  getLensIntensityValues,
+  getGraphData,
+  calculateLensPaletteLoss,
+} from "../viewerUtils.js";
 import _ from "lodash";
 import {
   DetailView,
@@ -188,6 +192,7 @@ const Viewer = (props) => {
       setOverlapView: context?.setOverlapView,
       mainViewStateChanged: context?.mainViewStateChanged,
       setMainViewStateChanged: context?.setMainViewStateChanged,
+      setPaletteLoss: context?.setPaletteLoss,
     };
     deckProps = {
       ...deckProps,
@@ -246,7 +251,7 @@ const Viewer = (props) => {
       context?.setMainViewStateChanged(false);
     }
   }, [context?.mainViewStateChanged]);
-  const getLensGraphData = async () => {
+  const getLensData = async () => {
     let lensData = await getLensIntensityValues(
       coordinate,
       useViewerStore.getState()?.viewState,
@@ -266,16 +271,18 @@ const Viewer = (props) => {
       channelsVisible,
       selections
     );
+    context?.setLensData(lensData);
     context?.setGraphData(graphData);
     console.log("lensData", lensData);
-    // coordinate, viewState, loader, userData;
+    let paletteLoss = await calculateLensPaletteLoss(lensData);
+    if (paletteLoss) context?.setPaletteLoss(paletteLoss);
   };
 
   useEffect(() => {
     console.log("lensEnabled", lensEnabled);
 
     if (lensEnabled) {
-      getLensGraphData();
+      getLensData();
     }
   }, [lensEnabled]);
 
