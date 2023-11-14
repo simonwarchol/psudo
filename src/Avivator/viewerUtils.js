@@ -350,15 +350,24 @@ export async function calculateConfusionLoss(
     contrastLimits
   );
   let colorList = [];
+  // create a uint16array of length len(channelsPayload) * subsample_size
+  const rasterArray = new Uint16Array(subsample_size*channelsPayload.length);
 
-  await Promise.map(
+  await Promise.all(
     channelsPayload.map(async (d, i) => {
       colorList.push(...d.color);
       // const resolution = pyramidResolution;
       const raster = await loader?.[pyramidResolution]?.getRaster({
         selection: d.selection,
       });
-      console.log('raster', raster, raster.data.length);
+      // If sample_indices is null, then create a subsample of the raster
+      if (sample_indices == null) sample_indices  = _.times(subsample_size, () => _.random(0, raster.data.length));
+      // Write the data at these indices to the rasterArray
+      sample_indices.forEach((d, ii) => {
+        rasterArray[ii + i * subsample_size] = raster.data[d];
+      });
+      
+      console.log('raster', rasterArray);
       // raster size
     })
   );
