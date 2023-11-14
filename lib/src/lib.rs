@@ -2,7 +2,8 @@ mod utils;
 use ndarray::{ Array1, Array2, Array3, s };
 use web_sys::console;
 use linfa::traits::Fit; // Import the Fit trait
-
+use rand::seq::SliceRandom; // Import
+use rand::thread_rng; // Import the RNG
 use linfa_linear::LinearRegression;
 use linfa::prelude::MultiTargetRegression;
 use linfa::prelude::Predict; // Continue to include linfa prelude for other necessary traits and structures
@@ -14,7 +15,6 @@ use linfa_clustering::{ GaussianMixtureModel };
 use linfa::Dataset;
 use statrs::distribution::{ Continuous, Normal };
 use ndarray_stats::QuantileExt; // <-- Add this line
-use rand::seq::SliceRandom;
 use palette::{ FromColor, Oklab, Srgb, Lab, Xyz };
 use std::sync::{ Arc, Mutex };
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -463,8 +463,9 @@ fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::er
     // Calculate Avg MSE
     let avg_mse = total_mse / (num_targets as f32);
     // Take log of avg_mse
-    let sqrt_mse = avg_mse.sqrt();
-    Ok(sqrt_mse)
+    // let sqrt_mse = avg_mse.sqrt();
+    let cbrt_mse = avg_mse.cbrt();
+    Ok(cbrt_mse)
 }
 
 // #[wasm_bindgen]
@@ -488,7 +489,7 @@ fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::er
 pub fn optimize_in_lens(intensities: &[u16], colors: &[u16], contrast_limits: &[u16]) -> f32 {
     // console log colors
     let num_channels = colors.len() / 3;
-    let num_rows = intensities.len() / num_channels;
+    let mut num_rows = intensities.len() / num_channels;
     let mut intensities_array = Array2::zeros((num_rows, num_channels));
     let mut intensities_array_float: Array2<f32> = Array2::zeros((num_rows, num_channels));
     for channel in 0..num_channels {
@@ -516,11 +517,52 @@ pub fn optimize_in_lens(intensities: &[u16], colors: &[u16], contrast_limits: &[
         }
     }
 
+    let mut indexes = Vec::new();
+    for row in 0..num_rows {
+        let mut row_sum = 0.0;
+        for channel in 0..num_channels {
+            row_sum += intensities_array_float[[row, channel]];
+        }
+        if row_sum > 0.5 {
+            // print row index
+            indexes.push(row);
+        }
+    }
+    // println!("indexes: {:?}", indexes);
+    // Shuffle the indexes
+    let mut rng = thread_rng();
+    indexes.shuffle(&mut rng);
+    let mut rng = rand::thread_rng();
+    // print length of indexes
+    println!("indexes length: {:?}", indexes.len());
+    indexes = indexes
+        .iter()
+        .take(5000)
+        .map(|&x| x)
+        .collect::<Vec<usize>>();
+
+    // subsample intensities_array_float to the first 5000 indices
+    let mut subsampled_array = Array2::zeros((indexes.len(), num_channels));
+    for (i, &index) in indexes.iter().enumerate() {
+        for channel in 0..num_channels {
+            subsampled_array[[i, channel]] = intensities_array_float[[index, channel]];
+        }
+    }
+    // print shape of subsampled_array
+    println!("subsampled_array shape: {:?}", subsampled_array.shape());
+    // Print first few rows
+    println!("subsampled_array: {:?}", subsampled_array.slice(s![0..10, ..]));
+
+    intensities_array_float = subsampled_array;
+    num_rows = intensities_array_float.shape()[0];
+
     // Print first 10 rows in 0th channel
     let float_color_map: Vec<f32> = colors
         .iter()
         .map(|&x| (x as f32) / 255.0)
         .collect::<Vec<f32>>();
+
+    let now = instant::Instant::now();
     let oklab_color_map: Vec<f32> = float_color_map
         .chunks(3)
         .map(|color| {
@@ -562,5 +604,7 @@ pub fn optimize_in_lens(intensities: &[u16], colors: &[u16], contrast_limits: &[
 
     let dataset = Dataset::new(intensities_array_float, mixed_array);
     let rmse = calculate_ols_msre(dataset);
+    let time = now.elapsed();
+    console::log_1(&format!("time: {:?}", time).into());
     rmse.unwrap()
 }
