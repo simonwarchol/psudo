@@ -207,7 +207,6 @@ const Viewer = (props) => {
             loader.length - 1
           ),
         });
-        
       }
       if (mainViewer) context?.setMainViewStateChanged(true);
 
@@ -242,7 +241,7 @@ const Viewer = (props) => {
   useEffect(() => {
     console.log("linkedviews", context?.linkedViews);
     if (context?.mainViewStateChanged && !mainViewer && context?.linkedViews) {
-      console.log("Updating",useViewerStore.getState()?.viewState);
+      console.log("Updating", useViewerStore.getState()?.viewState);
       setViewStates([useViewerStore.getState()?.viewState]);
       context?.setMainViewStateChanged(false);
     }
@@ -256,7 +255,9 @@ const Viewer = (props) => {
       lensRadius,
       channelsVisible,
       selections,
-      setMovingLens
+      setMovingLens,
+      contrastLimits,
+      colors
     );
     let graphData = getGraphData(
       lensData,
@@ -276,7 +277,7 @@ const Viewer = (props) => {
     if (lensEnabled) {
       getLensGraphData();
     }
-  } , [lensEnabled]);
+  }, [lensEnabled]);
 
   return (
     <div className={"viewerWrapper"} onClick={onClick}>

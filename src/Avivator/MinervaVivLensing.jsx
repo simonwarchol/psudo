@@ -1,7 +1,6 @@
 // @ts-nocheck
 import shallow from "zustand/shallow";
-import { debounce } from 'lodash';
-
+import { debounce } from "lodash";
 
 import { LensExtension } from "@hms-dbmi/viv";
 import { VivView } from "@hms-dbmi/viv";
@@ -11,6 +10,7 @@ import {
   getChannelGraphData,
   getLensIntensityValues,
   getGraphData,
+  optimizeInLens,
 } from "./viewerUtils.js";
 
 import {
@@ -84,7 +84,9 @@ const updateLensGraphValues = async (
     lensRadius,
     channelsVisible,
     selections,
-    setMovingLens
+    setMovingLens,
+    useChannelsStore.getState()?.contrastLimits,
+    useChannelsStore.getState()?.colors
   );
 
   let graphData = getGraphData(
@@ -99,7 +101,6 @@ const updateLensGraphValues = async (
 };
 
 const debouncedUpdateLensGraphValues = debounce(updateLensGraphValues, 1000);
-
 
 const MinervaVivLensing = class extends LensExtension {
   getShaders() {
@@ -791,7 +792,8 @@ const LensLayer = class extends CompositeLayer {
 
   async onClick(pickingInfo, event) {
     this.context.userData.setMovingLens(false);
-    console.log("coordinate", coordinate);
+    const coordinate = this.context?.userData?.coordinate;
+
     // Determine which tiles are displayed
     const { viewState } = this.props;
     const { loader } = this.props;
@@ -808,7 +810,9 @@ const LensLayer = class extends CompositeLayer {
         this.context.userData?.lensRadius,
         this.context.userData?.channelsVisible,
         this.context.userData?.selections,
-        this.context.userData?.setMovingLens
+        this.context.userData?.setMovingLens,
+        useChannelsStore.getState()?.contrastLimits,
+        useChannelsStore.getState()?.colors
       );
       this.context?.userData?.setIsLoading(true);
       // If nothing is in the lens, apply to all channels
@@ -860,6 +864,23 @@ const LensLayer = class extends CompositeLayer {
     } else if (
       pickingInfo?.sourceLayer?.id == `graph-circle-${this.props.id}`
     ) {
+      const lensSelection = useImageSettingsStore.getState()?.lensSelection;
+
+      const channelData = await getLensIntensityValues(
+        coordinate,
+        viewState,
+        loader,
+        this.context.userData?.pyramidResolution,
+        this.context.userData?.lensRadius,
+        this.context.userData?.channelsVisible,
+        this.context.userData?.selections,
+        this.context.userData?.setMovingLens,
+        useChannelsStore.getState()?.contrastLimits,
+        useChannelsStore.getState()?.colors
+      );
+      console.log("channelData", channelData);
+      let opt = await optimizeInLens(channelData);
+      console.log("opt", opt);
     } else if (
       pickingInfo?.sourceLayer?.id == `resize-circle-${this.props.id}`
     ) {

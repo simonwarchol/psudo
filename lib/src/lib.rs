@@ -1,5 +1,5 @@
 mod utils;
-use ndarray::{ Array1, Array2, s };
+use ndarray::{ Array1, Array2, Array3, s };
 use web_sys::console;
 use linfa::traits::Fit; // Import the Fit trait
 
@@ -15,7 +15,7 @@ use linfa::Dataset;
 use statrs::distribution::{ Continuous, Normal };
 use ndarray_stats::QuantileExt; // <-- Add this line
 use rand::seq::SliceRandom;
-use palette::{ FromColor, Oklab, Srgb, Lab };
+use palette::{ FromColor, Oklab, Srgb, Lab, Xyz };
 use std::sync::{ Arc, Mutex };
 use rand_xoshiro::Xoshiro256PlusPlus;
 use argmin::core::{ CostFunction, Error, Executor, Operator, OptimizationResult, State };
@@ -407,7 +407,7 @@ pub fn calculate_palette_loss(colors: &[u16]) -> JsValue {
     }
 }
 
-fn calculate_ols_mse(dataset: Dataset<f64, f64>) -> Result<f64, Box<dyn std::error::Error>> {
+fn calculate_ols_mse(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::error::Error>> {
     let num_targets = dataset.targets().dim().1;
     let mut total_mse = 0.0;
 
@@ -427,28 +427,140 @@ fn calculate_ols_mse(dataset: Dataset<f64, f64>) -> Result<f64, Box<dyn std::err
             .mapv(|x| x.powi(2))
             .mean()
             .unwrap();
+        println!("mse: {:?}", mse);
         total_mse += mse;
     }
 
     // Calculate Avg MSE
-    let avg_mse = total_mse / (num_targets as f64);
-
+    let avg_mse = total_mse / (num_targets as f32);
     Ok(avg_mse)
 }
 
-#[wasm_bindgen]
-pub fn test_ols() -> f32 {
-    let iris_dataset = linfa_datasets::iris();
-    let targets = iris_dataset.targets();
-    let mut one_hot_targets = Array2::zeros((targets.len(), 3));
-    for (i, target) in targets.iter().enumerate() {
-        one_hot_targets[(i, *target as usize)] = 1.0;
-    }
-    
-    // Create a dataset with owned records and targets
-    let dataset = Dataset::new(iris_dataset.records().to_owned(), one_hot_targets);
+fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::error::Error>> {
+    let num_targets = dataset.targets().dim().1;
+    let mut total_mse = 0.0;
 
-    let avg_mse = calculate_ols_mse(dataset);
-    console::log_1(&format!("avg_mse: {:?}", avg_mse).into());
-    avg_mse.unwrap() as f32
+    // Fit a model on each target individually
+    for i in 0..num_targets {
+        let target_column = dataset.targets().column(i).to_owned();
+
+        let dataset_with_single_target = Dataset::new(
+            dataset.records().to_owned(),
+            target_column.clone()
+        );
+        let model = LinearRegression::new();
+        let fitted_model = model.fit(&dataset_with_single_target)?;
+        let predictions = fitted_model.predict(&dataset_with_single_target);
+
+        let mse = (predictions - target_column)
+            .mapv(|x| x.powi(2))
+            .mean()
+            .unwrap();
+        println!("mse: {:?}", mse);
+        total_mse += mse;
+    }
+
+    // Calculate Avg MSE
+    let avg_mse = total_mse / (num_targets as f32);
+    // Take log of avg_mse
+    let sqrt_mse = avg_mse.sqrt();
+    Ok(sqrt_mse)
+}
+
+// #[wasm_bindgen]
+// pub fn test_ols() -> f32 {
+//     let iris_dataset = linfa_datasets::iris();
+//     let targets = iris_dataset.targets();
+//     let mut one_hot_targets = Array2::zeros((targets.len(), 3));
+//     for (i, target) in targets.iter().enumerate() {
+//         one_hot_targets[(i, *target as usize)] = 1.0;
+//     }
+
+//     // Create a dataset with owned records and targets
+//     let dataset = Dataset::new(iris_dataset.records().to_owned(), one_hot_targets);
+
+//     let avg_mse = calculate_ols_mse(dataset);
+//     console::log_1(&format!("avg_mse: {:?}", avg_mse).into());
+//     avg_mse.unwrap() as f32
+// }
+
+#[wasm_bindgen]
+pub fn optimize_in_lens(intensities: &[u16], colors: &[u16], contrast_limits: &[u16]) -> f32 {
+    // console log colors
+    let num_channels = colors.len() / 3;
+    let num_rows = intensities.len() / num_channels;
+    let mut intensities_array = Array2::zeros((num_rows, num_channels));
+    let mut intensities_array_float: Array2<f32> = Array2::zeros((num_rows, num_channels));
+    for channel in 0..num_channels {
+        for row in 0..num_rows {
+            let index = channel * num_rows + row;
+            intensities_array[[row, channel]] = intensities[index];
+        }
+    }
+    // set all values per channel in contrast_limits[0] to contrast_limits[0] and
+    // all values above contrast_limits[1] to contrast_limits[1]
+
+    for channel in 0..num_channels {
+        for row in 0..num_rows {
+            let index = channel * num_rows + row;
+            if intensities[index] < contrast_limits[channel * 2] {
+                intensities_array[[row, channel]] = contrast_limits[channel * 2];
+            } else if intensities[index] > contrast_limits[channel * 2 + 1] {
+                intensities_array[[row, channel]] = contrast_limits[channel * 2 + 1];
+            }
+            // Subtract the lower limit from the value
+            intensities_array[[row, channel]] -= contrast_limits[channel * 2];
+            intensities_array_float[[row, channel]] =
+                (intensities_array[[row, channel]] as f32) /
+                ((contrast_limits[channel * 2 + 1] - contrast_limits[channel * 2]) as f32);
+        }
+    }
+
+    // Print first 10 rows in 0th channel
+    let float_color_map: Vec<f32> = colors
+        .iter()
+        .map(|&x| (x as f32) / 255.0)
+        .collect::<Vec<f32>>();
+    let oklab_color_map: Vec<f32> = float_color_map
+        .chunks(3)
+        .map(|color| {
+            let rgb = Srgb::new(color[0] as f32, color[1] as f32, color[2] as f32);
+            let oklab: Oklab = Oklab::from_color(rgb);
+            vec![oklab.l, oklab.a, oklab.b]
+        })
+        .flatten()
+        .collect::<Vec<f32>>();
+    println!("color_map: {:?}", oklab_color_map);
+    // Psudocolor each channel by applying the color ramp
+    // Create a 3d Array where the first dimension is the channel, the second dimension is the row, and the third dimension is the color
+    let mut colored_array = Array3::zeros((num_channels, num_rows, 3));
+    let mut mixed_array: Array2<f32> = Array2::zeros((num_rows, 3));
+    for row in 0..num_rows {
+        for channel in 0..num_channels {
+            let index = channel * num_rows + row;
+            let intensity_value = intensities_array_float[[row, channel]];
+            let oklab_colored = Oklab::new(
+                oklab_color_map[channel * 3] * intensity_value,
+                oklab_color_map[channel * 3 + 1] * intensity_value,
+                oklab_color_map[channel * 3 + 2] * intensity_value
+            );
+            let xyz: Xyz = Xyz::from_color(oklab_colored);
+            colored_array[[channel, row, 0]] = xyz.x;
+            colored_array[[channel, row, 1]] = xyz.y;
+            colored_array[[channel, row, 2]] = xyz.z;
+            mixed_array[[row, 0]] += xyz.x;
+            mixed_array[[row, 1]] += xyz.y;
+            mixed_array[[row, 2]] += xyz.z;
+        }
+        let okl = Oklab::from_color(
+            Xyz::new(mixed_array[[row, 0]], mixed_array[[row, 1]], mixed_array[[row, 2]])
+        );
+        mixed_array[[row, 0]] = okl.l;
+        mixed_array[[row, 1]] = okl.a;
+        mixed_array[[row, 2]] = okl.b;
+    }
+
+    let dataset = Dataset::new(intensities_array_float, mixed_array);
+    let rmse = calculate_ols_msre(dataset);
+    rmse.unwrap()
 }

@@ -351,7 +351,7 @@ export async function calculateConfusionLoss(
   );
   let colorList = [];
   // create a uint16array of length len(channelsPayload) * subsample_size
-  const rasterArray = new Uint16Array(subsample_size*channelsPayload.length);
+  const rasterArray = new Uint16Array(subsample_size * channelsPayload.length);
 
   await Promise.all(
     channelsPayload.map(async (d, i) => {
@@ -361,13 +361,16 @@ export async function calculateConfusionLoss(
         selection: d.selection,
       });
       // If sample_indices is null, then create a subsample of the raster
-      if (sample_indices == null) sample_indices  = _.times(subsample_size, () => _.random(0, raster.data.length));
+      if (sample_indices == null)
+        sample_indices = _.times(subsample_size, () =>
+          _.random(0, raster.data.length)
+        );
       // Write the data at these indices to the rasterArray
       sample_indices.forEach((d, ii) => {
         rasterArray[ii + i * subsample_size] = raster.data[d];
       });
-      
-      console.log('raster', rasterArray);
+
+      console.log("raster", rasterArray);
       // raster size
     })
   );
@@ -590,7 +593,9 @@ export async function getLensIntensityValues(
   lensRadius,
   channelsVisible,
   selections,
-  setMovingLens
+  setMovingLens,
+  contrastLimits,
+  colors
 ) {
   let multiplier = 1 / Math.pow(2, viewState.zoom);
   const size = lensRadius * multiplier;
@@ -657,6 +662,8 @@ export async function getLensIntensityValues(
       let thisChannel = {};
       let channelSelection = selections[i];
       thisChannel.selection = channelSelection;
+      thisChannel.color = colors[i];
+      thisChannel.contrastLimits = contrastLimits[i];
       thisChannel.data = [];
       let indexArray = [];
       const radiusSquared = sizeAtPyramidLevel * sizeAtPyramidLevel;
@@ -690,4 +697,26 @@ export async function getLensIntensityValues(
   }
   setMovingLens(false);
   return channelData;
+}
+
+export async function optimizeInLens(channelData, contrastLimits) {
+  let totalLength = 0;
+  console.log("cd", channelData);
+  channelData.forEach((d) => {
+    totalLength += d.data.length;
+  });
+
+  let allData = new Uint16Array(totalLength);
+  let index = 0;
+  let _colors = [];
+  let _contrastLimits = [];
+  let modifiedData = channelData.map((d) => {
+    allData.set(d.data, index);
+    index += d.data.length;
+    _colors = [..._colors, ...d.color];
+    _contrastLimits = [..._contrastLimits, ...d.contrastLimits];
+    delete d.data;
+    return d;
+  });
+  return psudoAnalysis.optimize_in_lens(allData, _colors, _contrastLimits);
 }
