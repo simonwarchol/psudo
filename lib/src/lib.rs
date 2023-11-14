@@ -485,9 +485,7 @@ fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::er
 //     avg_mse.unwrap() as f32
 // }
 
-#[wasm_bindgen]
-pub fn optimize_in_lens(intensities: &[u16], colors: &[u16], contrast_limits: &[u16]) -> f32 {
-    // console log colors
+fn optimize_for_confusion(intensities: &[u16], colors: &[u16], contrast_limits: &[u16]) -> f32 {
     let num_channels = colors.len() / 3;
     let mut num_rows = intensities.len() / num_channels;
     let mut intensities_array = Array2::zeros((num_rows, num_channels));
@@ -607,4 +605,10 @@ pub fn optimize_in_lens(intensities: &[u16], colors: &[u16], contrast_limits: &[
     let time = now.elapsed();
     console::log_1(&format!("time: {:?}", time).into());
     rmse.unwrap()
+}
+
+#[wasm_bindgen]
+pub fn optimize_in_lens(intensities: &[u16], colors: &[u16], contrast_limits: &[u16]) -> f32 {
+    // console log colors
+    optimize_for_confusion(intensities, colors, contrast_limits)
 }
