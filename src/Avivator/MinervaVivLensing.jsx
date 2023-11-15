@@ -892,14 +892,6 @@ const LensLayer = class extends CompositeLayer {
     } else if (
       pickingInfo?.sourceLayer?.id == `resize-circle-${this.props.id}`
     ) {
-      console.log("sourceLayer", pickingInfo?.sourceLayer?.id);
-      console.time("optimize");
-      const test = psudoAnalysis.optimize([
-        127, 201, 127, 190, 174, 212, 253, 192, 134, 255, 255, 153, 56, 108,
-        176, 240, 2, 127,
-      ]);
-      console.timeEnd("optimize");
-      console.log("test", test);
     }
   }
 
@@ -924,7 +916,7 @@ const LensLayer = class extends CompositeLayer {
       colors,
       lensSelection,
       this.context.userData?.setGraphData,
-      this.context.userData?.setPaletteLoss,
+      this.context.userData?.setPaletteLoss
     );
   }
 };

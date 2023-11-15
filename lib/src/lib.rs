@@ -41,6 +41,71 @@ pub fn greet() {
     alert("Hello, lib!");
 }
 
+fn preprocess_data(colors: &[u16], intensities: &[u16], contrast_limits: &[u16]) -> Array2<f32> {
+    let num_channels = colors.len() / 3;
+    let num_rows = intensities.len() / num_channels;
+    let mut intensities_array = Array2::zeros((num_rows, num_channels));
+    for channel in 0..num_channels {
+        for row in 0..num_rows {
+            let index = channel * num_rows + row;
+            intensities_array[[row, channel]] = intensities[index];
+        }
+    }
+    let mut intensities_array_float: Array2<f32> = Array2::zeros((num_rows, num_channels));
+
+    for channel in 0..num_channels {
+        for row in 0..num_rows {
+            let index = channel * num_rows + row;
+            if intensities[index] < contrast_limits[channel * 2] {
+                intensities_array[[row, channel]] = contrast_limits[channel * 2];
+            } else if intensities[index] > contrast_limits[channel * 2 + 1] {
+                intensities_array[[row, channel]] = contrast_limits[channel * 2 + 1];
+            }
+            // Subtract the lower limit from the value
+            intensities_array[[row, channel]] -= contrast_limits[channel * 2];
+            intensities_array_float[[row, channel]] =
+                (intensities_array[[row, channel]] as f32) /
+                ((contrast_limits[channel * 2 + 1] - contrast_limits[channel * 2]) as f32);
+        }
+    }
+    // Compute the sum of each row
+    // let mut row_sums = Array1::zeros(num_rows);
+    let mut indexes = Vec::new();
+    for row in 0..num_rows {
+        let mut row_sum = 0.0;
+        for channel in 0..num_channels {
+            row_sum += intensities_array_float[[row, channel]];
+        }
+        if row_sum > 0.3 {
+            // print row index
+            indexes.push(row);
+        }
+    }
+    // println!("indexes: {:?}", indexes);
+    // Shuffle the indexes
+    let mut rng = thread_rng();
+    indexes.shuffle(&mut rng);
+    let mut rng = rand::thread_rng();
+    // print length of indexes
+    println!("indexes length: {:?}", indexes.len());
+    indexes = indexes
+        .iter()
+        .take(5000)
+        .map(|&x| x)
+        .collect::<Vec<usize>>();
+
+    // subsample intensities_array_float to the first 5000 indices
+    let mut subsampled_array = Array2::zeros((indexes.len(), num_channels));
+    for (i, &index) in indexes.iter().enumerate() {
+        for channel in 0..num_channels {
+            subsampled_array[[i, channel]] = intensities_array_float[[index, channel]];
+        }
+    }
+    // print shape of subsampled_array
+    println!("subsampled_array shape: {:?}", subsampled_array.shape());
+    subsampled_array
+}
+
 #[wasm_bindgen]
 pub fn ln(array: &[u16]) -> Vec<f32> {
     let array_vec = array.to_vec();
@@ -191,14 +256,16 @@ struct Loss {
     rng: Arc<Mutex<Xoshiro256PlusPlus>>,
     c3_instance: c3::C3,
     locked_colors: Vec<bool>,
+    intensity_array: Array2<f32>,
 }
 
 impl Loss {
-    pub fn new(locked_colors: Vec<bool>) -> Self {
+    pub fn new(locked_colors: Vec<bool>, intensity_array: Array2<f32>) -> Self {
         Self {
             rng: Arc::new(Mutex::new(Xoshiro256PlusPlus::from_entropy())),
             locked_colors: locked_colors,
             c3_instance: c3::C3::new(),
+            intensity_array: intensity_array,
         }
     }
 }
@@ -246,7 +313,15 @@ impl CostFunction for Loss {
         }
         let average_cosine_distance = total_distance / (total_pairs as f64);
         let avergae_euc_distance = average_pairwise_euclidean_distance(&oklab_palette);
-        Ok((-average_cosine_distance as f32) + (-avergae_euc_distance as f32))
+        let confusion_loss = compute_confusion_loss(
+            oklab_colors.to_vec(),
+            self.intensity_array.clone()
+        );
+        Ok(
+            (-average_cosine_distance as f32) +
+                (-avergae_euc_distance as f32) +
+                (-confusion_loss as f32)
+        )
     }
 }
 impl Anneal for Loss {
@@ -283,9 +358,13 @@ impl Anneal for Loss {
         Ok(param_n)
     }
 }
-fn annealing(colors: &Vec<f32>, locked_colors: &Vec<bool>) -> Result<Vec<f32>, Error> {
+fn annealing(
+    colors: &Vec<f32>,
+    locked_colors: &Vec<bool>,
+    intensity_array: Array2<f32>
+) -> Result<Vec<f32>, Error> {
     let solver = SimulatedAnnealing::new(15.0)?;
-    let cost_function = Loss::new(locked_colors.clone());
+    let cost_function = Loss::new(locked_colors.clone(), intensity_array);
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
         .configure(|state| { state.param(colors.to_vec()).max_iters(10_000) })
@@ -298,8 +377,14 @@ fn annealing(colors: &Vec<f32>, locked_colors: &Vec<bool>) -> Result<Vec<f32>, E
 }
 
 #[wasm_bindgen]
-pub fn optimize(colors: &[u16], locked_colors: &[u8]) -> Vec<f32> {
+pub fn optimize(
+    colors: &[u16],
+    locked_colors: &[u16],
+    intensities: &[u16],
+    contrast_limits: &[u16]
+) -> Vec<f32> {
     utils::set_panic_hook();
+    let now = instant::Instant::now();
 
     let float_color_map: Vec<f32> = colors
         .iter()
@@ -320,7 +405,12 @@ pub fn optimize(colors: &[u16], locked_colors: &[u8]) -> Vec<f32> {
         })
         .flatten()
         .collect::<Vec<f32>>();
-    let optimized_colors = annealing(&oklab_color_map, &locked_colors_vec).unwrap();
+    let intensity_array = preprocess_data(colors, intensities, contrast_limits);
+    let optimized_colors = annealing(
+        &oklab_color_map,
+        &locked_colors_vec,
+        intensity_array
+    ).unwrap();
     let optimized_srgb = optimized_colors
         .chunks(3)
         .map(|color| {
@@ -330,6 +420,8 @@ pub fn optimize(colors: &[u16], locked_colors: &[u8]) -> Vec<f32> {
         })
         .flatten()
         .collect::<Vec<f32>>();
+    let elapsed = now.elapsed();
+    console::log_1(&format!("annealing took: {:?}", elapsed).into());
     optimized_srgb
 }
 
@@ -488,92 +580,9 @@ fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::er
 //     avg_mse.unwrap() as f32
 // }
 
-fn optimize_for_confusion(intensities: &[u16], colors: &[u16], contrast_limits: &[u16]) -> f32 {
-    let num_channels = colors.len() / 3;
-    let mut num_rows = intensities.len() / num_channels;
-    let mut intensities_array = Array2::zeros((num_rows, num_channels));
-    let mut intensities_array_float: Array2<f32> = Array2::zeros((num_rows, num_channels));
-    for channel in 0..num_channels {
-        for row in 0..num_rows {
-            let index = channel * num_rows + row;
-            intensities_array[[row, channel]] = intensities[index];
-        }
-    }
-    // set all values per channel in contrast_limits[0] to contrast_limits[0] and
-    // all values above contrast_limits[1] to contrast_limits[1]
-
-    for channel in 0..num_channels {
-        for row in 0..num_rows {
-            let index = channel * num_rows + row;
-            if intensities[index] < contrast_limits[channel * 2] {
-                intensities_array[[row, channel]] = contrast_limits[channel * 2];
-            } else if intensities[index] > contrast_limits[channel * 2 + 1] {
-                intensities_array[[row, channel]] = contrast_limits[channel * 2 + 1];
-            }
-            // Subtract the lower limit from the value
-            intensities_array[[row, channel]] -= contrast_limits[channel * 2];
-            intensities_array_float[[row, channel]] =
-                (intensities_array[[row, channel]] as f32) /
-                ((contrast_limits[channel * 2 + 1] - contrast_limits[channel * 2]) as f32);
-        }
-    }
-
-    let mut indexes = Vec::new();
-    for row in 0..num_rows {
-        let mut row_sum = 0.0;
-        for channel in 0..num_channels {
-            row_sum += intensities_array_float[[row, channel]];
-        }
-        if row_sum > 0.5 {
-            // print row index
-            indexes.push(row);
-        }
-    }
-    // println!("indexes: {:?}", indexes);
-    // Shuffle the indexes
-    let mut rng = thread_rng();
-    indexes.shuffle(&mut rng);
-    let mut rng = rand::thread_rng();
-    // print length of indexes
-    println!("indexes length: {:?}", indexes.len());
-    indexes = indexes
-        .iter()
-        .take(5000)
-        .map(|&x| x)
-        .collect::<Vec<usize>>();
-
-    // subsample intensities_array_float to the first 5000 indices
-    let mut subsampled_array = Array2::zeros((indexes.len(), num_channels));
-    for (i, &index) in indexes.iter().enumerate() {
-        for channel in 0..num_channels {
-            subsampled_array[[i, channel]] = intensities_array_float[[index, channel]];
-        }
-    }
-    // print shape of subsampled_array
-    println!("subsampled_array shape: {:?}", subsampled_array.shape());
-    // Print first few rows
-    println!("subsampled_array: {:?}", subsampled_array.slice(s![0..10, ..]));
-
-    intensities_array_float = subsampled_array;
-    num_rows = intensities_array_float.shape()[0];
-
-    // Print first 10 rows in 0th channel
-    let float_color_map: Vec<f32> = colors
-        .iter()
-        .map(|&x| (x as f32) / 255.0)
-        .collect::<Vec<f32>>();
-
-    let now = instant::Instant::now();
-    let oklab_color_map: Vec<f32> = float_color_map
-        .chunks(3)
-        .map(|color| {
-            let rgb = Srgb::new(color[0] as f32, color[1] as f32, color[2] as f32);
-            let oklab: Oklab = Oklab::from_color(rgb);
-            vec![oklab.l, oklab.a, oklab.b]
-        })
-        .flatten()
-        .collect::<Vec<f32>>();
-    println!("color_map: {:?}", oklab_color_map);
+fn compute_confusion_loss(oklab_color_map: Vec<f32>, intensities_array_float: Array2<f32>) -> f32 {
+    let num_channels = intensities_array_float.shape()[1];
+    let num_rows = intensities_array_float.shape()[0];
     // Psudocolor each channel by applying the color ramp
     // Create a 3d Array where the first dimension is the channel, the second dimension is the row, and the third dimension is the color
     let mut colored_array = Array3::zeros((num_channels, num_rows, 3));
@@ -605,10 +614,41 @@ fn optimize_for_confusion(intensities: &[u16], colors: &[u16], contrast_limits: 
 
     let dataset = Dataset::new(intensities_array_float, mixed_array);
     let rmse = calculate_ols_msre(dataset);
-    let time = now.elapsed();
-    console::log_1(&format!("time: {:?}", time).into());
     console::log_1(&format!("rmse: {:?}", rmse).into());
     rmse.unwrap()
+}
+
+fn optimize_for_confusion(intensities: &[u16], colors: &[u16], contrast_limits: &[u16]) -> f32 {
+    let num_channels = colors.len() / 3;
+    let mut num_rows = intensities.len() / num_channels;
+    let intensities_array_float: Array2<f32> = preprocess_data(
+        colors,
+        intensities,
+        contrast_limits
+    );
+
+    num_rows = intensities_array_float.shape()[0];
+
+    // Print first 10 rows in 0th channel
+    let float_color_map: Vec<f32> = colors
+        .iter()
+        .map(|&x| (x as f32) / 255.0)
+        .collect::<Vec<f32>>();
+
+   
+    let oklab_color_map: Vec<f32> = float_color_map
+        .chunks(3)
+        .map(|color| {
+            let rgb = Srgb::new(color[0] as f32, color[1] as f32, color[2] as f32);
+            let oklab: Oklab = Oklab::from_color(rgb);
+            vec![oklab.l, oklab.a, oklab.b]
+        })
+        .flatten()
+        .collect::<Vec<f32>>();
+    println!("color_map: {:?}", oklab_color_map);
+
+    let rmse = compute_confusion_loss(oklab_color_map, intensities_array_float);
+    rmse
 }
 
 #[wasm_bindgen]

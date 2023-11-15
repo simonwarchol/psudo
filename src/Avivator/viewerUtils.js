@@ -276,7 +276,7 @@ export function useWindowSize(scaleWidth = 1, scaleHeight = 1, elem = null) {
   });
   return windowSize;
 }
-async function getChannelPayload(
+export async function getChannelPayload(
   channelsVisible,
   colors,
   selections,
@@ -319,7 +319,7 @@ async function getChannelPayload(
   return channelsPayload;
 }
 
-function createContiguousArrays(channelList) {
+export function createContiguousArrays(channelList) {
   let dataLength = channelList[0]?.data?.length || 0;
   let intensityArray = new Uint16Array(dataLength * channelList.length);
   let colorArray = new Uint16Array(3 * channelList.length);

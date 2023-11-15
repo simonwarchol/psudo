@@ -29,6 +29,8 @@ import {
   getNameFromUrl,
   calculatePaletteLoss,
   getGMMContrastLimits,
+  createContiguousArrays,
+  getChannelPayload,
 } from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
@@ -207,78 +209,41 @@ function PsudoToolbar() {
     context?.setIsLoading(true);
     console.log("lcc", context?.lockedChannelColors);
     const channelsPayload = [];
-    channelsVisible.forEach((d, i) => {
-      if (d) {
-        const channelPayload = {
-          color: colors[i],
-          contrastLimits: contrastLimits[i],
-          selection: selections[i],
-        };
-        channelsPayload.push(channelPayload);
-      }
-    });
-
-    let intensityList = new Float32Array([]);
-    let colorList = [];
-    await Promise.all(
-      channelsPayload.map(async (d, i) => {
-        colorList.push(...d.color);
-        // const resolution = pyramidResolution;
-
-        // async function getGMMContrastLimits({
-        //   loader,
-        //   selection,
-        //   pyramidResolution,
-        // })
-        // const contrastLimits = await getGMMContrastLimits({loader, selection: d.selection, pyramidResolution});
-        // const raster = await loader?.[pyramidResolution]?.getRaster({
-        //   selection: d.selection,
-        // });
-        // // Print the size of raster.data
-        // console.log("raster.data size", raster.data.length, raster.data.length);
-        // // Subsample
-        // // time the next line
-        // console.time("channel_gmm");
-        // const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
-        // console.timeEnd("channel_gmm");
-        // let floatArr = new Float32Array([...conrastLimits]);
-        // // Make Javascript Array
-        // floatArr = Array.from(floatArr);
-        // console.log("conrastLimits", floatArr);
-      })
+    const channelPayload = await getChannelPayload(
+      channelsVisible,
+      colors,
+      selections,
+      contrastLimits,
+      loader,
+      pyramidResolution,
+      10000
     );
 
-    // Length of each channel's intensity list.
-    const channelLength = intensityList.length / channelsPayload.length;
+    const { intensityArray, colorArray, contrastLimitsArray } =
+      createContiguousArrays(channelPayload);
+    console.log(
+      "intensityArray",
+      intensityArray,
+      colorArray,
+      contrastLimitsArray
+    );
 
-    // New intensityList
-    const newIntensityList = new Float32Array(intensityList.length);
-
-    // Iterate for channelLength
-    _.range(channelLength).map((i) => {
-      _.range(channelsPayload.length).map((j) => {
-        newIntensityList[i * channelsPayload.length + j] =
-          intensityList[i + j * channelLength];
-      });
-    });
-
-    // convert Uint16Array to Float32 Array, where each value is /255
-    const colorListFloat = new Float32Array(colorList.length);
-    colorList.forEach((d, i) => {
-      colorListFloat[i] = d / 255;
-    });
-    console.log("colors", colorList, colorListFloat);
-    let lockedList = [];
     // Iterate over colorList // 3 length
-    for (let i = 0; i < colorList.length / 3; i += 1) {
+    let lockedList = [];
+    for (let i = 0; i < colorArray.length / 3; i += 1) {
       if (context?.lockedChannelColors[i]) {
         lockedList.push(1);
       } else {
         lockedList.push(0);
       }
     }
-    console.log("lockedList", lockedList);
-    const optColors = psudoAnalysis.optimize(colorList, lockedList);
+
+    const optColors = psudoAnalysis.optimize(
+      colorArray,
+      lockedList,
+      intensityArray,
+      contrastLimitsArray
+    );
     console.log("optColors", optColors);
     console.log("Colors Before", colors);
     let colorCounter = 0;
