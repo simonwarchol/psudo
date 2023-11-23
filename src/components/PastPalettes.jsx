@@ -47,10 +47,14 @@ const PastPalettes = (props) => {
   }, [context?.pastPalettes]);
 
   const selectOldPalette = (palette) => {
-
-    useChannelsStore.setState({ colors: palette.colors, contrastLimits: palette.contrastLimits, selections: palette.selections, channelsVisible: palette.channelsVisible });
+    useChannelsStore.setState({
+      colors: palette.colors,
+      contrastLimits: palette.contrastLimits,
+      selections: palette.selections,
+      channelsVisible: palette.channelsVisible,
+    });
     useViewerStore.setState({ viewState: palette.viewState });
-};
+  };
 
   //   const selectOldPalette = async (palette) => {
   //     console.log("clickclick", palette);

@@ -20,6 +20,8 @@ export const ContextWrapper = (props) => {
   const [linkedViews, setLinkedViews] = useState(false);
   const [mainViewStateChanged, setMainViewStateChanged] = useState(false);
   const [paletteLoss, setPaletteLoss] = useState({});
+  const [coordinate, setCoordinate] = useState([]);
+  const [lensRadius, setLensRadius] = useState(100);
 
   const rgb2hex = (rgb) => {
     try {
@@ -80,6 +82,10 @@ export const ContextWrapper = (props) => {
         setLinkedViews,
         paletteLoss,
         setPaletteLoss,
+        coordinate,
+        setCoordinate,
+        lensRadius,
+        setLensRadius,
       }}
     >
       {props.children}

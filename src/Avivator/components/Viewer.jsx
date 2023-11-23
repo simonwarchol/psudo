@@ -35,10 +35,9 @@ const Viewer = (props) => {
   const showChannel = props?.showChannel;
   const mainViewer = props?.mainViewer;
   const [mousePosition, setMousePosition] = useState([null, null]);
-  const [lensRadius, setLensRadius] = useState(100);
+
   const [movingLens, setMovingLens] = useState(false);
   const [lensOpacity, setLensOpacity] = useState(1);
-  const [coordinate, setCoordinate] = useState([]);
 
   const viewerRef = React.useRef(null);
 
@@ -104,12 +103,6 @@ const Viewer = (props) => {
     return new ColorMixingExtension({ colormap });
   };
 
-  const onClick = () => {
-    // const _coordinate = useViewerStore
-    //   .getState()
-    //   ?.coordinate?.map((x) => Math.round(x));
-  };
-
   useEffect(() => {
     const viewState = getDefaultInitialViewState(
       loader,
@@ -153,7 +146,7 @@ const Viewer = (props) => {
       height,
       width,
       mousePosition,
-      lensRadius,
+      lensRadius: context.lensRadius,
       lensOpacity,
     });
     layerConfig = {
@@ -176,8 +169,8 @@ const Viewer = (props) => {
       setMousePosition,
       movingLens,
       setMovingLens,
-      lensRadius,
-      setLensRadius,
+      lensRadius: context?.lensRadius,
+      setLensRadius: context?.setLensRadius,
       lensOpacity,
       setLensOpacity,
       pyramidResolution,
@@ -186,8 +179,8 @@ const Viewer = (props) => {
       setIsLoading: context?.setIsLoading,
       graphData: context?.graphData,
       setGraphData: context?.setGraphData,
-      coordinate,
-      setCoordinate,
+      coordinate: context?.coordinate,
+      setCoordinate: context?.setCoordinate,
       overlapView: context?.overlapView,
       setOverlapView: context?.setOverlapView,
       mainViewStateChanged: context?.mainViewStateChanged,
@@ -253,11 +246,11 @@ const Viewer = (props) => {
   }, [context?.mainViewStateChanged]);
   const getLensData = async () => {
     let lensData = await getLensIntensityValues(
-      coordinate,
+      context?.coordinate,
       useViewerStore.getState()?.viewState,
       loader,
       pyramidResolution,
-      lensRadius,
+      context?.lensRadius,
       channelsVisible,
       selections,
       setMovingLens,
@@ -287,7 +280,7 @@ const Viewer = (props) => {
   }, [lensEnabled]);
 
   return (
-    <div className={"viewerWrapper"} onClick={onClick}>
+    <div className={"viewerWrapper"}>
       <VivViewer
         layerProps={layerProps}
         views={views}

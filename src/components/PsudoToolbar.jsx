@@ -31,6 +31,7 @@ import {
   getGMMContrastLimits,
   createContiguousArrays,
   getChannelPayload,
+  getLensIntensityValues
 } from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
@@ -209,7 +210,22 @@ function PsudoToolbar() {
     context?.setIsLoading(true);
     console.log("lcc", context?.lockedChannelColors);
     const channelsPayload = [];
-    const channelPayload = await getChannelPayload(
+    let payload;
+    if (lensEnabled && context.optimizationScope == "lens") {
+      payload = await getLensIntensityValues(context?.coordinate,
+        viewState,
+        loader,
+        pyramidResolution,
+        lensRadius,
+        channelsVisible,
+        selections,
+        setMovingLens,
+        contrastLimits,
+        colors
+      )
+    } else {
+    }
+    payload = await getChannelPayload(
       channelsVisible,
       colors,
       selections,
@@ -507,9 +523,9 @@ function PsudoToolbar() {
                       label="Global"
                     />
                     <FormControlLabel
-                      value="viewport"
+                      value="lens"
                       control={<Radio />}
-                      label="Viewport"
+                      label="Lens"
                     />
                   </RadioGroup>
                 </FormControl>
@@ -531,9 +547,9 @@ function PsudoToolbar() {
         alignItems="center"
         p={1}
       >
-        <Grid item xs={5} style={{ zIndex: 100 }} alignItems={"center"}>
+        {/* <Grid item xs={5} style={{ zIndex: 100 }} alignItems={"center"}>
           <AddChannel />
-        </Grid>
+        </Grid> */}
         <Grid item xs={"auto"} style={{ zIndex: 100 }} alignItems={"center"}>
           <IconButton
             id="source-button"

@@ -225,6 +225,8 @@ export function isInterleaved(shape) {
  * @param { import('../../src/types').PixelSource<['t', 'z', 'c']> } pixelSource
  */
 export function buildDefaultSelection(pixelSource) {
+  const numChannels = pixelSource.shape[pixelSource.shape.length - 3];
+  console.log("pixelSource", pixelSource, numChannels);
   let selection = [];
   const globalSelection = getDefaultGlobalSelection(pixelSource);
   // First non-global dimension with some sort of selectable values.
@@ -232,6 +234,8 @@ export function buildDefaultSelection(pixelSource) {
   const firstNonGlobalDimension = pixelSource.labels
     .map((name, i) => ({ name, size: pixelSource.shape[i] }))
     .find((d) => !GLOBAL_SLIDER_DIMENSION_FIELDS.includes(d.name) && d.size);
+
+  console.log("fng", firstNonGlobalDimension);
 
   for (let i = 0; i < Math.min(6, firstNonGlobalDimension.size); i += 1) {
     selection.push({
@@ -283,7 +287,8 @@ export async function getChannelPayload(
   contrastLimits,
   loader,
   pyramidResolution,
-  sampleSize = null
+  sampleSize = null,
+  lens = false
 ) {
   const channelsPayload = [];
   let indices = null;

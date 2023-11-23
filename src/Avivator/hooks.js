@@ -60,7 +60,7 @@ export const useImage = (source, history) => {
     let graphData = [];
     for (const [i, visible] of (channelsVisible || []).entries()) {
       if (visible) {
-        console.log("loader", loader);
+        console.log("loader", loader, selections);
         let raster = await loader?.[_.size(loader) - 1]?.getRaster({
           selection: selections[i],
         });
