@@ -292,9 +292,24 @@ function PsudoToolbar() {
       <Grid
         container
         sx={{ top: 0, left: 0, position: "absolute" }}
+        direction="column"
+        justifyContent="flex-end"
+        alignItems="start"
+        // p={1}
+      >
+        <Grid item sx={{ marginTop: 10, zIndex: 10000 }}>
+          <GaugeCharts
+            paletteLoss={context?.paletteLoss}
+            style={{ position: "relative", top: "50%", zIndex: 10000 }}
+          />
+        </Grid>
+      </Grid>
+      <Grid
+        container
+        sx={{ top: 0, left: 0, position: "absolute" }}
         direction="row"
         justifyContent="flex-start"
-        alignItems="start"
+        alignItems="center"
         // p={1}
       >
         <Grid
@@ -308,19 +323,13 @@ function PsudoToolbar() {
           <Grid item>
             <h1 className={"title-code color-gradient"}>psudo</h1>
           </Grid>
-          <Grid item>
-            <GaugeCharts
-              paletteLoss={context?.paletteLoss}
-              style={{ position: "relative", left: "50%" }}
-            />
-          </Grid>
         </Grid>
 
         <Grid
           container
           item
           xs={"auto"}
-          sx={{ zIndex: 10000, display: "flex", alignItems: "center" }}
+          sx={{ zIndex: 10000, display: "flex", alignItems: "flex-end" }} // Updated alignItems to 'flex-end'
         >
           <IconButton
             id="history-button"
@@ -339,11 +348,12 @@ function PsudoToolbar() {
             MenuListProps={{
               "aria-labelledby": "basic-button",
             }}
-            sx={{ marginTop: 1 }}
+            sx={{ marginTop: 4 }}
           >
             <PastPalettes />
           </Menu>
         </Grid>
+
         <Grid item xs={"auto"} p={0} m={0} sx={{ zIndex: 10000 }}>
           <Grid
             container

@@ -11,9 +11,12 @@ const GaugeCharts = () => {
   const [nameDistance, setNameDistance] = useState(0);
   const [perceptualDistance, setPerceptualDistance] = useState(0);
   const [confusion, setConfusion] = useState(0);
+  const [overallLoss, setOverallLoss] = useState(0);
   const chartStyle = {
     zoom: 0.4,
   };
+  // let chartColors = ["#fee0d2", "#fc9272", "#de2d26"];
+  let chartColors = ["#f0f0f0", "#bdbdbd", "#636363"];
 
   useEffect(() => {
     console.log("Gauge Chart Data Simon", context.paletteLoss);
@@ -25,6 +28,7 @@ const GaugeCharts = () => {
       setNameDistance(nameDist);
       setPerceptualDistance(perceptDist);
       setConfusion(conf);
+      setOverallLoss(nameDist + perceptDist + conf);
     }
   }, [context.paletteLoss]);
 
@@ -40,10 +44,11 @@ const GaugeCharts = () => {
           <Grid item>
             <GaugeChart
               id="gauge-chart-perceptual"
-              colors={["#fee0d2", "#fc9272", "#de2d26"]}
+              colors={chartColors}
               percent={perceptualDistance}
               animate={false}
               style={chartStyle}
+              hideText={true}
             />
           </Grid>
         </Grid>
@@ -61,9 +66,10 @@ const GaugeCharts = () => {
             <GaugeChart
               id="gauge-chart-name"
               percent={nameDistance}
-              colors={["#fee0d2", "#fc9272", "#de2d26"]}
+              colors={chartColors}
               style={chartStyle}
               animate={false}
+              hideText={true}
             />
           </Grid>
         </Grid>
@@ -73,22 +79,43 @@ const GaugeCharts = () => {
           </Grid>
         </Grid>
       </Grid>
-      {/* Name Distance Section */}
+      {/* Confusion Section */}
       <Grid item>
         <Grid container alignItems="center" justifyContent="center">
           <Grid item>
             <GaugeChart
-              id="gauge-chart-name"
+              id="gauge-chart-confusion"
               percent={confusion}
-              colors={["#fee0d2", "#fc9272", "#de2d26"]}
+              colors={chartColors}
               style={chartStyle}
               animate={false}
+              hideText={true}
             />
           </Grid>
         </Grid>
         <Grid container justifyContent="center">
           <Grid item>
             <label>Confusion</label>
+          </Grid>
+        </Grid>
+      </Grid>
+      {/* Confusion Section */}
+      <Grid item>
+        <Grid container alignItems="center" justifyContent="center">
+          <Grid item>
+            <GaugeChart
+              id="gauge-chart-total"
+              percent={confusion}
+              colors={chartColors}
+              style={chartStyle}
+              animate={false}
+              hideText={true}
+            />
+          </Grid>
+        </Grid>
+        <Grid container justifyContent="center">
+          <Grid item>
+            <label>Total</label>
           </Grid>
         </Grid>
       </Grid>

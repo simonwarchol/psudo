@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 
+import { getPastPalettes } from "../Avivator/viewerUtils.js";
+
 export const AppContext = React.createContext(null);
 
 export const COLORMAP_OPTIONS = ["sRGB", "Oklab"];
@@ -10,7 +12,7 @@ export const ContextWrapper = (props) => {
   const [channelColorNames, setChannelColorNames] = useState([]);
   const [colorExcluded, setColorExcluded] = useState([]);
   const [showOptimizedColor, setShowOptimizedColor] = useState(false);
-  const [pastPalettes, setPastPalettes] = useState([]);
+  const [pastPalettes, setPastPalettes] = useState(getPastPalettes());
   const [graphData, setGraphData] = useState([]);
   const [lensData, setLensData] = useState([]);
   const [optimizationScope, setOptimizationScope] = useState("global");

@@ -319,7 +319,7 @@ impl CostFunction for Loss {
         );
         Ok(
             (-average_cosine_distance as f32) +
-                (-avergae_euc_distance as f32) +
+                -2.0 * (avergae_euc_distance as f32) +
                 (-confusion_loss as f32)
         )
     }
@@ -347,7 +347,8 @@ impl Anneal for Loss {
                 param_n[idx] += val;
                 // Scale luminance between 0.5 and 1
                 if i == 0 {
-                    param_n[idx] = (param_n[idx] / 2.0 + 0.5).clamp(0.5, 1.0);
+                    param_n[idx] = param_n[idx].clamp(-0.0, 1.0);
+                    // param_n[idx] = (param_n[idx] / 2.0 + 0.5).clamp(0.5, 1.0);
                 } else {
                     // Clamp the value to ensure it stays within bounds
                     param_n[idx] = param_n[idx].clamp(-0.4, 0.4);
@@ -635,7 +636,6 @@ fn optimize_for_confusion(intensities: &[u16], colors: &[u16], contrast_limits: 
         .map(|&x| (x as f32) / 255.0)
         .collect::<Vec<f32>>();
 
-   
     let oklab_color_map: Vec<f32> = float_color_map
         .chunks(3)
         .map(|color| {

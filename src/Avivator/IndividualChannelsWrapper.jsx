@@ -122,9 +122,7 @@ function IndividualChannelsWrapper() {
       colors,
       contrastLimits: JSON.stringify(contrastLimits),
       optimizationScope:
-        context.optimizationScope === "global"
-          ? JSON.stringify({})
-          : JSON.stringify(makeBoundingBox(viewState)),
+        context.optimizationScope === "global",
       z: selections[0].z,
     };
     fetchUrl.search = new URLSearchParams(params).toString();

@@ -127,7 +127,6 @@ function ChannelColorDisplay(props) {
   const isFloat = dtype === "Float32" || dtype === "Float64";
   const step = max - min < 500 && isFloat ? (max - min) / 500 : 1;
 
-
   const handleSliderChange = (e, v) => {
     setPropertiesForChannel(ind, { contrastLimits: v });
   };
@@ -200,8 +199,6 @@ function ChannelColorDisplay(props) {
       colors,
       pyramidResolution
     );
-
-  
 
     context?.setPaletteLoss(paletteLoss);
 

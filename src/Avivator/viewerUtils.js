@@ -778,3 +778,43 @@ export async function optimizeInLens(channelData, contrastLimits) {
   });
   return psudoAnalysis.optimize_in_lens(allData, _colors, _contrastLimits);
 }
+
+export function savePastPalette(
+  colors,
+  channelsVisible,
+  contrastLimits,
+  selections,
+  viewState
+) {
+  let pastPalettes = JSON.parse(localStorage.getItem("pastPalettes") || "[]");
+  // Create unique id
+  let id = Math.random().toString(36).substring(2, 15);
+  let pastPalette = {
+    id: id,
+    colors: colors,
+    channelsVisible: channelsVisible,
+    contrastLimits: contrastLimits,
+    selections: selections,
+    viewState: viewState,
+  };
+  pastPalettes.push(pastPalette);
+  localStorage.setItem("pastPalettes", JSON.stringify(pastPalettes));
+  return pastPalettes;
+}
+
+export function getPastPalettes() {
+  let pastPalettes = JSON.parse(localStorage.getItem("pastPalettes") || "[]");
+  return pastPalettes;
+}
+
+export function deletePastPalette(id) {
+  let pastPalettes = JSON.parse(localStorage.getItem("pastPalettes") || "[]");
+  pastPalettes = pastPalettes.filter((d) => d.id != id);
+  localStorage.setItem("pastPalettes", JSON.stringify(pastPalettes));
+  return pastPalettes;
+}
+
+export function clearPastPalettes() {
+  localStorage.setItem("pastPalettes", JSON.stringify([]));
+  return [];
+}
