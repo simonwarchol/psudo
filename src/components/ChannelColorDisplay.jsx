@@ -184,7 +184,7 @@ function ChannelColorDisplay(props) {
     let ii = 0;
     for (const [i, visible] of (channelsVisible || []).entries()) {
       if (visible) {
-        let channelGraphData = context?.graphData[ii];
+        let channelGraphData = context?.graphData?.[ii] || {};
         channelGraphData.color = colors[i];
         tmpGraphData.push(channelGraphData);
         ii++;

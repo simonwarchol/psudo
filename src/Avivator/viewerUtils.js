@@ -467,18 +467,22 @@ export async function getGMMContrastLimits({
   selection,
   pyramidResolution,
 }) {
-  let raster = await loader?.[pyramidResolution]?.getRaster({
-    selection: selection,
-  });
-  console.log("raster", raster);
-  const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
-  const intContrastLimits = [
-    _.toInteger(conrastLimits[0]),
-    _.toInteger(conrastLimits[1]),
-  ];
-  delete raster.data;
-  console.log("contrastLimits", intContrastLimits);
-  return intContrastLimits;
+  try {
+    let raster = await loader?.[pyramidResolution]?.getRaster({
+      selection: selection,
+    });
+    console.log("raster", raster);
+    const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
+    const intContrastLimits = [
+      _.toInteger(conrastLimits[0]),
+      _.toInteger(conrastLimits[1]),
+    ];
+    delete raster.data;
+    console.log("contrastLimits", intContrastLimits);
+    return intContrastLimits;
+  } catch (e) {
+    return [0, 65535];
+  }
 }
 
 export function getChannelGraphData({ data, color, selection }) {

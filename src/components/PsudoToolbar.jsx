@@ -17,6 +17,7 @@ import {
   FormControlLabel,
   Radio,
   Button,
+  Slider,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import {
@@ -31,7 +32,7 @@ import {
   getGMMContrastLimits,
   createContiguousArrays,
   getChannelPayload,
-  getLensIntensityValues
+  getLensIntensityValues,
 } from "../Avivator/viewerUtils.js";
 import HistoryIcon from "@mui/icons-material/History";
 import PastPalettes from "./PastPalettes.jsx";
@@ -96,6 +97,16 @@ function PsudoToolbar() {
     ],
     shallow
   );
+
+  // function luminanceValueText(value) {
+  //   // round to 2 decimal places
+  //   console.log("val", value);
+  //   return `${(value / 100.0).toFixed(2)}`;
+  // }
+
+  const handleLuminanceChange = (event, newValue) => {
+    context.setLuminanceValue(newValue);
+  };
   useEffect(() => {
     setImageUrl(source?.urlOrFile);
   }, [source]);
@@ -212,7 +223,8 @@ function PsudoToolbar() {
     const channelsPayload = [];
     let payload;
     if (lensEnabled && context.optimizationScope == "lens") {
-      payload = await getLensIntensityValues(context?.coordinate,
+      payload = await getLensIntensityValues(
+        context?.coordinate,
         viewState,
         loader,
         pyramidResolution,
@@ -222,7 +234,7 @@ function PsudoToolbar() {
         setMovingLens,
         contrastLimits,
         colors
-      )
+      );
     } else {
     }
     payload = await getChannelPayload(
@@ -236,7 +248,7 @@ function PsudoToolbar() {
     );
 
     const { intensityArray, colorArray, contrastLimitsArray } =
-      createContiguousArrays(channelPayload);
+      createContiguousArrays(payload);
     console.log(
       "intensityArray",
       intensityArray,
@@ -254,11 +266,14 @@ function PsudoToolbar() {
       }
     }
 
+    console.log("LumVal", context.luminanceValue);
+
     const optColors = psudoAnalysis.optimize(
       colorArray,
       lockedList,
       intensityArray,
-      contrastLimitsArray
+      contrastLimitsArray,
+      context.luminanceValue
     );
     console.log("optColors", optColors);
     console.log("Colors Before", colors);
@@ -307,13 +322,13 @@ function PsudoToolbar() {
     <ThemeProvider theme={darkTheme}>
       <Grid
         container
-        sx={{ top: 0, left: 0, position: "absolute" }}
+        sx={{ top: 0, right: 0, position: "absolute" }}
         direction="column"
         justifyContent="flex-end"
         alignItems="start"
         // p={1}
       >
-        <Grid item sx={{ marginTop: 10, zIndex: 10000 }}>
+        <Grid item sx={{ marginTop: 20, zIndex: 10000 }}>
           <GaugeCharts
             paletteLoss={context?.paletteLoss}
             style={{ position: "relative", top: "50%", zIndex: 10000 }}
@@ -335,40 +350,14 @@ function PsudoToolbar() {
           container
           direction="column"
           sx={{ zIndex: 10000, display: "flex", alignItems: "center" }}
-        >
-          <Grid item>
-            <h1 className={"title-code color-gradient"}>psudo</h1>
-          </Grid>
-        </Grid>
+        ></Grid>
 
         <Grid
           container
           item
           xs={"auto"}
           sx={{ zIndex: 10000, display: "flex", alignItems: "flex-end" }} // Updated alignItems to 'flex-end'
-        >
-          <IconButton
-            id="history-button"
-            aria-controls={openHistory ? "basic-menu" : undefined}
-            aria-haspopup="true"
-            aria-expanded={openHistory ? "true" : undefined}
-            onClick={handleHistoryClick}
-          >
-            <HistoryIcon />
-          </IconButton>
-          <Menu
-            id="basic-menu"
-            anchorEl={anchorElHistory}
-            open={openHistory}
-            onClose={handleCloseHistory}
-            MenuListProps={{
-              "aria-labelledby": "basic-button",
-            }}
-            sx={{ marginTop: 4 }}
-          >
-            <PastPalettes />
-          </Menu>
-        </Grid>
+        ></Grid>
 
         <Grid item xs={"auto"} p={0} m={0} sx={{ zIndex: 10000 }}>
           <Grid
@@ -386,60 +375,24 @@ function PsudoToolbar() {
 
           <Footer />
         </Grid>
+        <Grid item sx={{ marginLeft: 20 }}>
+          <h1 className={"title-code color-gradient"}>psudo</h1>
+        </Grid>
       </Grid>
 
       <Grid
         container
-        sx={{ bottom: 0, left: 0, position: "absolute", zIndex: 100000 }}
+        sx={{
+          bottom: 0,
+          left: 0,
+          position: "absolute",
+          zIndex: 100000,
+          marginBottom: "10px",
+        }}
         direction="row"
-        justifyContent="space-between"
-        // alignItems="center"
+        justifyContent="start"
+        alignItems="center"
       >
-        {/* <Grid item xs={"auto"}>
-          <IconButton
-            id="source-button"
-            aria-controls={openSource ? "basic-menu" : undefined}
-            aria-haspopup="true"
-            aria-expanded={openSource ? "true" : undefined}
-            onClick={handleOverlapClick}
-          >
-            <JoinInnerIcon sx={{ fontSize: 40 }} />
-          </IconButton>
-          <Menu
-            id="basic-menu"
-            anchorEl={anchorElOverlap}
-            open={openOverlap}
-            onClose={handleCloseOverlap}
-            MenuListProps={{
-              "aria-labelledby": "basic-button",
-            }}
-          >
-            <Grid
-              container
-              direction="column"
-              justifyContent="center"
-              alignItems="center"
-              p={0}
-              m={0}
-            >
-              <Grid item p={0} m={0}>
-                <h4 style={{ margin: 0, padding: 0 }}>Channel Overlap</h4>
-              </Grid>
-
-              <Grid item p={0} m={0}>
-                <SingleChannelWrapper
-                  label={"Channel Overlap"}
-                  channelIndex={-1}
-                  width={128}
-                  height={128}
-                  absoluteScale={1}
-                  channelsVisible={channelsVisible}
-                ></SingleChannelWrapper>
-              </Grid>
-            </Grid>
-          </Menu>
-          <Footer />
-        </Grid> */}
         <Grid item xs={"auto"}>
           <IconButton id="overlap-button" onClick={toggleOverlapView}>
             {/* if context?.showOverlap, show at full opacity, otherwise at 0.5 opacity */}
@@ -469,7 +422,31 @@ function PsudoToolbar() {
             </Icon>
           </IconButton>
         </Grid>
-
+        <Grid item xs={"auto"}>
+          <IconButton
+            id="history-button"
+            aria-controls={openHistory ? "basic-menu" : undefined}
+            aria-haspopup="true"
+            aria-expanded={openHistory ? "true" : undefined}
+            onClick={handleHistoryClick}
+          >
+            <HistoryIcon />
+          </IconButton>
+          <Menu
+            id="basic-menu"
+            anchorEl={anchorElHistory}
+            open={openHistory}
+            onClose={handleCloseHistory}
+            MenuListProps={{
+              "aria-labelledby": "basic-button",
+            }}
+            sx={{ zIndex: 100000000000, marginTop: -10 }}
+          >
+            <PastPalettes />
+          </Menu>
+        </Grid>
+        {/* Fill max spac */}
+        <Grid item sx={{ flexGrow: 1 }}></Grid>
         <Grid item xs={"auto"}>
           {/* Increase size of icon */}
           <IconButton
@@ -492,7 +469,6 @@ function PsudoToolbar() {
             MenuListProps={{
               "aria-labelledby": "basic-button",
             }}
-            sx={{ zIndex: "100000000" }}
           >
             <Grid
               container
@@ -505,7 +481,21 @@ function PsudoToolbar() {
               <Grid item xs={12} p={1} sx={{ width: "100%" }}>
                 <ColorNameSelect label={"Excluded Colors"} multiSelect={true} />
               </Grid>
-
+              {/* Add a 0-1 slider called luminance range */}
+              <Grid item xs={12} p={1}>
+                <FormControl>
+                  <FormLabel id="optimization-scope-grouplabel">
+                    Luminance Range
+                  </FormLabel>
+                  <Slider
+                    getAriaLabel={() => "Luminance Range"}
+                    value={context.luminanceValue}
+                    onChange={handleLuminanceChange}
+                    valueLabelDisplay="auto"
+                    getAriaValueText={(value) => `${value}`}
+                  />
+                </FormControl>
+              </Grid>
               <Grid item xs={12} p={1}>
                 <FormControl>
                   <FormLabel id="optimization-scope-grouplabel">
@@ -547,9 +537,6 @@ function PsudoToolbar() {
         alignItems="center"
         p={1}
       >
-        {/* <Grid item xs={5} style={{ zIndex: 100 }} alignItems={"center"}>
-          <AddChannel />
-        </Grid> */}
         <Grid item xs={"auto"} style={{ zIndex: 100 }} alignItems={"center"}>
           <IconButton
             id="source-button"
@@ -648,6 +635,13 @@ function PsudoToolbar() {
             </Grid>
           </Menu>
         </Grid>
+
+        <Grid
+          item
+          xs={"auto"}
+          style={{ zIndex: 100 }}
+          alignItems={"center"}
+        ></Grid>
       </Grid>
     </ThemeProvider>
   );

@@ -159,7 +159,7 @@ const PastPalettes = (props) => {
           direction="column"
           m={1}
           //   p={1}
-          sx={{ height: "100%", width: "200px" }}
+          sx={{ height: "100%", width: "220px" }}
         >
           <Grid
             item
@@ -203,8 +203,8 @@ const PastPalettes = (props) => {
                             key={palette["id"] + "_" + index}
                             style={{
                               margin: "2px",
-                              width: "25px",
-                              height: "25px",
+                              width: "20px",
+                              height: "20px",
                               backgroundColor: `rgb(${palette["colors"][index][0]},${palette["colors"][index][1]},${palette["colors"][index][2]})`,
                               borderRadius: "5px",
                             }}

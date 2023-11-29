@@ -223,7 +223,7 @@ fn average_pairwise_euclidean_distance(matrix: &Array2<f64>) -> f64 {
     let len = matrix.nrows();
     let mut distance_sum = 0.0;
     let mut count = 0;
-
+    let mut min_dist = f64::MAX;
     for i in 0..len {
         for j in i + 1..len {
             // Bind the temporary ArrayView to variables so they live long enough
@@ -232,16 +232,14 @@ fn average_pairwise_euclidean_distance(matrix: &Array2<f64>) -> f64 {
             let a_slice = a_view.as_slice().unwrap();
             let b_slice = b_view.as_slice().unwrap();
 
-            distance_sum += euclidean_distance(a_slice, b_slice);
-            count += 1;
+            let this_dist = euclidean_distance(a_slice, b_slice);
+            if this_dist < min_dist {
+                min_dist = this_dist;
+            }
+            // count += 1;
         }
     }
-
-    if count > 0 {
-        distance_sum / (count as f64)
-    } else {
-        0.0
-    }
+    min_dist
 }
 
 fn color_conversion_test() -> () {
@@ -257,15 +255,21 @@ struct Loss {
     c3_instance: c3::C3,
     locked_colors: Vec<bool>,
     intensity_array: Array2<f32>,
+    luminance_values: Vec<f32>,
 }
 
 impl Loss {
-    pub fn new(locked_colors: Vec<bool>, intensity_array: Array2<f32>) -> Self {
+    pub fn new(
+        locked_colors: Vec<bool>,
+        intensity_array: Array2<f32>,
+        luminance_values: Vec<f32>
+    ) -> Self {
         Self {
             rng: Arc::new(Mutex::new(Xoshiro256PlusPlus::from_entropy())),
             locked_colors: locked_colors,
             c3_instance: c3::C3::new(),
             intensity_array: intensity_array,
+            luminance_values: luminance_values,
         }
     }
 }
@@ -347,8 +351,11 @@ impl Anneal for Loss {
                 param_n[idx] += val;
                 // Scale luminance between 0.5 and 1
                 if i == 0 {
-                    param_n[idx] = param_n[idx].clamp(-0.0, 1.0);
-                    // param_n[idx] = (param_n[idx] / 2.0 + 0.5).clamp(0.5, 1.0);
+                    // param_n[idx] = param_n[idx].clamp(-0.0, 1.0);
+                    param_n[idx] = param_n[idx].clamp(
+                        self.luminance_values[0],
+                        self.luminance_values[1]
+                    );
                 } else {
                     // Clamp the value to ensure it stays within bounds
                     param_n[idx] = param_n[idx].clamp(-0.4, 0.4);
@@ -362,13 +369,14 @@ impl Anneal for Loss {
 fn annealing(
     colors: &Vec<f32>,
     locked_colors: &Vec<bool>,
-    intensity_array: Array2<f32>
+    intensity_array: Array2<f32>,
+    luminance_values: &Vec<f32>
 ) -> Result<Vec<f32>, Error> {
     let solver = SimulatedAnnealing::new(15.0)?;
-    let cost_function = Loss::new(locked_colors.clone(), intensity_array);
+    let cost_function = Loss::new(locked_colors.clone(), intensity_array, luminance_values.clone());
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
-        .configure(|state| { state.param(colors.to_vec()).max_iters(10_000) })
+        .configure(|state| { state.param(colors.to_vec()).max_iters(3_000) })
         // Optional: Attach an observer
         .run()?;
     // Print result
@@ -382,10 +390,19 @@ pub fn optimize(
     colors: &[u16],
     locked_colors: &[u16],
     intensities: &[u16],
-    contrast_limits: &[u16]
+    contrast_limits: &[u16],
+    luminance_values: &[u16]
 ) -> Vec<f32> {
     utils::set_panic_hook();
     let now = instant::Instant::now();
+    // print luminance values
+    console::log_1(&format!("luminance_values: {:?}", luminance_values).into());
+
+    // Convert to float
+    let float_luminance_values: Vec<f32> = luminance_values
+        .iter()
+        .map(|&x| (x as f32) / 100.0)
+        .collect::<Vec<f32>>();
 
     let float_color_map: Vec<f32> = colors
         .iter()
@@ -410,7 +427,8 @@ pub fn optimize(
     let optimized_colors = annealing(
         &oklab_color_map,
         &locked_colors_vec,
-        intensity_array
+        intensity_array,
+        &float_luminance_values
     ).unwrap();
     let optimized_srgb = optimized_colors
         .chunks(3)
@@ -615,7 +633,7 @@ fn compute_confusion_loss(oklab_color_map: Vec<f32>, intensities_array_float: Ar
 
     let dataset = Dataset::new(intensities_array_float, mixed_array);
     let rmse = calculate_ols_msre(dataset);
-    console::log_1(&format!("rmse: {:?}", rmse).into());
+    // console::log_1(&format!("rmse: {:?}", rmse).into());
     rmse.unwrap()
 }
 
