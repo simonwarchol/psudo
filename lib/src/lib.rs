@@ -373,6 +373,9 @@ fn annealing(
     luminance_values: &Vec<f32>
 ) -> Result<Vec<f32>, Error> {
     let solver = SimulatedAnnealing::new(15.0)?;
+
+    //
+
     let cost_function = Loss::new(locked_colors.clone(), intensity_array, luminance_values.clone());
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
@@ -521,34 +524,34 @@ pub fn calculate_palette_loss(
     JsValue::from_serde(&loss).unwrap()
 }
 
-fn calculate_ols_mse(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::error::Error>> {
-    let num_targets = dataset.targets().dim().1;
-    let mut total_mse = 0.0;
+// fn calculate_ols_mse(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::error::Error>> {
+//     let num_targets = dataset.targets().dim().1;
+//     let mut total_mse = 0.0;
 
-    // Fit a model on each target individually
-    for i in 0..num_targets {
-        let target_column = dataset.targets().column(i).to_owned();
+//     // Fit a model on each target individually
+//     for i in 0..num_targets {
+//         let target_column = dataset.targets().column(i).to_owned();
 
-        let dataset_with_single_target = Dataset::new(
-            dataset.records().to_owned(),
-            target_column.clone()
-        );
-        let model = LinearRegression::new();
-        let fitted_model = model.fit(&dataset_with_single_target)?;
-        let predictions = fitted_model.predict(&dataset_with_single_target);
+//         let dataset_with_single_target = Dataset::new(
+//             dataset.records().to_owned(),
+//             target_column.clone()
+//         );
+//         let model = LinearRegression::new();
+//         let fitted_model = model.fit(&dataset_with_single_target)?;
+//         let predictions = fitted_model.predict(&dataset_with_single_target);
 
-        let mse = (predictions - target_column)
-            .mapv(|x| x.powi(2))
-            .mean()
-            .unwrap();
-        println!("mse: {:?}", mse);
-        total_mse += mse;
-    }
+//         let mse = (predictions - target_column)
+//             .mapv(|x| x.powi(2))
+//             .mean()
+//             .unwrap();
+//         println!("mse: {:?}", mse);
+//         total_mse += mse;
+//     }
 
-    // Calculate Avg MSE
-    let avg_mse = total_mse / (num_targets as f32);
-    Ok(avg_mse)
-}
+//     // Calculate Avg MSE
+//     let avg_mse = total_mse / (num_targets as f32);
+//     Ok(avg_mse)
+// }
 
 fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::error::Error>> {
     let num_targets = dataset.targets().dim().1;
@@ -577,9 +580,9 @@ fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::er
     // Calculate Avg MSE
     let avg_mse = total_mse / (num_targets as f32);
     // Take log of avg_mse
-    // let sqrt_mse = avg_mse.sqrt();
-    let cbrt_mse = avg_mse.cbrt();
-    Ok(cbrt_mse)
+    let sqrt_mse = avg_mse.sqrt() * 10.0;
+    // let cbrt_mse = avg_mse.cbrt();
+    Ok(sqrt_mse)
 }
 
 // #[wasm_bindgen]

@@ -96,11 +96,11 @@ const DEFAULT_IMAGE_STATE = {
   useFixedAxis: true,
 };
 
-// const filePath = "/exemplar-001.ome.tif";
-const filePath = "/Ch_8_Rand_2_512x512.ome.tif";
+const filePath = "/exemplar-001.ome.tif";
+// const filePath = "/Ch_8_Rand_2_512x512.ome.tif";
 const response = await fetch(filePath);
 const data = await response.blob();
-const fetchedFile = new File([data], "Ch_8_Rand_2_512x512.ome.tif", {
+const fetchedFile = new File([data], "exemplar-001.ome.tif", {
   type: "image/tiff",
 });
 
@@ -137,7 +137,6 @@ const DEFAULT_VIEWER_STATE = {
   //     "https://exemplar-001.s3.amazonaws.com/exemplar-001.ome.tif"
   //   ),
   // },
-  // pyramidResolution: 0,
   pyramidResolution: 0,
   // },
   // source: {},

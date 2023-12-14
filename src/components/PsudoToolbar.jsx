@@ -266,7 +266,7 @@ function PsudoToolbar() {
       }
     }
 
-    console.log("LumVal", context.luminanceValue);
+    // console.log("LumVal", context.luminanceValue);
 
     const optColors = psudoAnalysis.optimize(
       colorArray,

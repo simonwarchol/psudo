@@ -258,7 +258,6 @@ const LensLayer = class extends CompositeLayer {
     //     const colors = useChannelsStore.getState()?.colors;
 
     if (this.context.userData?.mainViewStateChanged) {
-      console.log("Setpal", this.context.userData?.paletteLoss);
       debouncedUpdateLensGraphValues(
         this.lensPosition,
         viewState,
@@ -938,22 +937,19 @@ class MinervaVivLensingDetailView extends VivView {
     const layers = [getImageLayer(id, props)];
 
     // Inspect the first pixel source for physical sizes
-    if (loader[0]?.meta?.physicalSizes?.x) {
-      const { size, unit } = loader[0].meta.physicalSizes.x;
-      layers.push(
-        new LensLayer({
-          id: getVivId(id),
-          loader,
-          unit,
-          size,
-          lensMousePosition: this.mousePosition,
-          lensRadius: this.lensRadius,
-          lensOpacity: this.lensOpacity,
-          overlapView: this.overlapView,
-          viewState: { ...layerViewState, height, width },
-        })
-      );
-    }
+    console.log("loader", loader, loader[0]?.meta?.physicalSizes?.x);
+
+    layers.push(
+      new LensLayer({
+        id: getVivId(id),
+        loader,
+        lensMousePosition: this.mousePosition,
+        lensRadius: this.lensRadius,
+        lensOpacity: this.lensOpacity,
+        overlapView: this.overlapView,
+        viewState: { ...layerViewState, height, width },
+      })
+    );
 
     return layers;
   }
