@@ -145,6 +145,7 @@ function ChannelColorDisplay(props) {
   const toggleVisibility = () => {
     let _tmpChannelsVisible = _.cloneDeep(channelsVisible);
     _tmpChannelsVisible[channelIndex] = !_tmpChannelsVisible[channelIndex];
+    console.log("_tmpChannelsVisible", _tmpChannelsVisible);
     useChannelsStore.setState({
       channelsVisible: _tmpChannelsVisible,
     });
@@ -236,6 +237,7 @@ function ChannelColorDisplay(props) {
       loader,
       selection,
       pyramidResolution,
+      channelVisible: channelsVisible[ind],
     }).then(({ domain, contrastLimits: newContrastLimit }) => {
       setPropertiesForChannel(ind, {
         contrastLimits: newContrastLimit,

@@ -59,10 +59,7 @@ const Viewer = (props) => {
       ],
       shallow
     );
-  if (showChannel || showChannel === 0) {
-    channelsVisible = channelsVisible.map(() => false);
-    channelsVisible[showChannel] = true;
-  }
+
   const { width, height } = props.dimensions;
   const allowNavigation = props?.allowNavigation || false;
   const loader = useLoader();
@@ -134,7 +131,11 @@ const Viewer = (props) => {
     loader,
     contrastLimits,
     colors,
-    channelsVisible,
+    channelsVisible:
+      showChannel || showChannel === 0
+        ? channelsVisible.map((_, i) => i === showChannel)
+        : channelsVisible,
+
     selections,
   };
   let detailView = null;
@@ -262,6 +263,7 @@ const Viewer = (props) => {
     );
     context?.setLensData(lensData);
     context?.setGraphData(graphData);
+
     let paletteLoss = await calculateLensPaletteLoss(
       lensData,
       context.luminanceValue

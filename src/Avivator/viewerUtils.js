@@ -368,7 +368,6 @@ export async function calculatePaletteLoss(
   );
   const { intensityArray, colorArray, contrastLimitsArray } =
     createContiguousArrays(channelsPayload);
-
   let paletteCost = psudoAnalysis.calculate_palette_loss(
     intensityArray,
     colorArray,
@@ -424,9 +423,10 @@ export async function calculateConfusionLoss(
 }
 
 export async function getSingleSelectionStats2D(
-  { loader, selection, pyramidResolution },
+  { loader, selection, pyramidResolution, channelVisible },
   computeStats = false
 ) {
+  console.trace('Simon')
   const data = Array.isArray(loader) ? loader[loader.length - 1] : loader;
   const raster = await data.getRaster({ selection });
   if (computeStats) {
@@ -434,11 +434,11 @@ export async function getSingleSelectionStats2D(
     const { domain, contrastLimits } = selectionStats;
     return { domain, contrastLimits };
   } else {
-    const contrastLimits = await getGMMContrastLimits({
+    const contrastLimits = channelVisible ? await getGMMContrastLimits({
       loader,
       selection,
       pyramidResolution,
-    });
+    }) : [0, 65535]
     // In the future do some logic to determine the dtype and return accordingly\
     return { domain: [0, 65535], contrastLimits: contrastLimits };
   }
@@ -453,10 +453,10 @@ export async function getGMMContrastLimits({
     let raster = await loader?.[pyramidResolution]?.getRaster({
       selection: selection,
     });
-    const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
+    const contrastLimits = psudoAnalysis.channel_gmm(raster.data);
     const intContrastLimits = [
-      _.toInteger(conrastLimits[0]),
-      _.toInteger(conrastLimits[1]),
+      _.toInteger(contrastLimits[0]),
+      _.toInteger(contrastLimits[1]),
     ];
     delete raster.data;
     return intContrastLimits;
@@ -532,19 +532,21 @@ export const getSingleSelectionStats = async ({
   loader,
   selection,
   pyramidResolution,
+  channelVisible
 }) => {
   const getStats = getSingleSelectionStats2D;
-  return getStats({ loader, selection, pyramidResolution });
+  return getStats({ loader, selection, pyramidResolution, channelVisible });
 };
 
 export const getMultiSelectionStats = async ({
   loader,
   selections,
   pyramidResolution,
+  channelsVisible
 }) => {
   const stats = await Promise.all(
-    selections.map((selection) =>
-      getSingleSelectionStats({ loader, selection, pyramidResolution })
+    selections.map((selection, i) =>
+      getSingleSelectionStats({ loader, selection, pyramidResolution, channelVisible: channelsVisible[i] })
     )
   );
   const domains = stats.map((stat) => stat.domain);

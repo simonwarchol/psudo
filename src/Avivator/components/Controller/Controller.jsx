@@ -102,7 +102,8 @@ const Controller = () => {
       getSingleSelectionStats({
         loader,
         selection,
-        pyramidResolution
+        pyramidResolution,
+        channelVisible: channelsVisible[i]
       }).then(({ domain, contrastLimits: newContrastLimit }) => {
         console.log("domain", domain, "contrastLimits", newContrastLimit);
         setPropertiesForChannel(i, {

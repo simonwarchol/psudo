@@ -45,6 +45,7 @@ const AddChannel = () => {
       loader,
       selection,
       pyramidResolution,
+      channelVisible: false,
     }).then(({ domain, contrastLimits }) => {
       console.log("domain", domain, "contrastLimits", contrastLimits);
       setPropertiesForChannel(numSelectionsBeforeAdd, {

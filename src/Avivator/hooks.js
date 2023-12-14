@@ -185,11 +185,9 @@ export const useImage = (source, history) => {
       const newSelections = buildDefaultSelection(loader[0]);
       const { Channels } = metadata.Pixels;
       let channelOptions = Channels.map((c, i) => c.Name ?? `Channel ${i}`);
-      // if (channelOptions?.length === 40) {
-      //     channelOptions = ['DNA0', 'HHLA2', 'CMA1', 'SOX10', 'DNA1', 'S100B', 'KERATIN', 'CD1A', 'DNA2', 'CD163', 'CD3D', 'C8A', 'DNA3', 'MITF', 'FOXP3', 'PDL1', 'DNA4', 'KI67', 'LAG3', 'TIM3', 'DNA5', 'PCNA', 'pSTAT1', 'cPARP', 'DNA6', 'SNAIL', 'aSMA', 'HLADPB1', 'DNA8', 'S100A', 'CD11C', 'PD1', 'DNA9', 'LDH', 'PANCK', 'CCNA2', 'DNA10', 'CCND1', 'CD63', 'CD31']
-      // } else if (channelOptions?.length === 12) {
-      //     channelOptions = ['DNA_6', 'ELANE', 'CD57', 'CD45', 'DNA_7', 'CD11B', 'SMA', 'CD16', 'DNA_8', 'ECAD', 'FOXP3', 'NCAM']
-      // }
+      let channelsVisible = channelOptions.map((d, i) => {
+        return i < 3;
+      });
       // Default RGB.
       let newContrastLimits = [];
       let newDomains = [];
@@ -227,6 +225,7 @@ export const useImage = (source, history) => {
           loader,
           selections: newSelections,
           pyramidResolution,
+          channelsVisible
         });
 
         newDomains = stats.domains;
@@ -250,9 +249,7 @@ export const useImage = (source, history) => {
         contrastLimits: newContrastLimits,
         colors: newColors,
         prevColors: newColors,
-        channelsVisible: channelOptions.map((d, i) => {
-          return i < 3;
-        }),
+        channelsVisible
       });
       useViewerStore.setState({
         isChannelLoading: newSelections.map((i) => !i),

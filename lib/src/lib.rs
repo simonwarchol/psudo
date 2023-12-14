@@ -510,10 +510,14 @@ pub fn calculate_palette_loss(
     contrast_limits: &[u16],
     luminance_values: &[u16]
 ) -> JsValue {
+    // Log all values
     let float_color_map: Vec<f32> = colors
         .iter()
         .map(|&x| (x as f32) / 255.0)
         .collect::<Vec<f32>>();
+
+    console::log_1(&format!("coly: {:?}", colors).into());
+
     // Convert to Oklab
 
     let float_luminance_values: Vec<f32> = luminance_values
@@ -531,6 +535,9 @@ pub fn calculate_palette_loss(
         .flatten()
         .collect::<Vec<f32>>();
     let mut loss: HashMap<String, f32> = annealing_cost(&oklab_color_map).unwrap();
+    console::log_1(&format!("loss: {:?}", loss).into());
+    console::log_1(&format!("oklab_color_map: {:?}", oklab_color_map).into());
+
     let confusion = optimize_for_confusion(
         intensities,
         colors,

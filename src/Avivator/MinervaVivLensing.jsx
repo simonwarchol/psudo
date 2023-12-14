@@ -101,6 +101,7 @@ const updateLensGraphValues = async (
   );
 
   setGraphData(graphData);
+  console.log("b");
   let paletteLoss = await calculateLensPaletteLoss(channelData, luminanceValue);
   setPaletteLoss(paletteLoss);
 };
@@ -826,13 +827,13 @@ const LensLayer = class extends CompositeLayer {
             let thisChannelsData = channelData.filter((d) => {
               return _.isEqual(d.selection, selection);
             })[0];
-            const conrastLimits = psudoAnalysis.channel_gmm(
+            const contrastLimits = psudoAnalysis.channel_gmm(
               thisChannelsData.data
             );
 
             const intContrastLimits = [
-              _.toInteger(conrastLimits[0]),
-              _.toInteger(conrastLimits[1]),
+              _.toInteger(contrastLimits[0]),
+              _.toInteger(contrastLimits[1]),
             ];
             useChannelsStore.getState()?.setPropertiesForChannel(i, {
               contrastLimits: intContrastLimits,
@@ -847,12 +848,12 @@ const LensLayer = class extends CompositeLayer {
             let thisChannelsData = channelData.filter((d) => {
               return _.isEqual(d.selection, selection);
             })[0];
-            const conrastLimits = psudoAnalysis.channel_gmm(
+            const contrastLimits = psudoAnalysis.channel_gmm(
               thisChannelsData.data
             );
             const intContrastLimits = [
-              _.toInteger(conrastLimits[0]),
-              _.toInteger(conrastLimits[1]),
+              _.toInteger(contrastLimits[0]),
+              _.toInteger(contrastLimits[1]),
             ];
             useChannelsStore.getState()?.setPropertiesForChannel(i, {
               contrastLimits: intContrastLimits,
