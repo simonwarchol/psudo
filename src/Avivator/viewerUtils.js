@@ -226,7 +226,6 @@ export function isInterleaved(shape) {
  */
 export function buildDefaultSelection(pixelSource) {
   const numChannels = pixelSource.shape[pixelSource.shape.length - 3];
-  console.log("pixelSource", pixelSource, numChannels);
   let selection = [];
   const globalSelection = getDefaultGlobalSelection(pixelSource);
   // First non-global dimension with some sort of selectable values.
@@ -235,7 +234,6 @@ export function buildDefaultSelection(pixelSource) {
     .map((name, i) => ({ name, size: pixelSource.shape[i] }))
     .find((d) => !GLOBAL_SLIDER_DIMENSION_FIELDS.includes(d.name) && d.size);
 
-  console.log("fng", firstNonGlobalDimension);
 
   for (let i = 0; i < Math.min(6, firstNonGlobalDimension.size); i += 1) {
     selection.push({
@@ -337,23 +335,16 @@ export function createContiguousArrays(channelList) {
   return { intensityArray, colorArray, contrastLimitsArray };
 }
 
-export async function calculateLensPaletteLoss(channelsPayload) {
-  console.log("lensPayload", channelsPayload);
+export async function calculateLensPaletteLoss(channelsPayload, luminanceValue) {
   const { intensityArray, colorArray, contrastLimitsArray } =
     createContiguousArrays(channelsPayload);
-  console.log(
-    "lensintensityArray",
-    intensityArray,
-    colorArray,
-    contrastLimitsArray
-  );
   if (intensityArray.length == 0) return null;
   let paletteCost = psudoAnalysis.calculate_palette_loss(
     intensityArray,
     colorArray,
-    contrastLimitsArray
+    contrastLimitsArray,
+    luminanceValue
   );
-  console.log("paletteCost", paletteCost);
   return paletteCost;
 }
 
@@ -363,7 +354,8 @@ export async function calculatePaletteLoss(
   selections,
   contrastLimits,
   colors,
-  pyramidResolution
+  pyramidResolution,
+  luminanceValue
 ) {
   const channelsPayload = await getChannelPayload(
     channelsVisible,
@@ -374,21 +366,15 @@ export async function calculatePaletteLoss(
     pyramidResolution,
     10000
   );
-  console.log("channelsPayload", channelsPayload);
   const { intensityArray, colorArray, contrastLimitsArray } =
     createContiguousArrays(channelsPayload);
-  console.log(
-    "intensityArray",
-    intensityArray,
-    colorArray,
-    contrastLimitsArray
-  );
+
   let paletteCost = psudoAnalysis.calculate_palette_loss(
     intensityArray,
     colorArray,
-    contrastLimitsArray
+    contrastLimitsArray,
+    luminanceValue
   );
-  console.log("paletteCost", paletteCost);
   return paletteCost;
 }
 
@@ -414,9 +400,7 @@ export async function calculateConfusionLoss(
   let colorList = [];
   // create a uint16array of length len(channelsPayload) * subsample_size
   const rasterArray = new Uint16Array(subsampleSize * channelsPayload.length);
-  console.log("channelsPayload", channelsPayload);
 
-  // await Promise.all(
   //   channelsPayload.map(async (d, i) => {
   //     colorList.push(...d.color);
   //     // const resolution = pyramidResolution;
@@ -456,8 +440,6 @@ export async function getSingleSelectionStats2D(
       pyramidResolution,
     });
     // In the future do some logic to determine the dtype and return accordingly\
-    console.log("Selection", selection);
-    // return { domain: [0, 65535], contrastLimits: [0, 65535] };
     return { domain: [0, 65535], contrastLimits: contrastLimits };
   }
 }
@@ -471,14 +453,12 @@ export async function getGMMContrastLimits({
     let raster = await loader?.[pyramidResolution]?.getRaster({
       selection: selection,
     });
-    console.log("raster", raster);
     const conrastLimits = psudoAnalysis.channel_gmm(raster.data);
     const intContrastLimits = [
       _.toInteger(conrastLimits[0]),
       _.toInteger(conrastLimits[1]),
     ];
     delete raster.data;
-    console.log("contrastLimits", intContrastLimits);
     return intContrastLimits;
   } catch (e) {
     return [0, 65535];
@@ -703,7 +683,6 @@ export async function getLensIntensityValues(
       : y + sizeAtPyramidLevel
   );
   // get viewport
-  // console.log("range", xMin, xMax, yMin, yMax, shapeAtThisLevel);
   // Calculate the indices of the tiles
   const xMinIndex = Math.floor(xMin / tileSizeAtThisLevel[0]);
   const xMaxIndex = Math.ceil(xMax / tileSizeAtThisLevel[0]) - 1; // we subtract 1 because we want the index of the last tile, not the count
@@ -768,7 +747,6 @@ export async function getLensIntensityValues(
 
 export async function optimizeInLens(channelData, contrastLimits) {
   let totalLength = 0;
-  console.log("cd", channelData);
   channelData.forEach((d) => {
     totalLength += d.data.length;
   });

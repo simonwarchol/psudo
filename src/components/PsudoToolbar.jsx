@@ -273,7 +273,7 @@ function PsudoToolbar() {
       lockedList,
       intensityArray,
       contrastLimitsArray,
-      context.luminanceValue
+      context?.luminanceValue
     );
     console.log("optColors", optColors);
     console.log("Colors Before", colors);
@@ -307,7 +307,8 @@ function PsudoToolbar() {
       selections,
       contrastLimits,
       colors,
-      pyramidResolution
+      pyramidResolution,
+      context?.luminanceValue
     );
 
     context?.setPaletteLoss(paletteLoss);
@@ -489,7 +490,7 @@ function PsudoToolbar() {
                   </FormLabel>
                   <Slider
                     getAriaLabel={() => "Luminance Range"}
-                    value={context.luminanceValue}
+                    value={context?.luminanceValue}
                     onChange={handleLuminanceChange}
                     valueLabelDisplay="auto"
                     getAriaValueText={(value) => `${value}`}

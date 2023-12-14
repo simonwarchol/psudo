@@ -1,40 +1,17 @@
 import React, { Fragment, useContext, useEffect, useState } from "react";
 import { AppContext } from "../context/GlobalContext.jsx";
-import PerfectScrollbar from "react-perfect-scrollbar";
 import "react-perfect-scrollbar/dist/css/styles.css";
 
-import {
-  Button,
-  FormControlLabel,
-  FormLabel,
-  Grid,
-  InputLabel,
-  Menu,
-  MenuItem,
-  Paper,
-  Radio,
-  RadioGroup,
-  Select,
-} from "@mui/material";
+import { Grid } from "@mui/material";
 import _ from "lodash";
-import {
-  useChannelsStore,
-  useImageSettingsStore,
-  useLoader,
-  useViewerStore,
-} from "./state.js";
+import { useChannelsStore, useLoader, useViewerStore } from "./state.js";
 import shallow from "zustand/shallow";
 import MiniAvivator from "./MiniAvivator.jsx";
 import ChannelColorDisplay from "../components/ChannelColorDisplay.jsx";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { makeBoundingBox } from "@vivjs/layers";
-import FormControl from "@mui/material/FormControl";
 import { GLOBAL_SLIDER_DIMENSION_FIELDS } from "./constants.js";
 import GlobalSelectionSlider from "./components/Controller/components/GlobalSelectionSlider.jsx";
-import AddChannel from "./components/Controller/components/AddChannel.jsx";
-import ChannelList from "../components/ChannelList.jsx";
-import LayersIcon from "@mui/icons-material/Layers";
-import * as psudoAnalysis from "psudo-analysis";
 
 // import lodash
 function IndividualChannelsWrapper() {
@@ -121,8 +98,7 @@ function IndividualChannelsWrapper() {
       colorSpace: colorSpace,
       colors,
       contrastLimits: JSON.stringify(contrastLimits),
-      optimizationScope:
-        context.optimizationScope === "global",
+      optimizationScope: context.optimizationScope === "global",
       z: selections[0].z,
     };
     fetchUrl.search = new URLSearchParams(params).toString();

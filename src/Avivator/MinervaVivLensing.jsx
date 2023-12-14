@@ -76,7 +76,8 @@ const updateLensGraphValues = async (
   colors,
   lensSelection,
   setGraphData,
-  setPaletteLoss
+  setPaletteLoss,
+  luminanceValue
 ) => {
   const channelData = await getLensIntensityValues(
     coordinate,
@@ -100,8 +101,7 @@ const updateLensGraphValues = async (
   );
 
   setGraphData(graphData);
-  console.log("getLensIntensityValues", channelData);
-  let paletteLoss = await calculateLensPaletteLoss(channelData);
+  let paletteLoss = await calculateLensPaletteLoss(channelData, luminanceValue);
   setPaletteLoss(paletteLoss);
 };
 
@@ -270,7 +270,8 @@ const LensLayer = class extends CompositeLayer {
         useChannelsStore.getState()?.colors,
         lensSelection,
         this.context.userData?.setGraphData,
-        this.context.userData?.setPaletteLoss
+        this.context.userData?.setPaletteLoss,
+        this.context.userData?.luminanceValue
       );
       this.context.userData.setMainViewStateChanged(false);
     }
@@ -687,7 +688,6 @@ const LensLayer = class extends CompositeLayer {
           widthScale: 20,
           widthMinPixels: 2,
           getPath: (d) => {
-            console.log("ddddd", graphD);
             let multiplier = 1 / Math.pow(2, viewState.zoom);
             const resizeRadius = 20 * multiplier;
             const lensRadius = this.context.userData.lensRadius;
@@ -741,14 +741,12 @@ const LensLayer = class extends CompositeLayer {
     ];
   }
   onDrag(pickingInfo, event) {
-    // console.log("Drag", pickingInfo?.sourceLayer?.id);
     const { viewState } = this.props;
     this.context.userData.setMovingLens(true);
     // this.context.userData.setGraphData([]);
 
     if (pickingInfo?.sourceLayer?.id === `resize-circle-${this.props.id}`) {
       const lensCenter = this.context.userData.mousePosition;
-      // console.log("lensCenter", lensCenter, "event", event.offsetCenter);
       const xIntercept =
         (lensCenter[0] -
           lensCenter[1] +
@@ -767,7 +765,6 @@ const LensLayer = class extends CompositeLayer {
     } else if (
       pickingInfo?.sourceLayer?.id === `opacity-layer-${this.props.id}`
     ) {
-      // console.log("Opacity");
       const lensCenter = this.context.userData.mousePosition;
       const angle = Math.atan2(
         lensCenter[1] - event.offsetCenter.y,
@@ -789,7 +786,6 @@ const LensLayer = class extends CompositeLayer {
       pickingInfo?.sourceLayer?.id === `contrast-circle-${this.props.id}`
     ) {
     } else {
-      // console.log("pickingInfo", pickingInfo.sourceLayer.id);
       this.context.userData.setMousePosition([
         event.offsetCenter.x,
         event.offsetCenter.y,
@@ -830,7 +826,6 @@ const LensLayer = class extends CompositeLayer {
             let thisChannelsData = channelData.filter((d) => {
               return _.isEqual(d.selection, selection);
             })[0];
-            console.log("thisChannelsData", thisChannelsData);
             const conrastLimits = psudoAnalysis.channel_gmm(
               thisChannelsData.data
             );
@@ -852,7 +847,6 @@ const LensLayer = class extends CompositeLayer {
             let thisChannelsData = channelData.filter((d) => {
               return _.isEqual(d.selection, selection);
             })[0];
-            console.log("thisChannelsData", thisChannelsData);
             const conrastLimits = psudoAnalysis.channel_gmm(
               thisChannelsData.data
             );
@@ -885,9 +879,7 @@ const LensLayer = class extends CompositeLayer {
         useChannelsStore.getState()?.contrastLimits,
         useChannelsStore.getState()?.colors
       );
-      console.log("channelData", channelData);
       let opt = await optimizeInLens(channelData);
-      console.log("opt", opt);
     } else if (
       pickingInfo?.sourceLayer?.id == `resize-circle-${this.props.id}`
     ) {
@@ -898,7 +890,6 @@ const LensLayer = class extends CompositeLayer {
     const { viewState } = this.props;
     const { loader } = this.props;
     const coordinate = pickingInfo?.coordinate;
-    console.log("coordinate", coordinate);
     this.context.userData.setCoordinate(coordinate);
     this.context.userData.setMovingLens(false);
     const lensSelection = useImageSettingsStore.getState()?.lensSelection;
@@ -915,7 +906,8 @@ const LensLayer = class extends CompositeLayer {
       colors,
       lensSelection,
       this.context.userData?.setGraphData,
-      this.context.userData?.setPaletteLoss
+      this.context.userData?.setPaletteLoss,
+      this.context.userData?.luminanceValue
     );
   }
 };
@@ -937,8 +929,6 @@ class MinervaVivLensingDetailView extends VivView {
     const layers = [getImageLayer(id, props)];
 
     // Inspect the first pixel source for physical sizes
-    console.log("loader", loader, loader[0]?.meta?.physicalSizes?.x);
-
     layers.push(
       new LensLayer({
         id: getVivId(id),

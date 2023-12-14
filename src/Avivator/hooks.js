@@ -49,7 +49,7 @@ export const useImage = (source, history) => {
   const metadata = useMetadata();
   const context = useContext(AppContext);
 
-  useEffect(() => {}, [colormap]);
+  useEffect(() => { }, [colormap]);
 
   const getGlobalGraphData = async (
     channelsVisible,
@@ -60,7 +60,6 @@ export const useImage = (source, history) => {
     let graphData = [];
     for (const [i, visible] of (channelsVisible || []).entries()) {
       if (visible) {
-        console.log("loader", loader, selections);
         let raster = await loader?.[_.size(loader) - 1]?.getRaster({
           selection: selections[i],
         });
@@ -72,7 +71,6 @@ export const useImage = (source, history) => {
         graphData.push(channelGraphData);
       }
     }
-    console.log("Graph Data", graphData);
     context?.setGraphData(graphData);
   };
 
@@ -90,16 +88,14 @@ export const useImage = (source, history) => {
       selections,
       contrastLimits,
       colors,
-      pyramidResolution
+      pyramidResolution,
+      context?.luminanceValue
     );
-    console.log("Palette Loss 1", paletteLoss);
-
     context?.setPaletteLoss(paletteLoss);
   };
 
   useEffect(() => {
     if (_.isEmpty(channelsVisible) || !loader || _.isEmpty(selections)) return;
-    console.log("CV", channelsVisible, colors);
     getGlobalGraphData(channelsVisible, loader, selections, colors);
     getPaletteLoss(
       channelsVisible,
@@ -188,7 +184,6 @@ export const useImage = (source, history) => {
       useViewerStore.setState({ isViewerLoading: true });
       const newSelections = buildDefaultSelection(loader[0]);
       const { Channels } = metadata.Pixels;
-      console.log("Channels: ", Channels);
       let channelOptions = Channels.map((c, i) => c.Name ?? `Channel ${i}`);
       // if (channelOptions?.length === 40) {
       //     channelOptions = ['DNA0', 'HHLA2', 'CMA1', 'SOX10', 'DNA1', 'S100B', 'KERATIN', 'CD1A', 'DNA2', 'CD163', 'CD3D', 'C8A', 'DNA3', 'MITF', 'FOXP3', 'PDL1', 'DNA4', 'KI67', 'LAG3', 'TIM3', 'DNA5', 'PCNA', 'pSTAT1', 'cPARP', 'DNA6', 'SNAIL', 'aSMA', 'HLADPB1', 'DNA8', 'S100A', 'CD11C', 'PD1', 'DNA9', 'LDH', 'PANCK', 'CCNA2', 'DNA10', 'CCND1', 'CD63', 'CD31']

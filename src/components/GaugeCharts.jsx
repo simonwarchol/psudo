@@ -24,11 +24,11 @@ const GaugeCharts = () => {
       let nameDist = 1 - (context?.paletteLoss?.name_distance || 0) * -1;
       let perceptDist =
         1 - (context?.paletteLoss?.perceptural_distance || 0) * -1;
-      let conf = 1 - (context?.paletteLoss?.confusion || 0) * -1;
+      let conf = (context?.paletteLoss?.confusion || 0) * -1;
       setNameDistance(nameDist);
       setPerceptualDistance(perceptDist);
       setConfusion(conf);
-      setOverallLoss(nameDist + perceptDist + conf);
+      setOverallLoss(nameDist + perceptDist + 0.1 * conf);
     }
   }, [context.paletteLoss]);
 

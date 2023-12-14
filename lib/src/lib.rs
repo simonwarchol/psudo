@@ -219,7 +219,7 @@ fn euclidean_distance(a: &[f64], b: &[f64]) -> f64 {
         .sqrt()
 }
 
-fn average_pairwise_euclidean_distance(matrix: &Array2<f64>) -> f64 {
+fn min_euclidean_distance(matrix: &Array2<f64>) -> f64 {
     let len = matrix.nrows();
     let mut distance_sum = 0.0;
     let mut count = 0;
@@ -242,13 +242,6 @@ fn average_pairwise_euclidean_distance(matrix: &Array2<f64>) -> f64 {
     min_dist
 }
 
-fn color_conversion_test() -> () {
-    let my_rgb = Srgb::new(0.1, 0.0, 0.0);
-
-    let mut my_okl = Oklab::from_color(my_rgb);
-    println!("my_okl: {:?}", my_okl.l);
-}
-
 // ///////////////////////////////////////// Optimization /////////////////////////////////////
 struct Loss {
     rng: Arc<Mutex<Xoshiro256PlusPlus>>,
@@ -256,13 +249,15 @@ struct Loss {
     locked_colors: Vec<bool>,
     intensity_array: Array2<f32>,
     luminance_values: Vec<f32>,
+    avg_confusion: f32,
 }
 
 impl Loss {
     pub fn new(
         locked_colors: Vec<bool>,
         intensity_array: Array2<f32>,
-        luminance_values: Vec<f32>
+        luminance_values: Vec<f32>,
+        avg_confusion: f32
     ) -> Self {
         Self {
             rng: Arc::new(Mutex::new(Xoshiro256PlusPlus::from_entropy())),
@@ -270,6 +265,7 @@ impl Loss {
             c3_instance: c3::C3::new(),
             intensity_array: intensity_array,
             luminance_values: luminance_values,
+            avg_confusion: avg_confusion,
         }
     }
 }
@@ -316,15 +312,17 @@ impl CostFunction for Loss {
             }
         }
         let average_cosine_distance = total_distance / (total_pairs as f64);
-        let avergae_euc_distance = average_pairwise_euclidean_distance(&oklab_palette);
+        let min_euclidean_distance = min_euclidean_distance(&oklab_palette);
         let confusion_loss = compute_confusion_loss(
             oklab_colors.to_vec(),
-            self.intensity_array.clone()
+            self.intensity_array.clone(),
+            self.avg_confusion
         );
+
         Ok(
             (-average_cosine_distance as f32) +
-                -2.0 * (avergae_euc_distance as f32) +
-                (-confusion_loss as f32)
+                (-min_euclidean_distance as f32) +
+                0.1 * (confusion_loss as f32)
         )
     }
 }
@@ -375,8 +373,18 @@ fn annealing(
     let solver = SimulatedAnnealing::new(15.0)?;
 
     //
+    let average_confusion = calculate_average_confusion(
+        luminance_values,
+        colors,
+        intensity_array.clone()
+    );
 
-    let cost_function = Loss::new(locked_colors.clone(), intensity_array, luminance_values.clone());
+    let cost_function = Loss::new(
+        locked_colors.clone(),
+        intensity_array,
+        luminance_values.clone(),
+        average_confusion
+    );
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
         .configure(|state| { state.param(colors.to_vec()).max_iters(3_000) })
@@ -488,12 +496,10 @@ fn annealing_cost(param: &Vec<f32>) -> Result<HashMap<String, f32>, Error> {
     }
 
     let average_cosine_distance = total_distance / (total_pairs as f64);
-    console::log_1(&format!("average_cosine_distance: {:?}", average_cosine_distance).into());
-    let avergae_euc_distance = average_pairwise_euclidean_distance(&oklab_palette);
+    let min_euclidean_distance = min_euclidean_distance(&oklab_palette);
     let mut loss_components = HashMap::new();
     loss_components.insert("name_distance".to_string(), -average_cosine_distance as f32);
-    loss_components.insert("perceptural_distance".to_string(), -avergae_euc_distance as f32);
-
+    loss_components.insert("perceptural_distance".to_string(), -min_euclidean_distance as f32);
     Ok(loss_components)
 }
 
@@ -501,13 +507,19 @@ fn annealing_cost(param: &Vec<f32>) -> Result<HashMap<String, f32>, Error> {
 pub fn calculate_palette_loss(
     intensities: &[u16],
     colors: &[u16],
-    contrast_limits: &[u16]
+    contrast_limits: &[u16],
+    luminance_values: &[u16]
 ) -> JsValue {
     let float_color_map: Vec<f32> = colors
         .iter()
         .map(|&x| (x as f32) / 255.0)
         .collect::<Vec<f32>>();
     // Convert to Oklab
+
+    let float_luminance_values: Vec<f32> = luminance_values
+        .iter()
+        .map(|&x| (x as f32) / 100.0)
+        .collect::<Vec<f32>>();
 
     let oklab_color_map: Vec<f32> = float_color_map
         .chunks(3)
@@ -519,39 +531,15 @@ pub fn calculate_palette_loss(
         .flatten()
         .collect::<Vec<f32>>();
     let mut loss: HashMap<String, f32> = annealing_cost(&oklab_color_map).unwrap();
-    let confusion = optimize_for_confusion(intensities, colors, contrast_limits);
+    let confusion = optimize_for_confusion(
+        intensities,
+        colors,
+        contrast_limits,
+        &float_luminance_values
+    );
     loss.insert("confusion".to_string(), confusion - (1.0 as f32));
     JsValue::from_serde(&loss).unwrap()
 }
-
-// fn calculate_ols_mse(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::error::Error>> {
-//     let num_targets = dataset.targets().dim().1;
-//     let mut total_mse = 0.0;
-
-//     // Fit a model on each target individually
-//     for i in 0..num_targets {
-//         let target_column = dataset.targets().column(i).to_owned();
-
-//         let dataset_with_single_target = Dataset::new(
-//             dataset.records().to_owned(),
-//             target_column.clone()
-//         );
-//         let model = LinearRegression::new();
-//         let fitted_model = model.fit(&dataset_with_single_target)?;
-//         let predictions = fitted_model.predict(&dataset_with_single_target);
-
-//         let mse = (predictions - target_column)
-//             .mapv(|x| x.powi(2))
-//             .mean()
-//             .unwrap();
-//         println!("mse: {:?}", mse);
-//         total_mse += mse;
-//     }
-
-//     // Calculate Avg MSE
-//     let avg_mse = total_mse / (num_targets as f32);
-//     Ok(avg_mse)
-// }
 
 fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::error::Error>> {
     let num_targets = dataset.targets().dim().1;
@@ -585,24 +573,11 @@ fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::er
     Ok(sqrt_mse)
 }
 
-// #[wasm_bindgen]
-// pub fn test_ols() -> f32 {
-//     let iris_dataset = linfa_datasets::iris();
-//     let targets = iris_dataset.targets();
-//     let mut one_hot_targets = Array2::zeros((targets.len(), 3));
-//     for (i, target) in targets.iter().enumerate() {
-//         one_hot_targets[(i, *target as usize)] = 1.0;
-//     }
-
-//     // Create a dataset with owned records and targets
-//     let dataset = Dataset::new(iris_dataset.records().to_owned(), one_hot_targets);
-
-//     let avg_mse = calculate_ols_mse(dataset);
-//     console::log_1(&format!("avg_mse: {:?}", avg_mse).into());
-//     avg_mse.unwrap() as f32
-// }
-
-fn compute_confusion_loss(oklab_color_map: Vec<f32>, intensities_array_float: Array2<f32>) -> f32 {
+fn compute_confusion_loss(
+    oklab_color_map: Vec<f32>,
+    intensities_array_float: Array2<f32>,
+    avg_confusion: f32
+) -> f32 {
     let num_channels = intensities_array_float.shape()[1];
     let num_rows = intensities_array_float.shape()[0];
     // Psudocolor each channel by applying the color ramp
@@ -637,10 +612,45 @@ fn compute_confusion_loss(oklab_color_map: Vec<f32>, intensities_array_float: Ar
     let dataset = Dataset::new(intensities_array_float, mixed_array);
     let rmse = calculate_ols_msre(dataset);
     // console::log_1(&format!("rmse: {:?}", rmse).into());
-    rmse.unwrap()
+    rmse.unwrap() / avg_confusion
 }
 
-fn optimize_for_confusion(intensities: &[u16], colors: &[u16], contrast_limits: &[u16]) -> f32 {
+fn calculate_average_confusion(
+    luminance_values: &Vec<f32>,
+    colors: &Vec<f32>,
+    intensities_array_float: Array2<f32>
+) -> f32 {
+    let mut rng = thread_rng();
+    let mut total_confusion = 0.0;
+    let mut num_samples = 0;
+    for _ in 0..100 {
+        let mut random_colors = Vec::new();
+        for color in colors.chunks(3) {
+            for (i, &val) in color.iter().enumerate() {
+                let val = if i == 0 {
+                    rng.gen_range(luminance_values[0]..luminance_values[1])
+                } else {
+                    rng.gen_range(-0.4..0.4)
+                };
+                random_colors.push(val);
+            }
+        }
+        let confusion = compute_confusion_loss(random_colors, intensities_array_float.clone(), 1.0);
+        total_confusion += confusion;
+        num_samples += 1;
+    }
+    let avg_confusion = total_confusion / (num_samples as f32);
+    console::log_1(&format!("luminance_values: {:?}", luminance_values).into());
+    console::log_1(&format!("avg_confusion: {:?}", avg_confusion).into());
+    avg_confusion
+}
+
+fn optimize_for_confusion(
+    intensities: &[u16],
+    colors: &[u16],
+    contrast_limits: &[u16],
+    float_luminance_values: &Vec<f32>
+) -> f32 {
     let num_channels = colors.len() / 3;
     let mut num_rows = intensities.len() / num_channels;
     let intensities_array_float: Array2<f32> = preprocess_data(
@@ -667,13 +677,29 @@ fn optimize_for_confusion(intensities: &[u16], colors: &[u16], contrast_limits: 
         .flatten()
         .collect::<Vec<f32>>();
     println!("color_map: {:?}", oklab_color_map);
+    let avg_confusion: f32 = calculate_average_confusion(
+        float_luminance_values,
+        &oklab_color_map,
+        intensities_array_float.clone()
+    );
 
-    let rmse = compute_confusion_loss(oklab_color_map, intensities_array_float);
+    let rmse = compute_confusion_loss(oklab_color_map, intensities_array_float, avg_confusion);
     rmse
 }
 
 #[wasm_bindgen]
-pub fn optimize_in_lens(intensities: &[u16], colors: &[u16], contrast_limits: &[u16]) -> f32 {
+pub fn optimize_in_lens(
+    intensities: &[u16],
+    colors: &[u16],
+    contrast_limits: &[u16],
+    luminance_values: &[u16]
+) -> f32 {
     // console log colors
-    optimize_for_confusion(intensities, colors, contrast_limits)
+
+    let float_luminance_values: Vec<f32> = luminance_values
+        .iter()
+        .map(|&x| (x as f32) / 100.0)
+        .collect::<Vec<f32>>();
+
+    optimize_for_confusion(intensities, colors, contrast_limits, &float_luminance_values)
 }

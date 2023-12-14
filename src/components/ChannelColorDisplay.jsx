@@ -35,7 +35,6 @@ import {
   calculatePaletteLoss,
   calculateConfusionLoss,
 } from "../Avivator/viewerUtils.js";
-import * as psudoAnalysis from "psudo-analysis";
 
 // import lodash
 function ChannelColorDisplay(props) {
@@ -197,7 +196,8 @@ function ChannelColorDisplay(props) {
       selections,
       contrastLimits,
       colors,
-      pyramidResolution
+      pyramidResolution,
+      context?.luminanceValue
     );
 
     context?.setPaletteLoss(paletteLoss);

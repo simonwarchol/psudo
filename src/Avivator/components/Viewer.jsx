@@ -63,7 +63,6 @@ const Viewer = (props) => {
     channelsVisible = channelsVisible.map(() => false);
     channelsVisible[showChannel] = true;
   }
-  // console.log('colors', colors, 'contrastLimits', contrastLimits, 'channelsVisible', channelsVisible, 'selections', selections)
   const { width, height } = props.dimensions;
   const allowNavigation = props?.allowNavigation || false;
   const loader = useLoader();
@@ -186,6 +185,7 @@ const Viewer = (props) => {
       mainViewStateChanged: context?.mainViewStateChanged,
       setMainViewStateChanged: context?.setMainViewStateChanged,
       setPaletteLoss: context?.setPaletteLoss,
+      luminanceValue: context?.luminanceValue,
     };
     deckProps = {
       ...deckProps,
@@ -211,8 +211,6 @@ const Viewer = (props) => {
       return movingLens ? oldViewState : newViewState;
     };
     onHover = (v, d, e) => {
-      // console.log("Hover", v, d, e, loader);
-
       useViewerStore.setState({ coordinate: v?.coordinate });
     };
   } else {
@@ -237,9 +235,7 @@ const Viewer = (props) => {
   //   viewStates = [useViewerStore.getState()?.viewState] || viewStates;
   // }
   useEffect(() => {
-    console.log("linkedviews", context?.linkedViews);
     if (context?.mainViewStateChanged && !mainViewer && context?.linkedViews) {
-      console.log("Updating", useViewerStore.getState()?.viewState);
       setViewStates([useViewerStore.getState()?.viewState]);
       context?.setMainViewStateChanged(false);
     }
@@ -266,14 +262,14 @@ const Viewer = (props) => {
     );
     context?.setLensData(lensData);
     context?.setGraphData(graphData);
-    console.log("lensData", lensData);
-    let paletteLoss = await calculateLensPaletteLoss(lensData);
+    let paletteLoss = await calculateLensPaletteLoss(
+      lensData,
+      context.luminanceValue
+    );
     if (paletteLoss) context?.setPaletteLoss(paletteLoss);
   };
 
   useEffect(() => {
-    console.log("lensEnabled", lensEnabled);
-
     if (lensEnabled) {
       getLensData();
     }
