@@ -236,16 +236,16 @@ function PsudoToolbar() {
         colors
       );
     } else {
+      payload = await getChannelPayload(
+        channelsVisible,
+        colors,
+        selections,
+        contrastLimits,
+        loader,
+        pyramidResolution,
+        10000
+      );
     }
-    payload = await getChannelPayload(
-      channelsVisible,
-      colors,
-      selections,
-      contrastLimits,
-      loader,
-      pyramidResolution,
-      10000
-    );
 
     const { intensityArray, colorArray, contrastLimitsArray } =
       createContiguousArrays(payload);

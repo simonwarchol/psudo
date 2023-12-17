@@ -426,7 +426,6 @@ export async function getSingleSelectionStats2D(
   { loader, selection, pyramidResolution, channelVisible },
   computeStats = false
 ) {
-  console.trace('Simon')
   const data = Array.isArray(loader) ? loader[loader.length - 1] : loader;
   const raster = await data.getRaster({ selection });
   if (computeStats) {

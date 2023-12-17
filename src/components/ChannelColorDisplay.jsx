@@ -14,6 +14,7 @@ import LockOpenIcon from "@mui/icons-material/LockOpen";
 import ContrastIcon from "@mui/icons-material/Contrast";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import SquareIcon from "@mui/icons-material/Square";
+import * as psudoAnalysis from "psudo-analysis";
 
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ColorNameSelect from "./ColorNameSelect.jsx";
@@ -34,6 +35,8 @@ import {
   getGMMContrastLimits,
   calculatePaletteLoss,
   calculateConfusionLoss,
+  createContiguousArrays,
+  getChannelPayload,
 } from "../Avivator/viewerUtils.js";
 
 // import lodash
@@ -142,28 +145,107 @@ function ChannelColorDisplay(props) {
     }
   }, [colors]);
 
-  const toggleVisibility = () => {
+  const toggleVisibility = async () => {
     let _tmpChannelsVisible = _.cloneDeep(channelsVisible);
     _tmpChannelsVisible[channelIndex] = !_tmpChannelsVisible[channelIndex];
     console.log("_tmpChannelsVisible", _tmpChannelsVisible);
     useChannelsStore.setState({
       channelsVisible: _tmpChannelsVisible,
     });
+
+    // if you just made it visible, calculate the contrast limits
+    if (_tmpChannelsVisible[channelIndex]) {
+      let _tmpContrastLimits;
+      // Check if contrast limits are default value ([0, 65535])
+      if (
+        contrastLimits?.[channelIndex]?.[0] === 0 &&
+        contrastLimits?.[channelIndex]?.[1] === 65535
+      ) {
+        _tmpContrastLimits = await calculateContrastLimits();
+      }
+      // if colors are default value ([0,0,0]) optimize palette
+      if (
+        colors?.[channelIndex]?.[0] === 0 &&
+        colors?.[channelIndex]?.[1] === 0 &&
+        colors?.[channelIndex]?.[2] === 0
+      ) {
+        context?.setIsLoading(true);
+        //  Optimize Palette
+        let payload = await getChannelPayload(
+          _tmpChannelsVisible,
+          colors,
+          selections,
+          _tmpContrastLimits,
+          loader,
+          pyramidResolution,
+          10000
+        );
+        console.log("payload", payload);
+
+        const { intensityArray, colorArray, contrastLimitsArray } =
+          createContiguousArrays(payload);
+
+        // // Iterate over colorList // 3 length
+        let lockedList = [];
+        for (let i = 0; i < colorArray.length / 3; i += 1) {
+          if (i === channelIndex) lockedList.push(0);
+          else lockedList.push(1);
+        }
+
+        console.log("LockedList", colorArray,
+        lockedList,
+        intensityArray,
+        contrastLimitsArray,
+        context?.luminanceValue);
+
+        const optColors = psudoAnalysis.optimize(
+          colorArray,
+          lockedList,
+          intensityArray,
+          contrastLimitsArray,
+          context?.luminanceValue
+        );
+        console.log("optColors", optColors);
+        let colorCounter = 0;
+        let tmpColors = _.cloneDeep(colors);
+        channelsVisible.forEach((d, i) => {
+          if (d) {
+            tmpColors[i] = Array.from(
+              optColors
+                .slice(colorCounter, colorCounter + 3)
+                .map((d) => d * 255)
+            );
+            colorCounter += 3;
+          }
+        });
+        context?.setIsLoading(false);
+        useChannelsStore.setState({ colors: tmpColors, prevColors: tmpColors });
+        // getPaletteLoss(
+        //   channelsVisible,
+        //   loader,
+        //   newSelections,
+        //   tmpColors,
+        //   newContrastLimits,
+        //   pyramidResolution
+        // );
+      }
+    }
   };
 
-  const calculateContrastLimits = () => {
+  const calculateContrastLimits = async () => {
     context?.setIsLoading(true);
-    getGMMContrastLimits({
-      loader,
-      selection: selections[channelIndex],
-      pyramidResolution,
-    })
-      .then((intContrastLimits) => {
-        setPropertiesForChannel(ind, { contrastLimits: intContrastLimits });
-      })
-      .finally(() => {
-        context?.setIsLoading(false);
+    try {
+      const intContrastLimits = await getGMMContrastLimits({
+        loader,
+        selection: selections[channelIndex],
+        pyramidResolution,
       });
+      setPropertiesForChannel(ind, { contrastLimits: intContrastLimits });
+      contrastLimits[ind] = intContrastLimits;
+      return contrastLimits;
+    } finally {
+      context?.setIsLoading(false);
+    }
   };
 
   const addRemoveToLens = () => {

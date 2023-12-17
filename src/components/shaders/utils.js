@@ -23,15 +23,23 @@ export function padWithDefault(arr, defaultValue, padWidth) {
 /** @type {Color[]} */
 // prettier-ignore
 const COLOR_PALETTE = [
-  [  0,   0, 255], // blue
-  [  0, 255,   0], // green
-  [255,   0, 255], // magenta
-  [255, 255,   0], // yellow
-  [255, 128,   0], // orange
-  [  0, 255, 255], // cyan
-  [255, 255, 255], // white
-  [255,   0,   0], // red
-];
+  [0, 0, 0], // black
+  [0, 0, 0], // black
+  [0, 0, 0], // black
+  [0, 0, 0], // black
+  [0, 0, 0], // black
+  [0, 0, 0], // black
+  [0, 0, 0], // black
+  [0, 0, 0], // black
+]
+// [  0,   0, 255], // blue
+// [  0, 255,   0], // green
+// [255,   0, 255], // magenta
+// [255, 255,   0], // yellow
+// [255, 128,   0], // orange
+// [  0, 255, 255], // cyan
+// [255, 255, 255], // white
+// [255,   0,   0], // red
 
 /** @param {number} n */
 export function getDefaultPalette(n) {
@@ -52,7 +60,7 @@ export function padColors({ colors, channelsVisible }) {
   const padSize = MAX_CHANNELS - newColors.length;
   const paddedColors = padWithDefault(
     newColors,
-    /** @type {Color} */ (DEFAULT_COLOR_OFF),
+    /** @type {Color} */(DEFAULT_COLOR_OFF),
     padSize
   ).reduce((acc, val) => acc.concat(val), []);
   return paddedColors;

@@ -15,14 +15,15 @@ import {
   buildDefaultSelection,
   createLoader,
   getMultiSelectionStats,
-  guessRgb,
-  isInterleaved,
+  getChannelPayload,
+  createContiguousArrays,
   getChannelGraphData,
   calculatePaletteLoss,
 } from "./viewerUtils";
 import { FILL_PIXEL_VALUE } from "./constants";
 import { AppContext } from "../context/GlobalContext.jsx";
 import _ from "lodash";
+import * as psudoAnalysis from "psudo-analysis";
 
 export const useImage = (source, history) => {
   const [toggleIsOffsetsSnackbarOn] = useViewerStore(
@@ -192,56 +193,30 @@ export const useImage = (source, history) => {
       let newContrastLimits = [];
       let newDomains = [];
       let newColors = [];
-      const isRgb = guessRgb(metadata);
-      if (isRgb) {
-        if (isInterleaved(loader[0].shape)) {
-          // These don't matter because the data is interleaved.
-          newContrastLimits = [[0, 255]];
-          newDomains = [[0, 255]];
-          newColors = [[255, 0, 0]];
-        } else {
-          newContrastLimits = [
-            [0, 255],
-            [0, 255],
-            [0, 255],
-          ];
-          newDomains = [
-            [0, 255],
-            [0, 255],
-            [0, 255],
-          ];
-          newColors = [
-            [255, 0, 0],
-            [0, 255, 0],
-            [0, 0, 255],
-          ];
-        }
-        if (lensEnabled) {
-          toggleLensEnabled();
-        }
-        useViewerStore.setState({ useColormap: false });
-      } else {
-        const stats = await getMultiSelectionStats({
-          loader,
-          selections: newSelections,
-          pyramidResolution,
-          channelsVisible
-        });
 
-        newDomains = stats.domains;
-        newContrastLimits = stats.contrastLimits;
-        newColors = [
-          [0, 0, 255],
-          [255, 0, 0],
-          [0, 255, 0],
-          [255, 255, 0],
-          [255, 0, 255],
-          [0, 255, 255],
-        ];
-        useViewerStore.setState({
-          useColormap: true,
-        });
-      }
+      const stats = await getMultiSelectionStats({
+        loader,
+        selections: newSelections,
+        pyramidResolution,
+        channelsVisible
+      });
+
+      newDomains = stats.domains;
+      newContrastLimits = stats.contrastLimits;
+      newColors = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+      ];
+      useViewerStore.setState({
+        useColormap: true,
+      });
+
       useChannelsStore.setState({
         ids: newDomains.map(() => String(Math.random())),
         selections: newSelections,
@@ -259,6 +234,61 @@ export const useImage = (source, history) => {
         globalSelection: newSelections[0],
         channelOptions,
       });
+
+      // Optimize Colors
+      let payload = await getChannelPayload(
+        channelsVisible,
+        newColors,
+        newSelections,
+        newContrastLimits,
+        loader,
+        pyramidResolution,
+        10000
+      );
+
+
+      const { intensityArray, colorArray, contrastLimitsArray } =
+        createContiguousArrays(payload);
+
+      // Iterate over colorList // 3 length
+      let lockedList = [];
+      for (let i = 0; i < colorArray.length / 3; i += 1) {
+        lockedList.push(0);
+      }
+
+      // console.log("LumVal", context.luminanceValue);
+
+      const optColors = psudoAnalysis.optimize(
+        colorArray,
+        lockedList,
+        intensityArray,
+        contrastLimitsArray,
+        context?.luminanceValue
+      );
+      console.log("optColors", optColors);
+      let colorCounter = 0;
+      let tmpColors = _.cloneDeep(newColors);
+      channelsVisible.forEach((d, i) => {
+        if (d) {
+          tmpColors[i] = Array.from(
+            optColors.slice(colorCounter, colorCounter + 3).map((d) => d * 255)
+          );
+          colorCounter += 3;
+        }
+      });
+
+      useChannelsStore.setState({ colors: tmpColors, prevColors: tmpColors });
+      getPaletteLoss(
+        channelsVisible,
+        loader,
+        newSelections,
+        tmpColors,
+        newContrastLimits,
+        pyramidResolution
+      )
+
+
+
 
       // Init Graph Data
       context?.setIsLoading(false);
