@@ -245,11 +245,12 @@ fn min_euclidean_distance(matrix: &Array2<f64>) -> f64 {
 // ///////////////////////////////////////// Optimization /////////////////////////////////////
 struct Loss {
     rng: Arc<Mutex<Xoshiro256PlusPlus>>,
-    c3_instance: c3::C3,
     locked_colors: Vec<bool>,
     intensity_array: Array2<f32>,
     luminance_values: Vec<f32>,
     avg_confusion: f32,
+    excluded_colors_indices: Vec<f32>,
+    c3_instance: c3::C3,
 }
 
 impl Loss {
@@ -257,17 +258,36 @@ impl Loss {
         locked_colors: Vec<bool>,
         intensity_array: Array2<f32>,
         luminance_values: Vec<f32>,
-        avg_confusion: f32
+        avg_confusion: f32,
+        excluded_colors_indices: Vec<f32>,
+        c3_instance: c3::C3
     ) -> Self {
         Self {
             rng: Arc::new(Mutex::new(Xoshiro256PlusPlus::from_entropy())),
             locked_colors: locked_colors,
-            c3_instance: c3::C3::new(),
+            c3_instance: c3_instance,
             intensity_array: intensity_array,
             luminance_values: luminance_values,
             avg_confusion: avg_confusion,
+            excluded_colors_indices: excluded_colors_indices,
         }
     }
+}
+
+fn term_loss(
+    palette_terms: Vec<Vec<HashMap<&str, f64>>>,
+    excluded_colors_indices: Vec<f32>
+) -> f32 {
+    let mut loss = 0.0;
+    for term in palette_terms.iter() {
+        for color in term {
+            if excluded_colors_indices.contains(&(color["index"] as f32)) {
+                loss += color["score"];
+            }
+        }
+    }
+
+    loss as f32
 }
 
 impl CostFunction for Loss {
@@ -300,6 +320,8 @@ impl CostFunction for Loss {
         let analyzed_palette: Vec<HashMap<&str, f64>> = self.c3_instance.analyze_palette(
             lab_palette.clone()
         );
+        let palette_terms = self.c3_instance.get_palette_terms(lab_palette.clone(), 10);
+
         let cosine_matrix = self.c3_instance.compute_color_name_distance_matrix(analyzed_palette);
         // Calculate average distance between colors
         let mut total_distance = 0.0;
@@ -313,6 +335,7 @@ impl CostFunction for Loss {
         }
         let average_cosine_distance = total_distance / (total_pairs as f64);
         let min_euclidean_distance = min_euclidean_distance(&oklab_palette);
+        let term_loss = term_loss(palette_terms.clone(), self.excluded_colors_indices.clone());
         let confusion_loss = compute_confusion_loss(
             oklab_colors.to_vec(),
             self.intensity_array.clone(),
@@ -322,6 +345,7 @@ impl CostFunction for Loss {
         Ok(
             (-average_cosine_distance as f32) +
                 (-min_euclidean_distance as f32) +
+                (term_loss as f32) +
                 0.1 * (confusion_loss as f32)
         )
     }
@@ -371,7 +395,9 @@ fn annealing(
     colors: &Vec<f32>,
     locked_colors: &Vec<bool>,
     intensity_array: Array2<f32>,
-    luminance_values: &Vec<f32>
+    luminance_values: &Vec<f32>,
+    excluded_colors_indices: &Vec<f32>,
+    c3_instance: c3::C3
 ) -> Result<Vec<f32>, Error> {
     let solver = SimulatedAnnealing::new(15.0)?;
 
@@ -401,14 +427,17 @@ fn annealing(
         locked_colors.clone(),
         intensity_array,
         luminance_values.clone(),
-        average_confusion
+        average_confusion,
+        excluded_colors_indices.clone(),
+        c3_instance
     );
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
         .configure(|state| { state.param(random_colors.to_vec()).max_iters(6_000) })
         // Optional: Attach an observer
         .run()?;
-    // Print result
+    // Print loss from best_param
+    console::log_1(&format!("loss: {:?}", res.state().best_cost).into());
     let best_param = res.state().get_best_param().unwrap().clone();
     // log best param
     console::log_1(&format!("best_param: {:?}", best_param).into());
@@ -422,11 +451,13 @@ pub fn optimize(
     locked_colors: &[u16],
     intensities: &[u16],
     contrast_limits: &[u16],
-    luminance_values: &[u16]
+    luminance_values: &[u16],
+    excluded_colors: Vec<String>
 ) -> Vec<f32> {
     utils::set_panic_hook();
     let now = instant::Instant::now();
     // print luminance values
+    // log excluded_colors
 
     // Convert to float
     let float_luminance_values: Vec<f32> = luminance_values
@@ -456,11 +487,26 @@ pub fn optimize(
         .flatten()
         .collect::<Vec<f32>>();
     let intensity_array = preprocess_data(colors, intensities, contrast_limits);
+    // Excluded colors list to list of indices
+    let c3_instance = c3::C3::new();
+    let mut excluded_colors_indices = Vec::new();
+    for color in excluded_colors {
+        let analyzed_color = c3_instance.get_term_index(&color);
+        // if color is some, push
+        if let Some(index) = analyzed_color {
+            excluded_colors_indices.push(index as f32);
+        }
+    }
+
+    console::log_1(&format!("excluded_colors_indices: {:?}", excluded_colors_indices).into());
+
     let optimized_colors = annealing(
         &oklab_color_map,
         &locked_colors_vec,
         intensity_array,
-        &float_luminance_values
+        &float_luminance_values,
+        &excluded_colors_indices,
+        c3_instance
     ).unwrap();
     let optimized_srgb = optimized_colors
         .chunks(3)
@@ -476,7 +522,10 @@ pub fn optimize(
     optimized_srgb
 }
 
-fn annealing_cost(param: &Vec<f32>) -> Result<HashMap<String, f32>, Error> {
+fn color_only_loss(
+    param: &Vec<f32>,
+    excluded_colors: Vec<String>
+) -> Result<HashMap<String, f32>, Error> {
     let mut cielab_colors: Vec<Vec<f32>> = Vec::new();
     let oklab_colors = param;
     let c3_instance = c3::C3::new();
@@ -504,6 +553,19 @@ fn annealing_cost(param: &Vec<f32>) -> Result<HashMap<String, f32>, Error> {
     let analyzed_palette: Vec<HashMap<&str, f64>> = c3_instance.analyze_palette(
         lab_palette.clone()
     );
+    let mut excluded_colors_indices = Vec::new();
+    for color in excluded_colors {
+        let analyzed_color = c3_instance.get_term_index(&color);
+        // if color is some, push
+        if let Some(index) = analyzed_color {
+            excluded_colors_indices.push(index as f32);
+        }
+    }
+
+    let term_loss_val = term_loss(
+        c3_instance.get_palette_terms(lab_palette.clone(), 10),
+        excluded_colors_indices
+    );
     let cosine_matrix = c3_instance.compute_color_name_distance_matrix(analyzed_palette);
     // Calculate average distance between colors
     let mut total_distance = 0.0;
@@ -516,11 +578,14 @@ fn annealing_cost(param: &Vec<f32>) -> Result<HashMap<String, f32>, Error> {
         }
     }
 
+    //
+
     let average_cosine_distance = total_distance / (total_pairs as f64);
     let min_euclidean_distance = min_euclidean_distance(&oklab_palette);
     let mut loss_components = HashMap::new();
     loss_components.insert("name_distance".to_string(), -average_cosine_distance as f32);
     loss_components.insert("perceptural_distance".to_string(), -min_euclidean_distance as f32);
+    loss_components.insert("term_loss".to_string(), term_loss_val as f32);
     Ok(loss_components)
 }
 
@@ -529,7 +594,8 @@ pub fn calculate_palette_loss(
     intensities: &[u16],
     colors: &[u16],
     contrast_limits: &[u16],
-    luminance_values: &[u16]
+    luminance_values: &[u16],
+    excluded_colors: Vec<String>
 ) -> JsValue {
     // Log all values
     let float_color_map: Vec<f32> = colors
@@ -553,7 +619,10 @@ pub fn calculate_palette_loss(
         })
         .flatten()
         .collect::<Vec<f32>>();
-    let mut loss: HashMap<String, f32> = annealing_cost(&oklab_color_map).unwrap();
+    let mut loss: HashMap<String, f32> = color_only_loss(
+        &oklab_color_map,
+        excluded_colors
+    ).unwrap();
 
     let confusion = optimize_for_confusion(
         intensities,
@@ -561,6 +630,7 @@ pub fn calculate_palette_loss(
         contrast_limits,
         &float_luminance_values
     );
+
     loss.insert("confusion".to_string(), confusion - (1.0 as f32));
     JsValue::from_serde(&loss).unwrap()
 }

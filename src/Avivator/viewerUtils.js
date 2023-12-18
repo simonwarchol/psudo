@@ -335,7 +335,7 @@ export function createContiguousArrays(channelList) {
   return { intensityArray, colorArray, contrastLimitsArray };
 }
 
-export async function calculateLensPaletteLoss(channelsPayload, luminanceValue) {
+export async function calculateLensPaletteLoss(channelsPayload, luminanceValue, colorExcluded) {
   const { intensityArray, colorArray, contrastLimitsArray } =
     createContiguousArrays(channelsPayload);
   if (intensityArray.length == 0) return null;
@@ -343,7 +343,8 @@ export async function calculateLensPaletteLoss(channelsPayload, luminanceValue) 
     intensityArray,
     colorArray,
     contrastLimitsArray,
-    luminanceValue
+    luminanceValue,
+    colorExcluded
   );
   return paletteCost;
 }
@@ -355,7 +356,8 @@ export async function calculatePaletteLoss(
   contrastLimits,
   colors,
   pyramidResolution,
-  luminanceValue
+  luminanceValue,
+  colorExcluded
 ) {
   const channelsPayload = await getChannelPayload(
     channelsVisible,
@@ -372,7 +374,8 @@ export async function calculatePaletteLoss(
     intensityArray,
     colorArray,
     contrastLimitsArray,
-    luminanceValue
+    luminanceValue,
+    colorExcluded
   );
   return paletteCost;
 }

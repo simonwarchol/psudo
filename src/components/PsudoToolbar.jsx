@@ -273,7 +273,8 @@ function PsudoToolbar() {
       lockedList,
       intensityArray,
       contrastLimitsArray,
-      context?.luminanceValue
+      context?.luminanceValue,
+      context?.colorExcluded
     );
     console.log("Post Call Opt colors", optColors);
     console.log("Colors Before", colors);
@@ -308,7 +309,8 @@ function PsudoToolbar() {
       contrastLimits,
       colors,
       pyramidResolution,
-      context?.luminanceValue
+      context?.luminanceValue,
+      context?.colorExcluded
     );
 
     context?.setPaletteLoss(paletteLoss);

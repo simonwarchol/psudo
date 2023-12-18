@@ -3,12 +3,13 @@ use std::f64::consts::LN_2;
 use std::fs;
 use std::io::Cursor;
 use std::iter::FromIterator;
-use std::io::{self};
+use std::io::{ self };
+use web_sys::console;
 
-use kd_tree::{KdPoint, KdTree};
+use kd_tree::{ KdPoint, KdTree };
 use ndarray::Array1;
 use ndarray::Array2;
-use serde_json::{json, Value};
+use serde_json::{ json, Value };
 
 // define your own item type.
 struct Item {
@@ -21,7 +22,9 @@ impl KdPoint for Item {
     type Scalar = f64;
     type Dim = typenum::U3;
     // 2 dimensional tree.
-    fn at(&self, k: usize) -> f64 { self.point[k] }
+    fn at(&self, k: usize) -> f64 {
+        self.point[k]
+    }
 }
 
 pub struct C3 {
@@ -41,7 +44,6 @@ pub struct C3 {
 // make impl public
 impl C3 {
     pub fn new() -> C3 {
-
         let body = include_str!("data.json");
         let json: Value = serde_json::from_str(&body).unwrap();
         let _colorvec: Vec<i64> = serde_json::from_value(json["color"].clone()).unwrap();
@@ -50,19 +52,173 @@ impl C3 {
 
         let _c = _color.shape()[0];
 
-
         let _a: Vec<f64> = serde_json::from_value(json["A"].clone()).unwrap();
         let mut _t = HashMap::new();
         let t_vec: Vec<i64> = serde_json::from_value(json["T"].clone()).unwrap();
-
 
         // Iterate over every two elements in the vector
         for pair in t_vec.chunks(2) {
             _t.insert(pair[0], pair[1]);
         }
-        let tmp_vec = vec!["green", "blue", "purple", "red", "pink", "yellow", "orange", "brown", "teal", "lightblue", "grey", "limegreen", "magenta", "lightgreen", "brightgreen", "skyblue", "cyan", "turquoise", "darkblue", "darkgreen", "aqua", "olive", "navyblue", "lavender", "fuchsia", "black", "royalblue", "violet", "hotpink", "tan", "forestgreen", "lightpurple", "neongreen", "yellowgreen", "maroon", "darkpurple", "salmon", "peach", "beige", "lime", "seafoamgreen", "mustard", "brightblue", "lilac", "seagreen", "palegreen", "bluegreen", "mint", "lightbrown", "mauve", "darkred", "greyblue", "burntorange", "darkpink", "indigo", "periwinkle", "bluegrey", "lightpink", "aquamarine", "gold", "brightpurple", "grassgreen", "redorange", "bluepurple", "greygreen", "kellygreen", "puke", "rose", "darkteal", "babyblue", "paleblue", "greenyellow", "brickred", "lightgrey", "darkgrey", "white", "brightpink", "chartreuse", "purpleblue", "royalpurple", "burgundy", "goldenrod", "darkbrown", "lightorange", "darkorange", "redbrown", "paleyellow", "plum", "offwhite", "pinkpurple", "darkyellow", "lightyellow", "mustardyellow", "brightred", "peagreen", "khaki", "orangered", "crimson", "deepblue", "springgreen", "cream", "palepink", "yelloworange", "deeppurple", "pinkred", "pastelgreen", "sand", "rust", "lightred", "taupe", "armygreen", "robinseggblue", "huntergreen", "greenblue", "lightteal", "cerulean", "flesh", "orangebrown", "slateblue", "slate", "coral", "blueviolet", "ochre", "leafgreen", "electricblue", "seablue", "midnightblue", "steelblue", "brick", "palepurple", "mediumblue", "burntsienna", "darkmagenta", "eggplant", "sage", "darkturquoise", "puce", "bloodred", "neonpurple", "mossgreen", "terracotta", "oceanblue", "yellowbrown", "brightyellow", "dustyrose", "applegreen", "neonpink", "skin", "cornflowerblue", "lightturquoise", "wine", "deepred", "azure"];
-        let _terms: Vec<String> = tmp_vec.iter().map(|s| s.to_string()).collect();
-
+        let tmp_vec = vec![
+            "green",
+            "blue",
+            "purple",
+            "red",
+            "pink",
+            "yellow",
+            "orange",
+            "brown",
+            "teal",
+            "lightblue",
+            "grey",
+            "limegreen",
+            "magenta",
+            "lightgreen",
+            "brightgreen",
+            "skyblue",
+            "cyan",
+            "turquoise",
+            "darkblue",
+            "darkgreen",
+            "aqua",
+            "olive",
+            "navyblue",
+            "lavender",
+            "fuchsia",
+            "black",
+            "royalblue",
+            "violet",
+            "hotpink",
+            "tan",
+            "forestgreen",
+            "lightpurple",
+            "neongreen",
+            "yellowgreen",
+            "maroon",
+            "darkpurple",
+            "salmon",
+            "peach",
+            "beige",
+            "lime",
+            "seafoamgreen",
+            "mustard",
+            "brightblue",
+            "lilac",
+            "seagreen",
+            "palegreen",
+            "bluegreen",
+            "mint",
+            "lightbrown",
+            "mauve",
+            "darkred",
+            "greyblue",
+            "burntorange",
+            "darkpink",
+            "indigo",
+            "periwinkle",
+            "bluegrey",
+            "lightpink",
+            "aquamarine",
+            "gold",
+            "brightpurple",
+            "grassgreen",
+            "redorange",
+            "bluepurple",
+            "greygreen",
+            "kellygreen",
+            "puke",
+            "rose",
+            "darkteal",
+            "babyblue",
+            "paleblue",
+            "greenyellow",
+            "brickred",
+            "lightgrey",
+            "darkgrey",
+            "white",
+            "brightpink",
+            "chartreuse",
+            "purpleblue",
+            "royalpurple",
+            "burgundy",
+            "goldenrod",
+            "darkbrown",
+            "lightorange",
+            "darkorange",
+            "redbrown",
+            "paleyellow",
+            "plum",
+            "offwhite",
+            "pinkpurple",
+            "darkyellow",
+            "lightyellow",
+            "mustardyellow",
+            "brightred",
+            "peagreen",
+            "khaki",
+            "orangered",
+            "crimson",
+            "deepblue",
+            "springgreen",
+            "cream",
+            "palepink",
+            "yelloworange",
+            "deeppurple",
+            "pinkred",
+            "pastelgreen",
+            "sand",
+            "rust",
+            "lightred",
+            "taupe",
+            "armygreen",
+            "robinseggblue",
+            "huntergreen",
+            "greenblue",
+            "lightteal",
+            "cerulean",
+            "flesh",
+            "orangebrown",
+            "slateblue",
+            "slate",
+            "coral",
+            "blueviolet",
+            "ochre",
+            "leafgreen",
+            "electricblue",
+            "seablue",
+            "midnightblue",
+            "steelblue",
+            "brick",
+            "palepurple",
+            "mediumblue",
+            "burntsienna",
+            "darkmagenta",
+            "eggplant",
+            "sage",
+            "darkturquoise",
+            "puce",
+            "bloodred",
+            "neonpurple",
+            "mossgreen",
+            "terracotta",
+            "oceanblue",
+            "yellowbrown",
+            "brightyellow",
+            "dustyrose",
+            "applegreen",
+            "neonpink",
+            "skin",
+            "cornflowerblue",
+            "lightturquoise",
+            "wine",
+            "deepred",
+            "azure"
+        ];
+        let _terms: Vec<String> = tmp_vec
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
 
         let _w = _terms.len();
         let mut color_count: Array1<i64> = Array1::zeros(_c);
@@ -72,8 +228,8 @@ impl C3 {
             if let Some(x) = _t.get(key) {
                 v = *x;
             }
-            color_count[(*key as f64 / _w as f64).floor() as usize] += v;
-            terms_count[(*key % _w as i64) as usize] += v;
+            color_count[((*key as f64) / (_w as f64)).floor() as usize] += v;
+            terms_count[(*key % (_w as i64)) as usize] += v;
         }
         let pts = _color
             .outer_iter()
@@ -99,13 +255,13 @@ impl C3 {
     fn color_entropy(&self, c: usize) -> f64 {
         let mut h: f64 = 0.0;
         for w in 0..self.w {
-            let val = c as i64 * self.w as i64 + w as i64;
+            let val = (c as i64) * (self.w as i64) + (w as i64);
             let mut p = 0.0;
             if let Some(x) = self.t.get(&val as &i64) {
-                p = *x as f64 / self.color_count[c] as f64;
+                p = (*x as f64) / (self.color_count[c] as f64);
             }
             if p > 0.0 {
-                h += p * f64::ln(p) / LN_2;
+                h += (p * f64::ln(p)) / LN_2;
             }
         }
         h
@@ -115,33 +271,44 @@ impl C3 {
         c: usize,
         limit: Option<usize>,
         min_count: Option<usize>,
-        salience_threshold: Option<f64>,
+        salience_threshold: Option<f64>
     ) -> Vec<HashMap<&str, f64>> {
         let cc = c * self.w;
         let mut list = Vec::new();
         let mut sum = 0.0;
         for w in 0..self.w {
-            if self.t.contains_key(&(cc as i64 + w as i64)) {
-                sum += self.t[&(cc as i64 + w as i64)] as f64;
-                list.push(HashMap::from_iter([
-                    ("index", w as f64),
-                    ("score", self.t[&(cc as i64 + w as i64)] as f64),
-                ]));
+            if self.t.contains_key(&((cc as i64) + (w as i64))) {
+                sum += self.t[&((cc as i64) + (w as i64))] as f64;
+                list.push(
+                    HashMap::from_iter([
+                        ("index", w as f64),
+                        ("score", self.t[&((cc as i64) + (w as i64))] as f64),
+                    ])
+                );
             }
         }
-        let mut filtered_list = list.iter().map(|x: &HashMap<&str, f64>| {
-            let score = x["score"] / sum;
-            let index = x["index"];
-            HashMap::from_iter([("score", score), ("index", index)])
-        }).collect::<Vec<HashMap<&str, f64>>>();
+        let mut filtered_list = list
+            .iter()
+            .map(|x: &HashMap<&str, f64>| {
+                let score = x["score"] / sum;
+                let index = x["index"];
+                HashMap::from_iter([
+                    ("score", score),
+                    ("index", index),
+                ])
+            })
+            .collect::<Vec<HashMap<&str, f64>>>();
 
         if let Some(threshold) = salience_threshold {
-            filtered_list = filtered_list.into_iter().filter(|x: &HashMap<&str, f64>| x["score"] > threshold).collect();
+            filtered_list = filtered_list
+                .into_iter()
+                .filter(|x: &HashMap<&str, f64>| x["score"] > threshold)
+                .collect();
         }
         if let Some(min_count) = min_count {
             filtered_list = filtered_list
                 .into_iter()
-                .filter(|x| self.terms_count[x["index"] as usize] > min_count as i64)
+                .filter(|x| self.terms_count[x["index"] as usize] > (min_count as i64))
                 .collect();
         }
         filtered_list.sort_by(|a, b| b["score"].partial_cmp(&a["score"]).unwrap());
@@ -150,11 +317,7 @@ impl C3 {
         }
         filtered_list
     }
-    pub(crate) fn color_cosine(
-        &self,
-        a: usize,
-        b: usize,
-    ) -> f64 {
+    pub(crate) fn color_cosine(&self, a: usize, b: usize) -> f64 {
         let mut sa = 0.0;
         let mut sb = 0.0;
         let mut sc = 0.0;
@@ -196,27 +359,57 @@ impl C3 {
             .map(|row| self.color([row[0], row[1], row[2]]))
             .collect()
     }
-    fn get_palette_terms(&self, palette: Array2<f64>, color_term_limit: usize) -> Vec<Vec<HashMap<&str, f64>>> {
+
+    pub(crate) fn get_color_index(&self, color: [f64; 3]) -> usize {
+        self.color_index(color)
+    }
+
+    pub(crate) fn get_palette_terms(
+        &self,
+        palette: Array2<f64>,
+        color_term_limit: usize
+    ) -> Vec<Vec<HashMap<&str, f64>>> {
         let mut terms = Vec::new();
         for row in palette.outer_iter() {
             let c = self.color_index([row[0], row[1], row[2]]);
-            let related_terms = self.color_related_terms(c, Some(color_term_limit), None, None);
+            let related_terms = self.color_related_terms(
+                c,
+                Some(color_term_limit),
+                Some(10),
+                Some(0.1)
+            );
             terms.push(related_terms);
         }
         terms
     }
-    pub(crate) fn compute_color_name_distance_matrix(&self, data: Vec<HashMap<&str, f64>>) -> Array2<f64> {
+    pub(crate) fn compute_color_name_distance_matrix(
+        &self,
+        data: Vec<HashMap<&str, f64>>
+    ) -> Array2<f64> {
         let n = data.len();
         let mut matrix = Array2::zeros((n, n));
 
         for i in 0..n {
             for j in 0..i {
-                let cosine_distance = 1.0 - self.color_cosine(*data[i].get("c").unwrap() as usize, *data[j].get("c").unwrap() as usize);
+                let cosine_distance =
+                    1.0 -
+                    self.color_cosine(
+                        *data[i].get("c").unwrap() as usize,
+                        *data[j].get("c").unwrap() as usize
+                    );
                 matrix[[i, j]] = cosine_distance;
                 matrix[[j, i]] = cosine_distance;
             }
         }
         matrix
+    }
+    pub(crate) fn get_term_index(&self, term: &str) -> Option<usize> {
+        for (index, item) in self.terms.iter().enumerate() {
+            if item == term {
+                return Some(index);
+            }
+        }
+        None
     }
 }
 //

@@ -203,7 +203,8 @@ function ChannelColorDisplay(props) {
           lockedList,
           intensityArray,
           contrastLimitsArray,
-          context?.luminanceValue
+          context?.luminanceValue,
+          context?.colorExcluded
         );
         console.log("Post Call Opt colors", optColors);
         let colorCounter = 0;
@@ -280,7 +281,8 @@ function ChannelColorDisplay(props) {
       contrastLimits,
       colors,
       pyramidResolution,
-      context?.luminanceValue
+      context?.luminanceValue,
+      context?.colorExcluded
     );
 
     context?.setPaletteLoss(paletteLoss);

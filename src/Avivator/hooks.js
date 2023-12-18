@@ -90,7 +90,8 @@ export const useImage = (source, history) => {
       contrastLimits,
       colors,
       pyramidResolution,
-      context?.luminanceValue
+      context?.luminanceValue,
+      context?.colorExcluded
     );
     context?.setPaletteLoss(paletteLoss);
   };
@@ -262,7 +263,8 @@ export const useImage = (source, history) => {
         lockedList,
         intensityArray,
         contrastLimitsArray,
-        context?.luminanceValue
+        context?.luminanceValue,
+        context?.colorExcluded
       );
       console.log("Post Call Opt colors", optColors);
       let colorCounter = 0;
