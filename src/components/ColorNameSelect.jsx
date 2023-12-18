@@ -45,7 +45,13 @@ function ColorNameSelect(props) {
     "white",
     // 'lightgreen', 'darkpurple', 'magenta', 'lavender', 'darkblue', 'beige', 'limegreen', 'cyan', 'skyblue', 'forestgreen', 'darkgrey', 'lightpink', 'darkbrown', 'lightbrown', 'hotpink', 'mauve', 'lightpurple', 'yellowgreen', 'mustard', 'brightgreen', 'darkred', 'offwhite', 'turquoise', 'palegreen', 'burntorange', 'paleyellow', 'lightyellow', 'greygreen', 'cream', 'greyblue', 'lilac', 'bluegrey', 'fuchsia', 'aqua', 'lightorange', 'lightgrey', 'darkteal', 'neongreen', 'gold', 'burgundy', 'periwinkle', 'paleblue', 'royalblue', 'seafoamgreen', 'mint', 'redorange', 'rose', 'darkpink', 'palepink', 'redbrown', 'lime', 'brickred', 'puke', 'violet', 'bluegreen', 'yelloworange', 'plum', 'khaki', 'babyblue', 'darkorange', 'goldenrod', 'flesh', 'greenyellow', 'armygreen', 'taupe', 'sand', 'coral', 'deeppurple', 'rust', 'mustardyellow', 'seagreen', 'brightred', 'brightpurple', 'lightred', 'darkyellow', 'midnightblue', 'brightblue', 'royalpurple', 'indigo', 'crimson', 'orangered', 'huntergreen', 'brightpink', 'chartreuse', 'orangebrown', 'eggplant', 'dustyrose', 'skin', 'slate', 'pastelgreen', 'pinkred', 'sage', 'aquamarine', 'slateblue', 'peagreen', 'bluepurple', 'terracotta', 'brick', 'grassgreen', 'yellowbrown', 'ochre', 'burntsienna', 'steelblue', 'brightyellow', 'bloodred', 'darkturquoise', 'wine', 'kellygreen', 'purpleblue', 'pinkpurple', 'deepblue', 'darkmagenta', 'palepurple', 'deepred', 'springgreen', 'puce', 'mossgreen', 'robinseggblue', 'greenblue', 'neonpink', 'seablue', 'cerulean', 'neonpurple', 'leafgreen', 'blueviolet', 'electricblue', 'cornflowerblue', 'mediumblue', 'oceanblue', 'azure', 'applegreen']
   ];
-  const [selectedColorNames, setSelectedColorNames] = useState([colorNames[0]]);
+  let initialVal = [colorNames[0]];
+  if (!multiSelect) {
+    initialVal = [context.channelColorNames?.[channelIndex]] || initialVal;
+  }
+  const [selectedColorNames, setSelectedColorNames] = useState(
+    initialVal.flat()
+  );
 
   const handleChange = (event) => {
     const {
@@ -56,6 +62,9 @@ function ColorNameSelect(props) {
       typeof value === "string" ? value.split(",") : value
     );
   };
+  useEffect(() => {
+    console.log("scn", selectedColorNames);
+  }, [selectedColorNames]);
 
   useEffect(() => {
     if (multiSelect) {
@@ -83,7 +92,6 @@ function ColorNameSelect(props) {
         <Select
           id={`${id}`}
           labelId="exclude-select-label"
-        
           multiple={multiSelect}
           value={selectedColorNames}
           onChange={handleChange}
@@ -108,12 +116,6 @@ function ColorNameSelect(props) {
           )}
         </Select>
       </FormControl>
-      {/*<Grid item xs={2}>*/}
-      {/*    <IconButton*/}
-      {/*        onClick={() => clearColorNames()}>*/}
-      {/*        <ClearIcon/>*/}
-      {/*    </IconButton>*/}
-      {/*</Grid>*/}
     </div>
   );
 }
