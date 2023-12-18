@@ -192,11 +192,26 @@ function ChannelColorDisplay(props) {
           else lockedList.push(1);
         }
 
-        console.log("LockedList", colorArray,
-        lockedList,
-        intensityArray,
-        contrastLimitsArray,
-        context?.luminanceValue);
+        console.log(
+          "LockedList",
+          colorArray,
+          lockedList,
+          intensityArray,
+          contrastLimitsArray,
+          context?.luminanceValue
+        );
+        let colorNames = context?.channelColorNames;
+
+        let colorNamesList = [];
+
+        for (let i = 0; i < colorArray.length / 3; i += 1) {
+          if (colorNames[i]) {
+            colorNamesList.push(colorNames[i]?.[0]);
+          } else {
+            colorNamesList.push("");
+          }
+        }
+        console.log("CNL", colorNamesList);
 
         const optColors = psudoAnalysis.optimize(
           colorArray,
@@ -204,7 +219,8 @@ function ChannelColorDisplay(props) {
           intensityArray,
           contrastLimitsArray,
           context?.luminanceValue,
-          context?.colorExcluded
+          context?.colorExcluded,
+          colorNamesList
         );
         console.log("Post Call Opt colors", optColors);
         let colorCounter = 0;
@@ -282,7 +298,8 @@ function ChannelColorDisplay(props) {
       colors,
       pyramidResolution,
       context?.luminanceValue,
-      context?.colorExcluded
+      context?.colorExcluded,
+      context?.channelColorNames
     );
 
     context?.setPaletteLoss(paletteLoss);

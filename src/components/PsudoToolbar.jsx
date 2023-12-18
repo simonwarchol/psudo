@@ -265,6 +265,18 @@ function PsudoToolbar() {
         lockedList.push(0);
       }
     }
+    let colorNames = context?.channelColorNames;
+
+        let colorNamesList = [];
+
+        for (let i = 0; i < colorArray.length / 3; i += 1) {
+          if (colorNames[i]) {
+            colorNamesList.push(colorNames[i]?.[0]);
+          } else {
+            colorNamesList.push("");
+          }
+        }
+        console.log("CNL", colorNamesList);
 
     // console.log("LumVal", context.luminanceValue);
 
@@ -274,7 +286,8 @@ function PsudoToolbar() {
       intensityArray,
       contrastLimitsArray,
       context?.luminanceValue,
-      context?.colorExcluded
+      context?.colorExcluded,
+      colorNamesList
     );
     console.log("Post Call Opt colors", optColors);
     console.log("Colors Before", colors);
@@ -302,6 +315,8 @@ function PsudoToolbar() {
     }
     context?.setGraphData(tmpGraphData);
 
+    console.log("colname", context?.channelColorNames);
+
     let paletteLoss = await calculatePaletteLoss(
       channelsVisible,
       loader,
@@ -310,7 +325,8 @@ function PsudoToolbar() {
       colors,
       pyramidResolution,
       context?.luminanceValue,
-      context?.colorExcluded
+      context?.colorExcluded,
+      context?.channelColorNames
     );
 
     context?.setPaletteLoss(paletteLoss);

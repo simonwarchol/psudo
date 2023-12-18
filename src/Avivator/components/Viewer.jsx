@@ -267,7 +267,7 @@ const Viewer = (props) => {
     let paletteLoss = await calculateLensPaletteLoss(
       lensData,
       context.luminanceValue,
-      context?.colorExcluded
+      []
     );
     if (paletteLoss) context?.setPaletteLoss(paletteLoss);
   };

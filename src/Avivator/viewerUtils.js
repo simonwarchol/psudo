@@ -344,7 +344,7 @@ export async function calculateLensPaletteLoss(channelsPayload, luminanceValue, 
     colorArray,
     contrastLimitsArray,
     luminanceValue,
-    colorExcluded
+    colorExcluded, []
   );
   return paletteCost;
 }
@@ -357,7 +357,8 @@ export async function calculatePaletteLoss(
   colors,
   pyramidResolution,
   luminanceValue,
-  colorExcluded
+  colorExcluded,
+  colorNames
 ) {
   const channelsPayload = await getChannelPayload(
     channelsVisible,
@@ -370,12 +371,26 @@ export async function calculatePaletteLoss(
   );
   const { intensityArray, colorArray, contrastLimitsArray } =
     createContiguousArrays(channelsPayload);
+  console.log('SImON', colorNames);
+
+  let colorNamesList = [];
+  for (let i = 0; i < colorArray.length / 3; i += 1) {
+    if (colorNames[i]) {
+      colorNamesList.push(colorNames[i]?.[0]);
+    } else {
+      colorNamesList.push('');
+    }
+  }
+  console.log('CNL', colorNamesList);
+
+
   let paletteCost = psudoAnalysis.calculate_palette_loss(
     intensityArray,
     colorArray,
     contrastLimitsArray,
     luminanceValue,
-    colorExcluded
+    colorExcluded,
+    colorNamesList
   );
   return paletteCost;
 }

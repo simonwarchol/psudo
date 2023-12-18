@@ -102,7 +102,7 @@ const updateLensGraphValues = async (
 
   setGraphData(graphData);
   console.log("b");
-  let paletteLoss = await calculateLensPaletteLoss(channelData, luminanceValue);
+  let paletteLoss = await calculateLensPaletteLoss(channelData, luminanceValue, []);
   setPaletteLoss(paletteLoss);
 };
 

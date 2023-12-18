@@ -91,7 +91,8 @@ export const useImage = (source, history) => {
       colors,
       pyramidResolution,
       context?.luminanceValue,
-      context?.colorExcluded
+      context?.colorExcluded,
+      context?.channelColorNames
     );
     context?.setPaletteLoss(paletteLoss);
   };
@@ -256,6 +257,16 @@ export const useImage = (source, history) => {
       for (let i = 0; i < colorArray.length / 3; i += 1) {
         lockedList.push(0);
       }
+      let colorNames = context?.channelColorNames;
+      let colorNamesList = [];
+      for (let i = 0; i < colorArray.length / 3; i += 1) {
+        if (colorNames[i]) {
+          colorNamesList.push(colorNames[i]?.[0]);
+        } else {
+          colorNamesList.push('');
+        }
+      }
+      console.log('CNL', colorNamesList);
 
 
       const optColors = psudoAnalysis.optimize(
@@ -264,7 +275,8 @@ export const useImage = (source, history) => {
         intensityArray,
         contrastLimitsArray,
         context?.luminanceValue,
-        context?.colorExcluded
+        context?.colorExcluded,
+        colorNamesList
       );
       console.log("Post Call Opt colors", optColors);
       let colorCounter = 0;
