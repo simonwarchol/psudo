@@ -335,31 +335,34 @@ impl Anneal for Loss {
     fn anneal(&self, param: &Vec<f32>, temp: f32) -> Result<Vec<f32>, Error> {
         let mut param_n = param.clone();
         let mut rng = self.rng.lock().unwrap();
-
+        // log param.len()
         // Iterate over each color (assuming each color is represented by 3 values in the vector)
-        for color_idx in 0..param.len() / 3 {
-            if self.locked_colors[color_idx] {
-                continue; // Skip this color if it is locked
-            }
+        for _ in 0..(temp.floor() as u64) + 1 {
+            for color_idx in 0..param.len() / 3 {
+                if self.locked_colors[color_idx] {
+                    continue; // Skip this color if it is locked
+                }
 
-            // Modify each component of the color
-            for i in 0..3 {
-                let idx = color_idx * 3 + i; // Calculate the index in the parameter vector
-                let val = rng.sample(Uniform::new_inclusive(-0.1, 0.1));
-                param_n[idx] += val;
-                // Scale luminance between 0.5 and 1
-                if i == 0 {
-                    // param_n[idx] = param_n[idx].clamp(-0.0, 1.0);
-                    param_n[idx] = param_n[idx].clamp(
-                        self.luminance_values[0],
-                        self.luminance_values[1]
-                    );
-                } else {
-                    // Clamp the value to ensure it stays within bounds
-                    param_n[idx] = param_n[idx].clamp(-0.4, 0.4);
+                // Modify each component of the color
+                for i in 0..3 {
+                    let idx = color_idx * 3 + i; // Calculate the index in the parameter vector
+                    let val = rng.sample(Uniform::new_inclusive(-0.1, 0.1));
+                    param_n[idx] += val;
+                    // Scale luminance between 0.5 and 1
+                    if i == 0 {
+                        // param_n[idx] = param_n[idx].clamp(-0.0, 1.0);
+                        param_n[idx] = param_n[idx].clamp(
+                            self.luminance_values[0],
+                            self.luminance_values[1]
+                        );
+                    } else {
+                        // Clamp the value to ensure it stays within bounds
+                        param_n[idx] = param_n[idx].clamp(-0.4, 0.4);
+                    }
                 }
             }
         }
+        // log param
 
         Ok(param_n)
     }
@@ -378,6 +381,21 @@ fn annealing(
         colors,
         intensity_array.clone()
     );
+    // Randomize non locked colors
+    let mut rng = thread_rng();
+    let mut random_colors = Vec::new();
+    for (i, &color) in colors.iter().enumerate() {
+        if locked_colors[i / 3] {
+            random_colors.push(color);
+        } else {
+            let val = if i % 3 == 0 {
+                rng.gen_range(luminance_values[0]..luminance_values[1])
+            } else {
+                rng.gen_range(-0.4..0.4)
+            };
+            random_colors.push(val);
+        }
+    }
 
     let cost_function = Loss::new(
         locked_colors.clone(),
@@ -387,11 +405,13 @@ fn annealing(
     );
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
-        .configure(|state| { state.param(colors.to_vec()).max_iters(3_000) })
+        .configure(|state| { state.param(random_colors.to_vec()).max_iters(6_000) })
         // Optional: Attach an observer
         .run()?;
     // Print result
     let best_param = res.state().get_best_param().unwrap().clone();
+    // log best param
+    console::log_1(&format!("best_param: {:?}", best_param).into());
 
     Ok(best_param) // Return the best parameters
 }
@@ -407,7 +427,6 @@ pub fn optimize(
     utils::set_panic_hook();
     let now = instant::Instant::now();
     // print luminance values
-    console::log_1(&format!("luminance_values: {:?}", luminance_values).into());
 
     // Convert to float
     let float_luminance_values: Vec<f32> = luminance_values
@@ -424,6 +443,8 @@ pub fn optimize(
         .iter()
         .map(|&x| x == 1)
         .collect::<Vec<bool>>();
+
+    console::log_1(&format!("locked_colors_vec: {:?}", locked_colors_vec).into());
 
     let oklab_color_map: Vec<f32> = float_color_map
         .chunks(3)
@@ -516,8 +537,6 @@ pub fn calculate_palette_loss(
         .map(|&x| (x as f32) / 255.0)
         .collect::<Vec<f32>>();
 
-    console::log_1(&format!("coly: {:?}", colors).into());
-
     // Convert to Oklab
 
     let float_luminance_values: Vec<f32> = luminance_values
@@ -535,8 +554,6 @@ pub fn calculate_palette_loss(
         .flatten()
         .collect::<Vec<f32>>();
     let mut loss: HashMap<String, f32> = annealing_cost(&oklab_color_map).unwrap();
-    console::log_1(&format!("loss: {:?}", loss).into());
-    console::log_1(&format!("oklab_color_map: {:?}", oklab_color_map).into());
 
     let confusion = optimize_for_confusion(
         intensities,
@@ -647,8 +664,8 @@ fn calculate_average_confusion(
         num_samples += 1;
     }
     let avg_confusion = total_confusion / (num_samples as f32);
-    console::log_1(&format!("luminance_values: {:?}", luminance_values).into());
-    console::log_1(&format!("avg_confusion: {:?}", avg_confusion).into());
+    // console::log_1(&format!("luminance_values: {:?}", luminance_values).into());
+    // console::log_1(&format!("avg_confusion: {:?}", avg_confusion).into());
     avg_confusion
 }
 

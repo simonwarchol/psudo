@@ -275,7 +275,7 @@ function PsudoToolbar() {
       contrastLimitsArray,
       context?.luminanceValue
     );
-    console.log("optColors", optColors);
+    console.log("Post Call Opt colors", optColors);
     console.log("Colors Before", colors);
     let colorCounter = 0;
     let tmpColors = _.cloneDeep(colors);

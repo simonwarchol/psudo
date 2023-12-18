@@ -256,7 +256,6 @@ export const useImage = (source, history) => {
         lockedList.push(0);
       }
 
-      // console.log("LumVal", context.luminanceValue);
 
       const optColors = psudoAnalysis.optimize(
         colorArray,
@@ -265,7 +264,7 @@ export const useImage = (source, history) => {
         contrastLimitsArray,
         context?.luminanceValue
       );
-      console.log("optColors", optColors);
+      console.log("Post Call Opt colors", optColors);
       let colorCounter = 0;
       let tmpColors = _.cloneDeep(newColors);
       channelsVisible.forEach((d, i) => {

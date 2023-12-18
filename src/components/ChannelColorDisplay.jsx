@@ -205,10 +205,10 @@ function ChannelColorDisplay(props) {
           contrastLimitsArray,
           context?.luminanceValue
         );
-        console.log("optColors", optColors);
+        console.log("Post Call Opt colors", optColors);
         let colorCounter = 0;
         let tmpColors = _.cloneDeep(colors);
-        channelsVisible.forEach((d, i) => {
+        _tmpChannelsVisible.forEach((d, i) => {
           if (d) {
             tmpColors[i] = Array.from(
               optColors
