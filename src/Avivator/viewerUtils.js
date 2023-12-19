@@ -824,3 +824,28 @@ export function clearPastPalettes() {
   localStorage.setItem("pastPalettes", JSON.stringify([]));
   return [];
 }
+
+
+export async function getGlobalGraphData(
+  channelsVisible,
+  loader,
+  selections,
+  colors,
+  context
+) {
+  let graphData = [];
+  for (const [i, visible] of (channelsVisible || []).entries()) {
+    if (visible) {
+      let raster = await loader?.[_.size(loader) - 1]?.getRaster({
+        selection: selections[i],
+      });
+      let channelGraphData = getChannelGraphData({
+        data: raster.data,
+        color: colors[i],
+        selection: selections[i],
+      });
+      graphData.push(channelGraphData);
+    }
+  }
+  context?.setGraphData(graphData);
+};

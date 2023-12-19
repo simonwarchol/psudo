@@ -22,7 +22,7 @@ export const ContextWrapper = (props) => {
   const [paletteLoss, setPaletteLoss] = useState({});
   const [coordinate, setCoordinate] = useState([]);
   const [lensRadius, setLensRadius] = useState(100);
-  const [luminanceValue, setLuminanceValue] = React.useState([50, 100]);
+  const [luminanceValue, setLuminanceValue] = React.useState([60, 100]);
 
   const rgb2hex = (rgb) => {
     try {

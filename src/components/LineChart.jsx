@@ -13,6 +13,7 @@ const LineChart = () => {
   );
 
   useEffect(() => {
+    console.log("Graph Data", context.graphData);
     const dat = [];
     (context.graphData || []).forEach((d, index) => {
       (d?.frequencies || []).forEach((f) => {

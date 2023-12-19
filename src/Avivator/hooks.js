@@ -19,6 +19,7 @@ import {
   createContiguousArrays,
   getChannelGraphData,
   calculatePaletteLoss,
+  getGlobalGraphData
 } from "./viewerUtils";
 import { FILL_PIXEL_VALUE } from "./constants";
 import { AppContext } from "../context/GlobalContext.jsx";
@@ -52,29 +53,6 @@ export const useImage = (source, history) => {
 
   useEffect(() => { }, [colormap]);
 
-  const getGlobalGraphData = async (
-    channelsVisible,
-    loader,
-    selections,
-    colors
-  ) => {
-    let graphData = [];
-    for (const [i, visible] of (channelsVisible || []).entries()) {
-      if (visible) {
-        let raster = await loader?.[_.size(loader) - 1]?.getRaster({
-          selection: selections[i],
-        });
-        let channelGraphData = getChannelGraphData({
-          data: raster.data,
-          color: colors[i],
-          selection: selections[i],
-        });
-        graphData.push(channelGraphData);
-      }
-    }
-    context?.setGraphData(graphData);
-  };
-
   const getPaletteLoss = async (
     channelsVisible,
     loader,
@@ -99,7 +77,7 @@ export const useImage = (source, history) => {
 
   useEffect(() => {
     if (_.isEmpty(channelsVisible) || !loader || _.isEmpty(selections)) return;
-    getGlobalGraphData(channelsVisible, loader, selections, colors);
+    getGlobalGraphData(channelsVisible, loader, selections, colors, context);
     getPaletteLoss(
       channelsVisible,
       loader,
@@ -118,7 +96,7 @@ export const useImage = (source, history) => {
       lensEnabled
     )
       return;
-    getGlobalGraphData(channelsVisible, loader, selections, colors);
+    getGlobalGraphData(channelsVisible, loader, selections, colors, context);
     if (!lensEnabled)
       getPaletteLoss(
         channelsVisible,
@@ -266,7 +244,6 @@ export const useImage = (source, history) => {
           colorNamesList.push('');
         }
       }
-      console.log('CNL', colorNamesList);
 
 
       const optColors = psudoAnalysis.optimize(
@@ -289,8 +266,13 @@ export const useImage = (source, history) => {
           colorCounter += 3;
         }
       });
-
       useChannelsStore.setState({ colors: tmpColors, prevColors: tmpColors });
+
+
+
+      getGlobalGraphData(channelsVisible, loader, newSelections, tmpColors, context);
+
+
       getPaletteLoss(
         channelsVisible,
         loader,

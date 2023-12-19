@@ -37,6 +37,7 @@ import {
   calculateConfusionLoss,
   createContiguousArrays,
   getChannelPayload,
+  getGlobalGraphData,
 } from "../Avivator/viewerUtils.js";
 
 // import lodash
@@ -192,14 +193,6 @@ function ChannelColorDisplay(props) {
           else lockedList.push(1);
         }
 
-        console.log(
-          "LockedList",
-          colorArray,
-          lockedList,
-          intensityArray,
-          contrastLimitsArray,
-          context?.luminanceValue
-        );
         let colorNames = context?.channelColorNames;
 
         let colorNamesList = [];
@@ -237,14 +230,14 @@ function ChannelColorDisplay(props) {
         });
         context?.setIsLoading(false);
         useChannelsStore.setState({ colors: tmpColors, prevColors: tmpColors });
-        // getPaletteLoss(
-        //   channelsVisible,
-        //   loader,
-        //   newSelections,
-        //   tmpColors,
-        //   newContrastLimits,
-        //   pyramidResolution
-        // );
+
+        getGlobalGraphData(
+          _tmpChannelsVisible,
+          loader,
+          selections,
+          tmpColors,
+          context
+        );
       }
     }
   };
