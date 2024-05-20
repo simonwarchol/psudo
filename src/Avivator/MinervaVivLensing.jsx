@@ -22,7 +22,7 @@ import {
   IconLayer,
 } from "@deck.gl/layers";
 import _ from "lodash";
-import * as psudoAnalysis from "psudo-analysis";
+import * as psudo from "psudo";
 import { MultiscaleImageLayer, ImageLayer } from "@vivjs/layers";
 import srgbFs from "../components/shaders/fragment-shaders/rgb-color-mixing-fs.glsl";
 import oklabFs from "../components/shaders/fragment-shaders/oklab-color-mixing-fs.glsl";
@@ -101,8 +101,11 @@ const updateLensGraphValues = async (
   );
 
   setGraphData(graphData);
-  console.log("b");
-  let paletteLoss = await calculateLensPaletteLoss(channelData, luminanceValue, []);
+  let paletteLoss = await calculateLensPaletteLoss(
+    channelData,
+    luminanceValue,
+    []
+  );
   setPaletteLoss(paletteLoss);
 };
 
@@ -272,7 +275,8 @@ const LensLayer = class extends CompositeLayer {
         lensSelection,
         this.context.userData?.setGraphData,
         this.context.userData?.setPaletteLoss,
-        this.context.userData?.luminanceValue
+        this.context.userData?.luminanceValue,
+        this.context.userData?.colorNames
       );
       this.context.userData.setMainViewStateChanged(false);
     }
@@ -827,9 +831,7 @@ const LensLayer = class extends CompositeLayer {
             let thisChannelsData = channelData.filter((d) => {
               return _.isEqual(d.selection, selection);
             })[0];
-            const contrastLimits = psudoAnalysis.channel_gmm(
-              thisChannelsData.data
-            );
+            const contrastLimits = psudo.channel_gmm(thisChannelsData.data);
 
             const intContrastLimits = [
               _.toInteger(contrastLimits[0]),
@@ -848,9 +850,7 @@ const LensLayer = class extends CompositeLayer {
             let thisChannelsData = channelData.filter((d) => {
               return _.isEqual(d.selection, selection);
             })[0];
-            const contrastLimits = psudoAnalysis.channel_gmm(
-              thisChannelsData.data
-            );
+            const contrastLimits = psudo.channel_gmm(thisChannelsData.data);
             const intContrastLimits = [
               _.toInteger(contrastLimits[0]),
               _.toInteger(contrastLimits[1]),

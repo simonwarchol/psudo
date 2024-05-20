@@ -1,8 +1,9 @@
 [package]
-name = "lib"
-version = "0.1.0"
+name = "psudo"
+version = "0.2.4"
 authors = ["Simon Warchol <simonwarchol@g.harvard.edu>"]
 edition = "2018"
+license = "MIT"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

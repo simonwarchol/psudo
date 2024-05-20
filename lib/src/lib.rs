@@ -224,6 +224,7 @@ fn min_euclidean_distance(matrix: &Array2<f64>) -> f64 {
     let mut distance_sum = 0.0;
     let mut count = 0;
     let mut min_dist = f64::MAX;
+
     for i in 0..len {
         for j in i + 1..len {
             // Bind the temporary ArrayView to variables so they live long enough
@@ -283,6 +284,7 @@ fn term_loss(
     color_name_indices: Vec<f32>
 ) -> f32 {
     let mut loss = 0.0;
+
     for term in palette_terms.iter() {
         for color in term {
             if excluded_colors_indices.contains(&(color["index"] as f32)) {
@@ -290,6 +292,7 @@ fn term_loss(
             }
         }
     }
+
     let mut iter = 0;
     for term in palette_terms.iter() {
         if color_name_indices[iter] == -1.0 {
@@ -456,7 +459,7 @@ fn annealing(
     );
     // Optional: Define temperature function (defaults to `SATempFunc::TemperatureFast`)
     let res = Executor::new(cost_function, solver)
-        .configure(|state| { state.param(random_colors.to_vec()).max_iters(6_000) })
+        .configure(|state| { state.param(random_colors.to_vec()).max_iters(3_000) })
         // Optional: Attach an observer
         .run()?;
     // Print loss from best_param
@@ -482,7 +485,6 @@ pub fn optimize(
     let now = instant::Instant::now();
     // print luminance values
     // log excluded_colors
-
 
     // Convert to float
     let float_luminance_values: Vec<f32> = luminance_values
@@ -574,6 +576,7 @@ fn color_only_loss(
         let lab: Lab = Lab::from_color(okl);
         cielab_colors.push(vec![lab.l, lab.a, lab.b]);
     }
+
     let mut lab_palette = Array2::from_shape_vec(
         (oklab_colors.len() / 3, 3),
         cielab_colors
@@ -582,6 +585,7 @@ fn color_only_loss(
             .map(|&x| x as f64)
             .collect::<Vec<f64>>()
     ).unwrap();
+
     // console log the lab palette
     let mut oklab_palette = Array2::from_shape_vec(
         (param.len() / 3, 3),
@@ -593,6 +597,7 @@ fn color_only_loss(
     let analyzed_palette: Vec<HashMap<&str, f64>> = c3_instance.analyze_palette(
         lab_palette.clone()
     );
+
     let mut excluded_colors_indices = Vec::new();
     for color in excluded_colors {
         let analyzed_color = c3_instance.get_term_index(&color);
@@ -620,10 +625,12 @@ fn color_only_loss(
         excluded_colors_indices,
         color_name_indices
     );
+
     let cosine_matrix = c3_instance.compute_color_name_distance_matrix(analyzed_palette);
     // Calculate average distance between colors
     let mut total_distance = 0.0;
     let mut total_pairs = 0;
+
     // Iterate over lower triangle of matrix
     for i in 0..cosine_matrix.shape()[0] {
         for j in 0..i {
@@ -636,10 +643,12 @@ fn color_only_loss(
 
     let average_cosine_distance = total_distance / (total_pairs as f64);
     let min_euclidean_distance = min_euclidean_distance(&oklab_palette);
+
     let mut loss_components = HashMap::new();
     loss_components.insert("name_distance".to_string(), -average_cosine_distance as f32);
     loss_components.insert("perceptural_distance".to_string(), -min_euclidean_distance as f32);
     loss_components.insert("term_loss".to_string(), term_loss_val as f32);
+
     Ok(loss_components)
 }
 
@@ -660,8 +669,6 @@ pub fn calculate_palette_loss(
 
     // Convert to Oklab
 
-    console::log_1(&format!("color_names: {:?}", color_names).into());
-
     let float_luminance_values: Vec<f32> = luminance_values
         .iter()
         .map(|&x| (x as f32) / 100.0)
@@ -676,11 +683,13 @@ pub fn calculate_palette_loss(
         })
         .flatten()
         .collect::<Vec<f32>>();
+
     let mut loss: HashMap<String, f32> = color_only_loss(
         &oklab_color_map,
         excluded_colors,
         color_names
     ).unwrap();
+
 
     let confusion = optimize_for_confusion(
         intensities,
@@ -688,8 +697,11 @@ pub fn calculate_palette_loss(
         contrast_limits,
         &float_luminance_values
     );
+    console::log_1(&format!("confusion: {:?}", confusion).into());
 
     loss.insert("confusion".to_string(), confusion - (1.0 as f32));
+    console::log_1(&format!("Loss: {:?}", loss).into());
+
     JsValue::from_serde(&loss).unwrap()
 }
 

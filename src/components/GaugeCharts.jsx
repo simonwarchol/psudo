@@ -24,7 +24,7 @@ const GaugeCharts = () => {
       let nameDist = 1 - (context?.paletteLoss?.name_distance || 0) * -1;
       let perceptDist =
         1 - (context?.paletteLoss?.perceptural_distance || 0) * -1;
-      let conf = (context?.paletteLoss?.confusion || 0) * -1;
+      let conf = (context?.paletteLoss?.confusion || 0) + 1 / 2;
       setNameDistance(nameDist);
       setPerceptualDistance(perceptDist);
       setConfusion(conf);

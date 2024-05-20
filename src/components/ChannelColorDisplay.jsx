@@ -14,7 +14,7 @@ import LockOpenIcon from "@mui/icons-material/LockOpen";
 import ContrastIcon from "@mui/icons-material/Contrast";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import SquareIcon from "@mui/icons-material/Square";
-import * as psudoAnalysis from "psudo-analysis";
+import * as psudo from "psudo";
 
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ColorNameSelect from "./ColorNameSelect.jsx";
@@ -204,9 +204,8 @@ function ChannelColorDisplay(props) {
             colorNamesList.push("");
           }
         }
-        console.log("CNL", colorNamesList);
 
-        const optColors = psudoAnalysis.optimize(
+        const optColors = psudo.optimize(
           colorArray,
           lockedList,
           intensityArray,

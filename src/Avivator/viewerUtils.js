@@ -12,7 +12,7 @@ import {
 import { bin } from "d3-array";
 
 import { GLOBAL_SLIDER_DIMENSION_FIELDS } from "./constants";
-import * as psudoAnalysis from "psudo-analysis";
+import * as psudo from "psudo";
 import _ from "lodash";
 
 const MAX_CHANNELS_FOR_SNACKBAR_WARNING = 40;
@@ -339,12 +339,12 @@ export async function calculateLensPaletteLoss(channelsPayload, luminanceValue, 
   const { intensityArray, colorArray, contrastLimitsArray } =
     createContiguousArrays(channelsPayload);
   if (intensityArray.length == 0) return null;
-  let paletteCost = psudoAnalysis.calculate_palette_loss(
+  let paletteCost = psudo.calculate_palette_loss(
     intensityArray,
     colorArray,
     contrastLimitsArray,
     luminanceValue,
-    colorExcluded, []
+    colorExcluded, Array(channelsPayload.length).fill("")
   );
   return paletteCost;
 }
@@ -384,7 +384,7 @@ export async function calculatePaletteLoss(
   console.log('CNL', colorNamesList);
 
 
-  let paletteCost = psudoAnalysis.calculate_palette_loss(
+  let paletteCost = psudo.calculate_palette_loss(
     intensityArray,
     colorArray,
     contrastLimitsArray,
@@ -470,7 +470,7 @@ export async function getGMMContrastLimits({
     let raster = await loader?.[pyramidResolution]?.getRaster({
       selection: selection,
     });
-    const contrastLimits = psudoAnalysis.channel_gmm(raster.data);
+    const contrastLimits = psudo.channel_gmm(raster.data);
     const intContrastLimits = [
       _.toInteger(contrastLimits[0]),
       _.toInteger(contrastLimits[1]),
@@ -486,7 +486,7 @@ export function getChannelGraphData({ data, color, selection }) {
   const numBins = 50;
   let channelData = {};
   channelData["data"] = data;
-  channelData["logData"] = psudoAnalysis.ln(data);
+  channelData["logData"] = psudo.ln(data);
   // Number of bins you want
   const binF = bin()
     .domain([0, Math.log(65535)]) // Setting the range of your data
@@ -782,7 +782,7 @@ export async function optimizeInLens(channelData, contrastLimits) {
     delete d.data;
     return d;
   });
-  return psudoAnalysis.optimize_in_lens(allData, _colors, _contrastLimits);
+  return psudo.optimize_in_lens(allData, _colors, _contrastLimits);
 }
 
 export function savePastPalette(

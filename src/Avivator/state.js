@@ -133,7 +133,9 @@ const DEFAULT_VIEWER_STATE = {
   // },
   source: {
     urlOrFile: "https://exemplar-001.s3.amazonaws.com/exemplar-001.ome.tif",
+    // urlOrFile: "http://192.168.1.6:8005/overlapping_circles.ome.tiff",
     description: getNameFromUrl(
+      // "http://192.168.1.6:8005/overlapping_circles.ome.tiff"
       "https://exemplar-001.s3.amazonaws.com/exemplar-001.ome.tif"
     ),
   },

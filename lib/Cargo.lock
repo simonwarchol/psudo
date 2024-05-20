@@ -438,37 +438,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
-name = "lib"
-version = "0.1.0"
-dependencies = [
- "argmin",
- "console_error_panic_hook",
- "getrandom",
- "imp",
- "instant",
- "js-sys",
- "kd-tree",
- "libc",
- "linfa",
- "linfa-clustering",
- "linfa-datasets",
- "linfa-linear",
- "ndarray",
- "ndarray-stats",
- "palette",
- "rand",
- "rand_xoshiro",
- "rayon",
- "serde",
- "serde_json",
- "statrs",
- "typenum",
- "wasm-bindgen",
- "wasm-bindgen-test",
- "web-sys",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -883,6 +852,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b1106fec09662ec6dd98ccac0f81cef56984d0b49f75c92d8cbad76e20c005c"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "psudo"
+version = "0.2.4"
+dependencies = [
+ "argmin",
+ "console_error_panic_hook",
+ "getrandom",
+ "imp",
+ "instant",
+ "js-sys",
+ "kd-tree",
+ "libc",
+ "linfa",
+ "linfa-clustering",
+ "linfa-datasets",
+ "linfa-linear",
+ "ndarray",
+ "ndarray-stats",
+ "palette",
+ "rand",
+ "rand_xoshiro",
+ "rayon",
+ "serde",
+ "serde_json",
+ "statrs",
+ "typenum",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]

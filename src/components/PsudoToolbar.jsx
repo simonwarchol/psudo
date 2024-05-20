@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useState } from "react";
 import { AppContext } from "../context/GlobalContext.jsx";
 import ColorNameSelect from "./ColorNameSelect.jsx";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
-import * as psudoAnalysis from "psudo-analysis";
+import * as psudo from "psudo";
 
 import {
   Grid,
@@ -280,7 +280,7 @@ function PsudoToolbar() {
 
     // console.log("LumVal", context.luminanceValue);
 
-    const optColors = psudoAnalysis.optimize(
+    const optColors = psudo.optimize(
       colorArray,
       lockedList,
       intensityArray,

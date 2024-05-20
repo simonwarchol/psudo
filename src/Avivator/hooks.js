@@ -24,7 +24,7 @@ import {
 import { FILL_PIXEL_VALUE } from "./constants";
 import { AppContext } from "../context/GlobalContext.jsx";
 import _ from "lodash";
-import * as psudoAnalysis from "psudo-analysis";
+import * as psudo from "psudo";
 
 export const useImage = (source, history) => {
   const [toggleIsOffsetsSnackbarOn] = useViewerStore(
@@ -246,7 +246,7 @@ export const useImage = (source, history) => {
       }
 
 
-      const optColors = psudoAnalysis.optimize(
+      const optColors = psudo.optimize(
         colorArray,
         lockedList,
         intensityArray,
