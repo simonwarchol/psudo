@@ -8,7 +8,7 @@ import LoadingOverlay from "./components/LoadingOverlay.jsx";
 import PsudoToolbar from "./components/PsudoToolbar.jsx";
 import IndividualChannelsWrapper from "./Avivator/IndividualChannelsWrapper.jsx";
 import {BrowserRouter as Router, Route} from "react-router-dom";
-import AlertDialog from "./components/Dialog.jsx";
+import InfoDialog from "./components/Dialog.jsx";
 
 
 function App() {
@@ -16,7 +16,7 @@ function App() {
 
     return (
         <ContextWrapper>
-            {/*<AlertDialog/>*/}
+            <InfoDialog/>
             <LoadingOverlay/>
             <div className="App">
                 <Router>
