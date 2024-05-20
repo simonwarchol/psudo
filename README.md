@@ -1,70 +1,19 @@
-# Avivator
+# psudo
 
-Avivator is a lightweight "batteries-included" WebGL viewer for remote imaging data, built around Viv.
-A hosted instance of Avivator can be accessed at [avivator.gehlenborglab.org](avivator.gehlenborglab.org).
+See our paper [psudo: Exploring Multi-Channel Biomedical Image Data with Spatially and Perceptually Optimized Pseudocoloring](https://www.biorxiv.org/content/10.1101/2024.04.11.589087v1) for more information.
+## Publication
 
-Please checkout our [video tutorial](https://www.youtube.com/watch?v=_GES8BTzyWc) to get started.
+This package is developed following the research conducted by Simon Warchol, Jakob Troidl, Jeremy Muhlich, Robert Krueger, John Hoffer, Tica Lin, Johanna Beyer, Elena Glassman, Peter Sorger, and Hanspeter Pfister. For a detailed explanation of the methodologies and their applications, please refer to the original paper linked above.
 
-## Development system requirements
+### Affiliations
+- Harvard John A. Paulson School of Engineering and Applied Sciences
+- Harvard Medical School
+- New York University Tandon School of Engineering
 
-Avivator has been tested with the following dependency versions:
+## Use
 
-- Operating system: macOS 10.15.5
-- NodeJS 14.0.0
-- NPM 6.14.4
-- Zsh 5.7.1
-- one of:
-    - Firefox Developer Edition 84.0b8
-    - Firefox 80.0.1 (and later)
-    - Safari 13.1.1 (and later)
-    - Google Chrome 87.0.4280.88
+Install Psudo using npm:
 
-## Development guide
-
-Avivator is developed alongside the Viv codebase. To develop Avivator, clone
-the Viv repository and run the following commands in a `zsh` or `bash` shell:
-
-```sh
-git clone https://github.com/hms-dbmi/viv.git && cd viv
-npm install # installs dependencies for both viv and avivator
-npm start
-```
-
-This command starts a live development server. Navigate to `http://localhost:3000`
-in your web browser to view the site. You may edit the contents of `src/` (Viv codebase)
-or `avivator/`, and the changes should be applied automatically.
-
-## Production build
-
-You may build a static production build of Avivator with the following:
-
-```sh
-npm run build:avivator
-```
-
-which outputs the final build in `avivator/dist`. This directory can be deployed as
-static site in production.
-
-## Instructions for use
-
-To use Avivator to visualize your own imaging data, use the URL input in the web application to provide a URL to an
-OME-TIFF/Bioformats-Zarr.
-
-To learn more about working with OME-TIFF files or Bioformats-Zarr stores, please visit
-the [tutorial](../tutorial/README.md).
-
-
-## Deploying frontend
-
-For the first time, run
-```bash 
-gcloud config set gcloudignore/enabled true # only need to do this once
-```
-
-Then, run
 ```bash
-npm run build # builds the frontend
-gcloud app deploy # deploys the frontend
-gcloud app browse -s frontend # opens the deployed frontend
+npm i && npm run dev
 ```
-
