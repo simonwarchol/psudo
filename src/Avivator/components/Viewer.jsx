@@ -30,6 +30,7 @@ import {
 } from "../MinervaVivLensing.jsx";
 
 const Viewer = (props) => {
+  console.log("Viewer Render");
   const deckRef = useRef(null);
   const context = useContext(AppContext);
   const showChannel = props?.showChannel;

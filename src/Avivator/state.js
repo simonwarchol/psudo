@@ -132,11 +132,11 @@ const DEFAULT_VIEWER_STATE = {
   //   description: "exemplar-001.ome.tif",
   // },
   source: {
-    urlOrFile: "https://exemplar-001.s3.amazonaws.com/exemplar-001.ome.tif",
+    urlOrFile: "https://seal-vis.s3.us-east-1.amazonaws.com/exemplar-001v2/image.ome.tif",
     // urlOrFile: "http://192.168.1.6:8005/overlapping_circles.ome.tiff",
     description: getNameFromUrl(
       // "http://192.168.1.6:8005/overlapping_circles.ome.tiff"
-      "https://exemplar-001.s3.amazonaws.com/exemplar-001.ome.tif"
+      "https://seal-vis.s3.us-east-1.amazonaws.com/exemplar-001v2/image.ome.tif"
     ),
   },
   pyramidResolution: 0,

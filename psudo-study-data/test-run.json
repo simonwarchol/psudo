@@ -1,0 +1,1003 @@
+[
+  {
+    "task": 1,
+    "id": "2PTkQxhQNiI4jHmf1n6q",
+    "data": {
+      "colors": "[[20,199,190],[147,189,99],[225,158,74],[242,138,156],[197,150,234],[105,179,251]]",
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"OklabXYZ\",\"numChannels\":6,\"prevTask\":2,\"dataPath\":\"data/Ch_6_Rand_7_512x512.ome.tif\"}",
+      "guessValue": 65535,
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "channel": {
+        "channelNumber": 1,
+        "color": "#93bd63"
+      },
+      "channelValues": [
+        7779.875,
+        55343.25,
+        5636.375,
+        9030.625,
+        1201.875,
+        3560
+      ]
+    }
+  },
+  {
+    "task": 1,
+    "id": "5jdTkbHRIWBLIBEGNQ6f",
+    "data": {
+      "channelValues": [
+        5099.75,
+        62731.75,
+        7111.0625,
+        11186.8125,
+        2878
+      ],
+      "guessValue": 65535,
+      "uuid": "ba3d2c25-2fe8-a07b-b7fe-44c316b78831",
+      "colors": "[[212,166,65],[242,138,153],[185,155,243],[60,189,236],[99,197,138]]",
+      "channel": {
+        "color": "#f28a99",
+        "channelNumber": 1
+      },
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Lab\",\"numChannels\":5,\"prevTask\":2,\"dataPath\":\"data/Ch_5_Rand_10_512x512.ome.tif\"}"
+    }
+  },
+  {
+    "task": 1,
+    "id": "6BpE6m8ov0hDKnxs8QZR",
+    "data": {
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Linear RGB\",\"numChannels\":6,\"prevTask\":4,\"dataPath\":\"data/Ch_6_Rand_11_512x512.ome.tif\"}",
+      "colors": "[[209,167,65],[244,140,130],[215,144,216],[136,171,254],[8,196,213],[116,195,124]]",
+      "channelValues": [
+        17823,
+        7845.5625,
+        13176.8125,
+        6656.125,
+        20925,
+        63025.4375
+      ],
+      "channel": {
+        "color": "#74c37c",
+        "channelNumber": 5
+      },
+      "guessValue": 65535
+    }
+  },
+  {
+    "task": 1,
+    "id": "9DkV8aWxhvC4pDTFnAhV",
+    "data": {
+      "guessValue": 65535,
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"sRGB\",\"numChannels\":5,\"prevTask\":2,\"dataPath\":\"data/Ch_5_Rand_16_512x512.ome.tif\"}",
+      "colors": "[[7,196,212],[140,191,105],[231,154,82],[233,139,185],[154,165,253]]",
+      "channel": {
+        "color": "#e98bb9",
+        "channelNumber": 3
+      },
+      "channelValues": [
+        3373.75,
+        3868.75,
+        9027.3125,
+        57190.4375,
+        1750
+      ],
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03"
+    }
+  },
+  {
+    "task": 1,
+    "id": "9W46n8pXJRpYXgjFkVjJ",
+    "data": {
+      "channelValues": [
+        6879.0625,
+        8077,
+        5391.25,
+        63415.75,
+        10234.8125
+      ],
+      "colors": "[[30,193,223],[125,194,117],[225,158,74],[238,138,173],[167,161,250]]",
+      "channel": {
+        "color": "#ee8aad",
+        "channelNumber": 3
+      },
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":5,\"prevTask\":2,\"dataPath\":\"data/Ch_5_Rand_3_512x512.ome.tif\"}",
+      "guessValue": 65535,
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29"
+    }
+  },
+  {
+    "task": 1,
+    "id": "KTWwvkdGnJ8tgQo9LKAU",
+    "data": {
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "guessValue": 65535,
+      "colors": "[[244,141,126]]",
+      "channelValues": [
+        64069.4375
+      ],
+      "channel": {
+        "color": "#f48d7e",
+        "channelNumber": 0
+      },
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab\",\"numChannels\":1,\"prevTask\":2,\"dataPath\":\"data/Ch_1_Rand_14_512x512.ome.tif\"}"
+    }
+  },
+  {
+    "task": 1,
+    "id": "L1gqC6b4LR2Vu4r0OVZq",
+    "data": {
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "guessValue": 65535,
+      "channelValues": [
+        7663.125,
+        16399.5625,
+        64090.375
+      ],
+      "colors": "[[239,138,169],[90,183,246],[162,186,88]]",
+      "channel": {
+        "color": "#a2ba58",
+        "channelNumber": 2
+      },
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":3,\"prevTask\":4,\"dataPath\":\"data/Ch_3_Rand_16_512x512.ome.tif\"}"
+    }
+  },
+  {
+    "task": 1,
+    "id": "MR8mcnt7mizjWKEjPUqf",
+    "data": {
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Lab\",\"numChannels\":4,\"prevTask\":2,\"dataPath\":\"data/Ch_4_Rand_0_512x512.ome.tif\"}",
+      "channelValues": [
+        1075.625,
+        14884.4375,
+        63612.625,
+        10318.625
+      ],
+      "colors": "[[232,139,188],[121,175,253],[72,199,157],[218,163,68]]",
+      "uuid": "ba3d2c25-2fe8-a07b-b7fe-44c316b78831",
+      "channel": {
+        "channelNumber": 2,
+        "color": "#48c79d"
+      },
+      "guessValue": 65535
+    }
+  },
+  {
+    "task": 1,
+    "id": "OgO4ZFqwIaD7YqEriwjg",
+    "data": {
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":5,\"prevTask\":2,\"dataPath\":\"data/Ch_5_Rand_0_512x512.ome.tif\"}",
+      "guessValue": 65535,
+      "channel": {
+        "channelNumber": 3,
+        "color": "#cb94e6"
+      },
+      "colors": "[[68,199,160],[196,174,67],[244,140,131],[203,148,230],[91,183,247]]",
+      "channelValues": [
+        13182.5,
+        6919.625,
+        7321.1875,
+        61964.125,
+        21453.8125
+      ],
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29"
+    }
+  },
+  {
+    "task": 1,
+    "id": "QQkJkBovtTdQjzIMXMRC",
+    "data": {
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "channel": {
+        "color": "#b29df6",
+        "channelNumber": 2
+      },
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":5,\"prevTask\":2,\"dataPath\":\"data/Ch_5_Rand_19_512x512.ome.tif\"}",
+      "channelValues": [
+        15172.875,
+        7884.0625,
+        61371.375,
+        6163.375,
+        14122.6875
+      ],
+      "guessValue": 65535,
+      "colors": "[[218,163,68],[241,138,161],[178,157,246],[49,191,231],[109,196,130]]"
+    }
+  },
+  {
+    "task": 1,
+    "id": "RBdw5e5Y2mR0m6vgX3El",
+    "data": {
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":3,\"prevTask\":2,\"dataPath\":\"data/Ch_3_Rand_17_512x512.ome.tif\"}",
+      "channel": {
+        "color": "#d292df",
+        "channelNumber": 0
+      },
+      "colors": "[[210,146,223],[0,197,207],[215,164,66]]",
+      "guessValue": 65535,
+      "channelValues": [
+        57028.5,
+        4534.8125,
+        4756.875
+      ],
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29"
+    }
+  },
+  {
+    "task": 1,
+    "id": "RnaH1kh2aZXd26KFbLdl",
+    "data": {
+      "channel": {
+        "color": "#67b4fa",
+        "channelNumber": 0
+      },
+      "guessValue": 65535,
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "channelValues": [
+        56427
+      ],
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Linear RGB\",\"numChannels\":1,\"prevTask\":4,\"dataPath\":\"data/Ch_1_Rand_8_512x512.ome.tif\"}",
+      "colors": "[[103,180,250]]"
+    }
+  },
+  {
+    "task": 1,
+    "id": "RsjljVbJXKUX7oFMWcrt",
+    "data": {
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab\",\"numChannels\":3,\"prevTask\":4,\"dataPath\":\"data/Ch_3_Rand_16_512x512.ome.tif\"}",
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "channelValues": [
+        57103.25,
+        10455.875,
+        7731.5
+      ],
+      "guessValue": 65535,
+      "channel": {
+        "color": "#7dc275",
+        "channelNumber": 0
+      },
+      "colors": "[[125,194,117],[244,139,136],[129,173,254]]"
+    }
+  },
+  {
+    "task": 1,
+    "id": "UjV1uR6C957xEpKMI1Hy",
+    "data": {
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab\",\"numChannels\":3,\"prevTask\":4,\"dataPath\":\"data/Ch_3_Rand_1_512x512.ome.tif\"}",
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "colors": "[[166,185,85],[238,138,172],[84,184,245]]",
+      "channelValues": [
+        63873,
+        8162.0625,
+        4767.625
+      ],
+      "guessValue": 65535,
+      "channel": {
+        "channelNumber": 0,
+        "color": "#a6b955"
+      }
+    }
+  },
+  {
+    "task": 1,
+    "id": "VYKmK7jfewlmQkwC9zLf",
+    "data": {
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "channel": {
+        "color": "#97bd60",
+        "channelNumber": 3
+      },
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Linear RGB\",\"numChannels\":5,\"prevTask\":2,\"dataPath\":\"data/Ch_5_Rand_8_512x512.ome.tif\"}",
+      "colors": "[[229,140,194],[144,168,254],[0,197,205],[151,189,96],[235,151,89]]",
+      "channelValues": [
+        7471,
+        4310.4375,
+        10016.5,
+        49931.8125,
+        16342.4375
+      ],
+      "guessValue": 65535
+    }
+  },
+  {
+    "task": 1,
+    "id": "XTYgpzfOLaaQYoqL9MUn",
+    "data": {
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":5,\"prevTask\":2,\"dataPath\":\"data/Ch_5_Rand_6_512x512.ome.tif\"}",
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "channelValues": [
+        16730.625,
+        11191.9375,
+        17271.125,
+        57027.125,
+        5972.9375
+      ],
+      "guessValue": 65535,
+      "channel": {
+        "color": "#de8ece",
+        "channelNumber": 3
+      },
+      "colors": "[[17,199,191],[166,185,85],[239,147,101],[222,142,206],[129,173,254]]"
+    }
+  },
+  {
+    "task": 1,
+    "id": "Xwx9XtCehORfIO5tK8Mu",
+    "data": {
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "channel": {
+        "channelNumber": 3,
+        "color": "#03c4d2"
+      },
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab\",\"numChannels\":5,\"prevTask\":2,\"dataPath\":\"data/Ch_5_Rand_4_512x512.ome.tif\"}",
+      "guessValue": 65535,
+      "colors": "[[232,153,84],[232,139,188],[151,166,254],[3,196,210],[144,190,102]]",
+      "channelValues": [
+        18313.375,
+        819.9375,
+        1281.0625,
+        53060.0625,
+        8550.75
+      ]
+    }
+  },
+  {
+    "task": 1,
+    "id": "eMykJg6YhSDXiimANTyo",
+    "data": {
+      "guessValue": 65535,
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"OklabXYZ\",\"numChannels\":5,\"prevTask\":2,\"dataPath\":\"data/Ch_5_Rand_15_512x512.ome.tif\"}",
+      "channel": {
+        "channelNumber": 1,
+        "color": "#62c58a"
+      },
+      "colors": "[[62,189,236],[98,197,138],[211,166,65],[242,138,152],[186,154,242]]",
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "channelValues": [
+        16720.5,
+        51783.9375,
+        7800.8125,
+        9441.3125,
+        2187
+      ]
+    }
+  },
+  {
+    "task": 1,
+    "id": "pnEyF6TyRnuaumwxWWum",
+    "data": {
+      "colors": "[[87,184,246],[110,196,129],[232,153,84],[219,143,212]]",
+      "channelValues": [
+        53922.6875,
+        7148.9375,
+        7572.8125,
+        12298.625
+      ],
+      "channel": {
+        "channelNumber": 0,
+        "color": "#57b8f6"
+      },
+      "randomState": "{\"url\":\"/t1\",\"colorSpace\":\"Oklab\",\"numChannels\":4,\"prevTask\":4,\"dataPath\":\"data/Ch_4_Rand_9_512x512.ome.tif\"}",
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "guessValue": 65535
+    }
+  },
+  {
+    "task": 2,
+    "id": "1RrRS6OaWizTYao668Be",
+    "data": {
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"sRGB\",\"numChannels\":1,\"prevTask\":1,\"dataPath\":\"data/Ch_1_Rand_0_512x512.ome.tif\"}",
+      "data": {
+        "right_box": 7902.8660888671875,
+        "left_box": 16072.376586914062
+      },
+      "isLeft": true,
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "colors": "[[233,152,85]]",
+      "channel": {
+        "color": "#e99855",
+        "channelNumber": 0
+      }
+    }
+  },
+  {
+    "task": 2,
+    "id": "36xsTRwcvQDntRjsbDma",
+    "data": {
+      "colors": "[[178,157,246]]",
+      "data": {
+        "right_box": 8399.456726074219,
+        "left_box": 14984.166931152344
+      },
+      "isLeft": true,
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"sRGB\",\"numChannels\":1,\"prevTask\":4,\"dataPath\":\"data/Ch_1_Rand_3_512x512.ome.tif\"}",
+      "channel": {
+        "color": "#b29df6",
+        "channelNumber": 0
+      },
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29"
+    }
+  },
+  {
+    "task": 2,
+    "id": "3xATUAU8OKoF0TbRi7Y2",
+    "data": {
+      "colors": "[[230,140,193],[164,162,251],[54,190,233],[80,199,152],[187,177,70],[240,146,104]]",
+      "channel": {
+        "color": "#bbb146",
+        "channelNumber": 4
+      },
+      "data": {
+        "right_box": 14837.19873046875,
+        "left_box": 14770.946044921875
+      },
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"OklabXYZ\",\"numChannels\":6,\"prevTask\":1,\"dataPath\":\"data/Ch_6_Rand_15_512x512.ome.tif\"}",
+      "isLeft": false
+    }
+  },
+  {
+    "task": 2,
+    "id": "6HK8SdjwH1Eq7Ot4otq9",
+    "data": {
+      "colors": "[[225,141,202],[95,198,141]]",
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "data": {
+        "right_box": 9743.657409667969,
+        "left_box": 8092.932189941406
+      },
+      "channel": {
+        "channelNumber": 0,
+        "color": "#e18dca"
+      },
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"OklabXYZ\",\"numChannels\":2,\"prevTask\":1,\"dataPath\":\"data/Ch_2_Rand_19_512x512.ome.tif\"}",
+      "isLeft": true
+    }
+  },
+  {
+    "task": 2,
+    "id": "8WKOZvJu2ojJnbeqZNPK",
+    "data": {
+      "colors": "[[103,180,250],[226,157,75]]",
+      "channel": {
+        "channelNumber": 1,
+        "color": "#e29d4b"
+      },
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "isLeft": false,
+      "data": {
+        "left_box": 20175.139221191406,
+        "right_box": 49983.25891113281
+      },
+      "randomState": "{\"dataPath\":\"data/tutorial.ome.tif\",\"colorSpace\":\"sRGB\",\"prevTask\":1,\"numChannels\":1,\"url\":\"/t1\"}"
+    }
+  },
+  {
+    "task": 2,
+    "id": "DOHbj7qF51D6TCmhZBqW",
+    "data": {
+      "channel": {
+        "color": "#05c6c6",
+        "channelNumber": 2
+      },
+      "data": {
+        "left_box": 13603.927062988281,
+        "right_box": 14632.552551269531
+      },
+      "colors": "[[226,141,200],[137,170,254],[5,198,198],[159,186,90],[237,148,95]]",
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"Oklab\",\"numChannels\":5,\"prevTask\":1,\"dataPath\":\"data/Ch_5_Rand_13_512x512.ome.tif\"}",
+      "isLeft": true
+    }
+  },
+  {
+    "task": 2,
+    "id": "IeFVuR4wPONlwXE6DIc5",
+    "data": {
+      "channel": {
+        "color": "#03c4d2",
+        "channelNumber": 0
+      },
+      "isLeft": false,
+      "uuid": "ba3d2c25-2fe8-a07b-b7fe-44c316b78831",
+      "colors": "[[3,196,210],[244,140,134]]",
+      "data": {
+        "left_box": 45358.860778808594,
+        "right_box": 15550.741088867188
+      },
+      "randomState": "{\"dataPath\":\"data/tutorial.ome.tif\",\"colorSpace\":\"sRGB\",\"prevTask\":1,\"numChannels\":1,\"url\":\"/t1\"}"
+    }
+  },
+  {
+    "task": 2,
+    "id": "MeNAhSSIAjTflAnRBCUf",
+    "data": {
+      "isLeft": false,
+      "channel": {
+        "color": "#7fc274",
+        "channelNumber": 0
+      },
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"Oklab\",\"numChannels\":2,\"prevTask\":4,\"dataPath\":\"data/Ch_2_Rand_12_512x512.ome.tif\"}",
+      "colors": "[[127,194,116],[210,146,223]]",
+      "uuid": "ba3d2c25-2fe8-a07b-b7fe-44c316b78831",
+      "data": {
+        "left_box": 10288.044677734375,
+        "right_box": 8502.369873046875
+      }
+    }
+  },
+  {
+    "task": 2,
+    "id": "NIjwmfkn43SiokDm6Apr",
+    "data": {
+      "data": {
+        "left_box": 10523.29052734375,
+        "right_box": 11110.395874023438
+      },
+      "colors": "[[109,178,251],[145,190,101],[242,138,153]]",
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "channel": {
+        "color": "#6db2fb",
+        "channelNumber": 0
+      },
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"Lab\",\"numChannels\":3,\"prevTask\":4,\"dataPath\":\"data/Ch_3_Rand_7_512x512.ome.tif\"}",
+      "isLeft": false
+    }
+  },
+  {
+    "task": 2,
+    "id": "QywUr9VEZdmtaJtU41Wq",
+    "data": {
+      "isLeft": true,
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "data": {
+        "left_box": 16083.651428222656,
+        "right_box": 15288.665893554688
+      },
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":5,\"prevTask\":1,\"dataPath\":\"data/Ch_5_Rand_4_512x512.ome.tif\"}",
+      "channel": {
+        "color": "#7bc277",
+        "channelNumber": 1
+      },
+      "colors": "[[32,193,224],[123,194,119],[223,159,72],[238,138,171],[169,160,250]]"
+    }
+  },
+  {
+    "task": 2,
+    "id": "W5PhNou8G47sQd5edlLu",
+    "data": {
+      "channel": {
+        "color": "#b3b44b",
+        "channelNumber": 0
+      },
+      "data": {
+        "right_box": 14476.055419921875,
+        "left_box": 14038.538818359375
+      },
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"Linear RGB\",\"numChannels\":2,\"prevTask\":4,\"dataPath\":\"data/Ch_2_Rand_10_512x512.ome.tif\"}",
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "isLeft": false,
+      "colors": "[[179,180,75],[172,159,249]]"
+    }
+  },
+  {
+    "task": 2,
+    "id": "YmLQmoSvvWUSEzJpzaAQ",
+    "data": {
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "channel": {
+        "color": "#d093e1",
+        "channelNumber": 1
+      },
+      "colors": "[[131,193,112],[208,147,225]]",
+      "data": {
+        "left_box": 20175.139221191406,
+        "right_box": 49983.25891113281
+      },
+      "isLeft": false,
+      "randomState": "{\"dataPath\":\"data/tutorial.ome.tif\",\"colorSpace\":\"sRGB\",\"prevTask\":1,\"numChannels\":1,\"url\":\"/t1\"}"
+    }
+  },
+  {
+    "task": 2,
+    "id": "bX8SKoMHPj9NxW7c3qno",
+    "data": {
+      "isLeft": false,
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "colors": "[[179,180,75],[242,143,114],[214,144,217],[113,177,252],[41,199,178]]",
+      "channel": {
+        "channelNumber": 3,
+        "color": "#71b1fc"
+      },
+      "data": {
+        "left_box": 12661.2451171875,
+        "right_box": 16258.757690429688
+      },
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"Linear RGB\",\"numChannels\":5,\"prevTask\":1,\"dataPath\":\"data/Ch_5_Rand_12_512x512.ome.tif\"}"
+    }
+  },
+  {
+    "task": 2,
+    "id": "kg4wuGOWOfvxCrDIOsrY",
+    "data": {
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "data": {
+        "left_box": 10735.620666503906,
+        "right_box": 15772.534729003906
+      },
+      "colors": "[[77,186,242],[235,150,90]]",
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"Oklab\",\"numChannels\":2,\"prevTask\":1,\"dataPath\":\"data/Ch_2_Rand_14_512x512.ome.tif\"}",
+      "channel": {
+        "color": "#eb965a",
+        "channelNumber": 1
+      },
+      "isLeft": false
+    }
+  },
+  {
+    "task": 2,
+    "id": "llVLDuiJp1fHZHpqSGV4",
+    "data": {
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"Lab\",\"numChannels\":6,\"prevTask\":4,\"dataPath\":\"data/Ch_6_Rand_12_512x512.ome.tif\"}",
+      "channel": {
+        "channelNumber": 2,
+        "color": "#31c7ad"
+      },
+      "colors": "[[182,155,244],[83,184,244],[49,199,173],[167,184,84],[234,152,87],[237,138,174]]",
+      "data": {
+        "right_box": 11483.823120117188,
+        "left_box": 21697.252502441406
+      },
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "isLeft": true
+    }
+  },
+  {
+    "task": 2,
+    "id": "xfGv9JmczHRPboYxjPtp",
+    "data": {
+      "isLeft": false,
+      "channel": {
+        "channelNumber": 0,
+        "color": "#f38a92"
+      },
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"sRGB\",\"numChannels\":1,\"prevTask\":4,\"dataPath\":\"data/Ch_1_Rand_15_512x512.ome.tif\"}",
+      "colors": "[[243,138,146]]",
+      "data": {
+        "left_box": 11732.645751953125,
+        "right_box": 13681.824035644531
+      },
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03"
+    }
+  },
+  {
+    "task": 2,
+    "id": "z8N6Q3rYDh1mcc0LxhdL",
+    "data": {
+      "data": {
+        "left_box": 10236.561889648438,
+        "right_box": 8025.8265380859375
+      },
+      "channel": {
+        "channelNumber": 4,
+        "color": "#87c06d"
+      },
+      "randomState": "{\"url\":\"/t2\",\"colorSpace\":\"OklabXYZ\",\"numChannels\":5,\"prevTask\":1,\"dataPath\":\"data/Ch_5_Rand_16_512x512.ome.tif\"}",
+      "uuid": "ba3d2c25-2fe8-a07b-b7fe-44c316b78831",
+      "colors": "[[229,155,79],[235,138,181],[158,164,252],[15,195,216],[135,192,109]]",
+      "isLeft": false
+    }
+  },
+  {
+    "task": 4,
+    "id": "3YTmgj9cEjKXkBlTYdzp",
+    "data": {
+      "uuid": "ba3d2c25-2fe8-a07b-b7fe-44c316b78831",
+      "channels": [
+        {
+          "color": "#a5a1fb",
+          "channel": 0
+        },
+        {
+          "channel": 1,
+          "color": "#bab147"
+        }
+      ],
+      "selectedChannel": 0,
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Oklab\",\"numChannels\":2,\"prevTask\":2,\"dataPath\":\"data/Ch_2_Rand_17_512x512.ome.tif\"}",
+      "colors": "[[165,161,251],[186,177,71]]",
+      "data": {
+        "0": 11376.383666992188,
+        "1": 13815.38671875
+      }
+    }
+  },
+  {
+    "task": 4,
+    "id": "3ry8wPuNmXuo5zp1G6TF",
+    "data": {
+      "colors": "[[111,178,252],[223,159,71]]",
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "channels": [
+        {
+          "color": "#df9f47",
+          "channel": 1
+        },
+        {
+          "channel": 0,
+          "color": "#6fb2fc"
+        }
+      ],
+      "data": {
+        "0": 19521.670959472656,
+        "1": 10737.636779785156
+      },
+      "selectedChannel": 0,
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":2,\"prevTask\":1,\"dataPath\":\"data/Ch_2_Rand_0_512x512.ome.tif\"}"
+    }
+  },
+  {
+    "task": 4,
+    "id": "5Jx65CF528JhwwLEyfEI",
+    "data": {
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Oklab\",\"numChannels\":3,\"prevTask\":2,\"dataPath\":\"data/Ch_3_Rand_10_512x512.ome.tif\"}",
+      "data": {
+        "1": 8673.222290039062,
+        "2": 17962.448181152344
+      },
+      "channels": [
+        {
+          "channel": 1,
+          "color": "#dc8fd2"
+        },
+        {
+          "color": "#16c2db",
+          "channel": 2
+        }
+      ],
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "selectedChannel": 2,
+      "colors": "[[204,170,65],[220,143,210],[22,194,219]]"
+    }
+  },
+  {
+    "task": 4,
+    "id": "BRDT2WBPfMzfOQFaeOPK",
+    "data": {
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"OklabXYZ\",\"numChannels\":6,\"prevTask\":2,\"dataPath\":\"data/Ch_6_Rand_3_512x512.ome.tif\"}",
+      "colors": "[[177,157,247],[73,186,241],[60,199,166],[174,182,79],[236,150,92],[235,138,180]]",
+      "selectedChannel": 0,
+      "channels": [
+        {
+          "channel": 3,
+          "color": "#aeb64f"
+        },
+        {
+          "channel": 0,
+          "color": "#b19df7"
+        }
+      ],
+      "data": {
+        "0": 11941.612060546875,
+        "3": 8503.238403320312
+      }
+    }
+  },
+  {
+    "task": 4,
+    "id": "BS8CGPcorpbHeNaIt6yz",
+    "data": {
+      "colors": "[[215,164,67],[244,139,139],[210,146,223],[126,174,254],[0,197,205],[128,193,114]]",
+      "channels": [
+        {
+          "channel": 3,
+          "color": "#7eaefe"
+        },
+        {
+          "color": "#d292df",
+          "channel": 2
+        }
+      ],
+      "data": {
+        "2": 14700.898559570312,
+        "3": 19417.288208007812
+      },
+      "uuid": "ba3d2c25-2fe8-a07b-b7fe-44c316b78831",
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Lab\",\"numChannels\":6,\"prevTask\":1,\"dataPath\":\"data/Ch_6_Rand_6_512x512.ome.tif\"}",
+      "selectedChannel": 3
+    }
+  },
+  {
+    "task": 4,
+    "id": "DHdSto1Vhw1ZAzB1s8ou",
+    "data": {
+      "data": {
+        "1": 14167.800476074219,
+        "2": 8147.852844238281
+      },
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":3,\"prevTask\":1,\"dataPath\":\"data/Ch_3_Rand_18_512x512.ome.tif\"}",
+      "channels": [
+        {
+          "channel": 1,
+          "color": "#ef9365"
+        },
+        {
+          "color": "#a7a1fa",
+          "channel": 2
+        }
+      ],
+      "colors": "[[75,199,156],[239,147,101],[167,161,250]]",
+      "selectedChannel": 1,
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03"
+    }
+  },
+  {
+    "task": 4,
+    "id": "JDxpvzXbcREnAZkEifd2",
+    "data": {
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Lab\",\"numChannels\":2,\"prevTask\":1,\"dataPath\":\"data/Ch_2_Rand_2_512x512.ome.tif\"}",
+      "data": {
+        "0": 17231.59356689453,
+        "1": 9689.706726074219
+      },
+      "selectedChannel": 0,
+      "channels": [
+        {
+          "color": "#50c798",
+          "channel": 1
+        },
+        {
+          "color": "#e68bc1",
+          "channel": 0
+        }
+      ],
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "colors": "[[230,139,193],[80,199,152]]"
+    }
+  },
+  {
+    "task": 4,
+    "id": "KlDcGRq9idnF8dVXP1oZ",
+    "data": {
+      "channels": [
+        {
+          "channel": 3,
+          "color": "#8fbe67"
+        },
+        {
+          "channel": 0,
+          "color": "#f1916a"
+        }
+      ],
+      "colors": "[[241,145,106],[201,149,231],[49,191,231],[143,190,103]]",
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Oklab\",\"numChannels\":4,\"prevTask\":1,\"dataPath\":\"data/Ch_4_Rand_8_512x512.ome.tif\"}",
+      "selectedChannel": 3,
+      "data": {
+        "0": 8966.063537597656,
+        "3": 18867.63165283203
+      }
+    }
+  },
+  {
+    "task": 4,
+    "id": "OVqtpGVRtz8g6eAc7q9a",
+    "data": {
+      "selectedChannel": 1,
+      "colors": "[[155,165,253],[93,198,142],[242,143,113]]",
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"sRGB\",\"numChannels\":3,\"prevTask\":1,\"dataPath\":\"data/Ch_3_Rand_5_512x512.ome.tif\"}",
+      "data": {
+        "0": 9379.834899902344,
+        "1": 8071.868896484375
+      },
+      "channels": [
+        {
+          "channel": 0,
+          "color": "#9ba5fd"
+        },
+        {
+          "color": "#5dc68e",
+          "channel": 1
+        }
+      ]
+    }
+  },
+  {
+    "task": 4,
+    "id": "iUOvgZQ25sz7HvpSrYEG",
+    "data": {
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Oklab Gamut Clip Preserve Chroma\",\"numChannels\":6,\"prevTask\":1,\"dataPath\":\"data/Ch_6_Rand_0_512x512.ome.tif\"}",
+      "channels": [
+        {
+          "channel": 4,
+          "color": "#f38a94"
+        },
+        {
+          "channel": 0,
+          "color": "#73b1fc"
+        }
+      ],
+      "data": {
+        "0": 14791.360473632812,
+        "4": 19796.54473876953
+      },
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "colors": "[[115,177,252],[6,198,197],[139,191,105],[221,161,70],[243,138,148],[203,148,230]]",
+      "selectedChannel": 4
+    }
+  },
+  {
+    "task": 4,
+    "id": "qQpHEJB33svXqKCvzAFf",
+    "data": {
+      "data": {
+        "0": 11791.568115234375,
+        "2": 8147.852844238281
+      },
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "colors": "[[5,196,211],[210,166,65],[214,144,218]]",
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Oklab\",\"numChannels\":3,\"prevTask\":1,\"dataPath\":\"data/Ch_3_Rand_18_512x512.ome.tif\"}",
+      "channels": [
+        {
+          "channel": 2,
+          "color": "#d690da"
+        },
+        {
+          "channel": 0,
+          "color": "#05c4d3"
+        }
+      ],
+      "selectedChannel": 0
+    }
+  },
+  {
+    "task": 4,
+    "id": "xP2Itgu56KILN4wZp8iq",
+    "data": {
+      "data": {
+        "0": 10253.8779296875,
+        "3": 18226.351989746094
+      },
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"Oklab\",\"numChannels\":4,\"prevTask\":1,\"dataPath\":\"data/Ch_4_Rand_6_512x512.ome.tif\"}",
+      "channels": [
+        {
+          "channel": 3,
+          "color": "#00c5cf"
+        },
+        {
+          "color": "#b0b54d",
+          "channel": 0
+        }
+      ],
+      "uuid": "7a06e8a5-f36e-aef9-6805-4b6aca5d0c29",
+      "colors": "[[176,181,77],[244,139,138],[174,158,248],[0,197,207]]",
+      "selectedChannel": 3
+    }
+  },
+  {
+    "task": 4,
+    "id": "zOGys82NWY0puiHLZfCi",
+    "data": {
+      "randomState": "{\"url\":\"/t4\",\"colorSpace\":\"OklabXYZ\",\"numChannels\":2,\"prevTask\":1,\"dataPath\":\"data/Ch_2_Rand_8_512x512.ome.tif\"}",
+      "data": {
+        "0": 22643.128540039062,
+        "1": 12785.307800292969
+      },
+      "colors": "[[154,188,94],[193,152,237]]",
+      "uuid": "9ea3d82e-fb47-64c0-76b0-1a154e9c5d03",
+      "selectedChannel": 0,
+      "channels": [
+        {
+          "channel": 1,
+          "color": "#c198ed"
+        },
+        {
+          "channel": 0,
+          "color": "#9abc5e"
+        }
+      ]
+    }
+  }
+]

@@ -94,6 +94,7 @@ const PastPalettes = (props) => {
   //     context.setPaletteLoss(paletteLoss);
   //   };
   const savePalette = () => {
+    console.log("savePalette", colors, channelsVisible, contrastLimits, selections, viewState);
     let palettes = savePastPalette(
       colors,
       channelsVisible,
@@ -111,45 +112,7 @@ const PastPalettes = (props) => {
     let palettes = deletePastPalette(id);
     context.setPastPalettes(palettes);
   };
-  // function savePastPalette(
-  //   colors,
-  //   channelsVisible,
-  //   contrastLimits,
-  //   selections,
-  //   viewState
-  // )
 
-  //   const savePastPalette = async () => {
-  //     const visibleIndices = selections
-  //       .map((s) => s.c)
-  //       .filter((d, i) => channelsVisible[i]);
-
-  //     const fetchUrl = new URL(
-  //       `${import.meta.env.VITE_BACKEND_URL}/save_past_palette`
-  //     );
-  //     const params = {
-  //       pathName: context?.randomState?.dataPath,
-  //       channelsVisible: JSON.stringify(visibleIndices),
-  //       colorSpace: colormap,
-  //       colors,
-  //       contrastLimits: JSON.stringify(contrastLimits),
-  //       optimizationScope:
-  //         context.optimizationScope === "global"
-  //           ? JSON.stringify({})
-  //           : JSON.stringify(makeBoundingBox(viewState)),
-  //       z: selections[0].z,
-  //     };
-  //     fetchUrl.search = new URLSearchParams(params).toString();
-  //     const response = await fetch(fetchUrl);
-  //     const newColors = response.ok ? await response.json() : {};
-  //     newColors["fromHistoryClick"] = true;
-  //     context.setPastPalettes([newColors, ...context.pastPalettes]);
-  //   };
-
-  //   useEffect(() => {
-  //     const palettes = getPastPalettes();
-  //     context.setPastPalettes(palettes);
-  //   }, []);
   return (
     <ThemeProvider theme={darkTheme}>
       <div style={{ overflowY: "hidden" }}>

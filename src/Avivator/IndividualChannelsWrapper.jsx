@@ -85,71 +85,9 @@ function IndividualChannelsWrapper() {
     ],
     shallow
   );
-  const savePastPalette = async () => {
-    const visibleIndices = selections
-      .map((s) => s.c)
-      .filter((d, i) => channelsVisible[i]);
-    const fetchUrl = new URL(
-      `${import.meta.env.VITE_BACKEND_URL}/save_past_palette`
-    );
-    const params = {
-      pathName: context?.randomState?.dataPath,
-      channelsVisible: JSON.stringify(visibleIndices),
-      colorSpace: colorSpace,
-      colors,
-      contrastLimits: JSON.stringify(contrastLimits),
-      optimizationScope: context.optimizationScope === "global",
-      z: selections[0].z,
-    };
-    fetchUrl.search = new URLSearchParams(params).toString();
-    const response = await fetch(fetchUrl);
-    const newColors = response.ok ? await response.json() : {};
-    console.log("New Colors", newColors);
-    context.setPastPalettes([newColors, ...context.pastPalettes]);
-  };
 
-  const getNewPalette = async () => {
-    context?.setIsLoading(true);
-    await savePastPalette();
-    const visibleIndices = selections
-      .map((s) => s.c)
-      .filter((d, i) => channelsVisible[i]);
-    const fetchUrl = new URL(
-      `${import.meta.env.VITE_BACKEND_URL}/get_auto_palette`
-    );
-    const params = {
-      dataPath: source?.urlOrFile,
-      colors: colors,
-      lockedChannelColors: context.lockedChannelColors,
-      channelColorNames: JSON.stringify(context.channelColorNames),
-      colorexcluded: context.colorExcluded,
-      colorSpace: colorSpace,
-      contrastLimits: JSON.stringify(contrastLimits),
-      channelsVisible: JSON.stringify(visibleIndices),
-      globalSelection: JSON.stringify(globalSelection),
-      optimizationScope:
-        context.optimizationScope === "global"
-          ? JSON.stringify({})
-          : JSON.stringify(makeBoundingBox(viewState)),
-      z: selections[0].z,
-    };
-    fetchUrl.search = new URLSearchParams(params).toString();
-    const response = await fetch(fetchUrl);
-    const newColors = response.ok ? await response.json() : [];
-    let ctr = 0;
-    const _tmpColors = _.cloneDeep(colors).map((color, i) => {
-      if (channelsVisible[i]) {
-        return newColors["newPalette"][ctr++];
-      } else {
-        return color;
-      }
-    });
-    context?.setIsLoading(false);
 
-    context?.setShowOptimizedColor(true);
-    if (_tmpColors)
-      useChannelsStore.setState({ colors: _tmpColors, prevColors: colors });
-  };
+
 
   return (
     <>

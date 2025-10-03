@@ -40,12 +40,10 @@ import JoinInnerIcon from "@mui/icons-material/JoinInner";
 import AutoGraphIcon from "@mui/icons-material/AutoGraph";
 import LinkedCameraIcon from "@mui/icons-material/LinkedCamera";
 import shallow from "zustand/shallow";
-import SingleChannelWrapper from "./SingleChannelWrapper.jsx";
 import { AttachFile, InsertLink } from "@mui/icons-material";
 import DropzoneButton from "../Avivator/components/Controller/components/DropzoneButton.jsx";
 import Footer from "../Avivator/components/Footer.jsx";
-import AddChannel from "../Avivator/components/Controller/components/AddChannel.jsx";
-import { VegaLite } from "react-vega";
+
 import LineChart from "./LineChart.jsx";
 import _ from "lodash";
 import GaugeCharts from "./GaugeCharts.jsx";

@@ -1,3 +1,0 @@
-dispatch:
-  - url: "psudo.xyz/*"
-    service: frontend
