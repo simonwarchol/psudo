@@ -1,0 +1,60 @@
+name: Build & Push to ECR (Backend + Frontend)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+
+      ECR_REGISTRY: 337392631707.dkr.ecr.us-east-1.amazonaws.com
+      ECR_REPOSITORY: psudo
+      IMAGE_TAG: latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set version environment variables
+        run: |
+          echo "REACT_APP_GIT_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "REACT_APP_BUILD_DATE=$(TZ='America/New_York' date '+%m/%d %H:%M')" >> $GITHUB_ENV
+
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - name: Install and build frontend
+        run: |
+          bun install
+          bun run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push Docker image
+        run: |
+          docker build --platform linux/amd64 -t psudo .
+
+          docker tag psudo:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      
+      - name: Trigger App Runner Deployment
+        run: |
+          aws apprunner start-deployment \
+            --service-arn arn:aws:apprunner:us-east-1:337392631707:service/psudo-app/8a7ea82b8def4c1fab6efc69d4314cf5 \
+            --region us-east-1 
