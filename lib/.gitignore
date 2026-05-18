@@ -4,4 +4,8 @@ Cargo.lock
 bin/
 /pkg/*
 !/pkg/package.json
+!/pkg/index.js
+!/pkg/index.d.ts
+!/pkg/sync.js
+!/pkg/psudo.worker.js
 wasm-pack.log

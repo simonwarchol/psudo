@@ -6,7 +6,6 @@ on:
       - main
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   AWS_REGION: us-east-1
   ECR_REGISTRY: 337392631707.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: psudo
@@ -26,7 +25,7 @@ jobs:
           version: 9
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
@@ -44,10 +43,12 @@ jobs:
           echo "REACT_APP_GIT_HASH=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "REACT_APP_BUILD_DATE=$(TZ='America/New_York' date '+%m/%d %H:%M')" >> "$GITHUB_ENV"
 
+      - name: Build WASM package (lib/pkg)
+        run: pnpm run wasm-build
+
       - name: Install dependencies and build frontend
         run: |
           pnpm install --frozen-lockfile
-          pnpm run wasm-build
           pnpm run build
 
       - name: Configure AWS credentials

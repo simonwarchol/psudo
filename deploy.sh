@@ -5,9 +5,9 @@ set -euo pipefail
 ECR_IMAGE="337392631707.dkr.ecr.us-east-1.amazonaws.com/psudo:latest"
 REGION="us-east-1"
 
-echo "📦 Installing dependencies and building frontend..."
-pnpm install --frozen-lockfile
+echo "📦 Building WASM and frontend..."
 pnpm run wasm-build
+pnpm install --frozen-lockfile
 pnpm run build
 
 echo "🔨 Building Docker image..."

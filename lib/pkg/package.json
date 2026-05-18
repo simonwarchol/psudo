@@ -1,0 +1,28 @@
+{
+  "name": "psudo",
+  "version": "0.2.6",
+  "type": "module",
+  "description": "WASM palette optimization for multi-channel microscopy (Web Worker by default)",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "types": "./index.d.ts"
+    },
+    "./sync": {
+      "import": "./sync.js",
+      "types": "./psudo.d.ts"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "sync.js",
+    "psudo.worker.js",
+    "psudo.js",
+    "psudo.d.ts",
+    "psudo_bg.wasm"
+  ],
+  "sideEffects": false
+}

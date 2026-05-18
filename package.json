@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "palette-study": "cd lib && cargo run --example palette_study --release",
     "wasm-build": "bash scripts/wasm-build.sh",
+    "preinstall": "node scripts/ensure-pkg-stub.mjs",
     "predev": "node scripts/ensure-wasm.mjs",
     "prebuild": "node scripts/ensure-wasm.mjs",
     "bundle_shaders": "node src/scripts/bundle_shaders.js",
