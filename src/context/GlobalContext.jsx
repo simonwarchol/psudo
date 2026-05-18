@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import * as psudo from "psudo";
 
 import { getPastPalettes } from "../Avivator/viewerUtils.js";
 
@@ -29,6 +30,10 @@ export const ContextWrapper = (props) => {
   const [coordinate, setCoordinate] = useState([]);
   const [lensRadius, setLensRadius] = useState(100);
   const [luminanceValue, setLuminanceValue] = React.useState([45, 92]);
+
+  useEffect(() => {
+    psudo.warmup().catch(() => {});
+  }, []);
 
   const rgb2hex = (rgb) => {
     try {

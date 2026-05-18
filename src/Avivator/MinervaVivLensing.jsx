@@ -92,7 +92,7 @@ const updateLensGraphValues = async (
     useChannelsStore.getState()?.colors
   );
 
-  let graphData = getGraphData(
+  let graphData = await getGraphData(
     channelData,
     colors,
     lensSelection,
@@ -825,42 +825,38 @@ const LensLayer = class extends CompositeLayer {
       this.context?.userData?.setIsLoading(true);
       // If nothing is in the lens, apply to all channels
       if (_.every(lensSelection, (num) => num === 0)) {
-        (this.context?.userData?.channelsVisible || []).forEach((d, i) => {
-          if (d == true) {
-            const selection = this.context?.userData?.selections[i];
-            let thisChannelsData = channelData.filter((d) => {
-              return _.isEqual(d.selection, selection);
-            })[0];
-            const contrastLimits = psudo.channel_gmm(thisChannelsData.data);
+        for (let i = 0; i < (this.context?.userData?.channelsVisible || []).length; i += 1) {
+          if (this.context?.userData?.channelsVisible[i] !== true) continue;
+          const selection = this.context?.userData?.selections[i];
+          let thisChannelsData = channelData.filter((d) => {
+            return _.isEqual(d.selection, selection);
+          })[0];
+          const contrastLimits = await psudo.channel_gmm(thisChannelsData.data);
 
-            const intContrastLimits = [
-              _.toInteger(contrastLimits[0]),
-              _.toInteger(contrastLimits[1]),
-            ];
-            useChannelsStore.getState()?.setPropertiesForChannel(i, {
-              contrastLimits: intContrastLimits,
-            });
-            // setPropertiesForChannel(i, { contrastLimits: intContrastLimits });
-          }
-        });
+          const intContrastLimits = [
+            _.toInteger(contrastLimits[0]),
+            _.toInteger(contrastLimits[1]),
+          ];
+          useChannelsStore.getState()?.setPropertiesForChannel(i, {
+            contrastLimits: intContrastLimits,
+          });
+        }
       } else {
-        lensSelection.forEach((d, i) => {
-          if (d == 1) {
-            const selection = this.context?.userData?.selections[i];
-            let thisChannelsData = channelData.filter((d) => {
-              return _.isEqual(d.selection, selection);
-            })[0];
-            const contrastLimits = psudo.channel_gmm(thisChannelsData.data);
-            const intContrastLimits = [
-              _.toInteger(contrastLimits[0]),
-              _.toInteger(contrastLimits[1]),
-            ];
-            useChannelsStore.getState()?.setPropertiesForChannel(i, {
-              contrastLimits: intContrastLimits,
-            });
-            // setPropertiesForChannel(i, { contrastLimits: intContrastLimits });
-          }
-        });
+        for (let i = 0; i < lensSelection.length; i += 1) {
+          if (lensSelection[i] !== 1) continue;
+          const selection = this.context?.userData?.selections[i];
+          let thisChannelsData = channelData.filter((d) => {
+            return _.isEqual(d.selection, selection);
+          })[0];
+          const contrastLimits = await psudo.channel_gmm(thisChannelsData.data);
+          const intContrastLimits = [
+            _.toInteger(contrastLimits[0]),
+            _.toInteger(contrastLimits[1]),
+          ];
+          useChannelsStore.getState()?.setPropertiesForChannel(i, {
+            contrastLimits: intContrastLimits,
+          });
+        }
       }
       this.context?.userData?.setIsLoading(false);
     } else if (

@@ -44,4 +44,23 @@ if [[ $STATUS -ne 0 && -f "${PKG_JSON}.stub.bak" ]]; then
   exit "$STATUS"
 fi
 rm -f "${PKG_JSON}.stub.bak"
+
+if [[ $STATUS -eq 0 ]]; then
+  PKG="$LIB/pkg"
+  NPM="$LIB/npm"
+  CARGO_TOML="$LIB/Cargo.toml"
+  VERSION="$(grep -E '^version = ' "$CARGO_TOML" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+
+  cp "$NPM/index.js" "$NPM/sync.js" "$NPM/psudo.worker.js" "$NPM/index.d.ts" "$PKG/"
+  cp "$LIB/README.md" "$PKG/README.md"
+
+  node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('$NPM/package.json', 'utf8'));
+    pkg.version = '$VERSION';
+    fs.writeFileSync('$PKG/package.json', JSON.stringify(pkg, null, 2) + '\n');
+  "
+  echo "[wasm-build] npm package version=$VERSION in lib/pkg"
+fi
+
 exit "$STATUS"

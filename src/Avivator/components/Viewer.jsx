@@ -255,7 +255,7 @@ const Viewer = (props) => {
       contrastLimits,
       colors
     );
-    let graphData = getGraphData(
+    let graphData = await getGraphData(
       lensData,
       colors,
       lensSelection,

@@ -25,21 +25,36 @@ import topLevelAwait from "vite-plugin-top-level-await";
 
 export default {
   plugins: [wasm(), topLevelAwait()],
+  worker: {
+    plugins: () => [wasm(), topLevelAwait()],
+  },
 };
 ```
 
-## Import
+## Import (Web Worker by default)
+
+All exports are **async** and run in a **shared module worker** so the UI thread stays responsive.
 
 ```javascript
 import * as psudo from "psudo";
+
+// optional: preload WASM before the user clicks Optimize
+await psudo.warmup();
+
+const optimized = await psudo.optimize(/* ... */);
 ```
 
-TypeScript types are included (`psudo.d.ts`). The WASM module loads automatically on the first call.
-
-Named imports work as well:
+TypeScript types: `index.d.ts`. For **synchronous** WASM on the main thread (tests, debugging):
 
 ```javascript
-import { optimize, calculate_palette_loss, channel_gmm, ln } from "psudo";
+import * as psudo from "psudo/sync";
+const optimized = psudo.optimize(/* ... */);
+```
+
+Named imports:
+
+```javascript
+import { optimize, calculate_palette_loss, channel_gmm, ln, warmup } from "psudo";
 ```
 
 ## `optimize` — palette colors (main API)
@@ -85,7 +100,7 @@ const luminance = new Uint16Array([45, 92]);
 const excluded = ["grey", "white", "lightgrey", "darkgrey", "offwhite"];
 const colorNames = ["red", "", "blue", ""]; // optional C3 hint per channel; "" = none
 
-const optimized = psudo.optimize(
+const optimized = await psudo.optimize(
   colors,
   locked,
   intensities,
@@ -125,7 +140,7 @@ export function usePaletteOptimizer() {
   const runOptimize = useCallback((colors, locked, intensities, contrast, lum, excluded, names) => {
     setBusy(true);
     try {
-      const out = psudo.optimize(
+      return await psudo.optimize(
         colors,
         locked,
         intensities,
@@ -137,7 +152,6 @@ export function usePaletteOptimizer() {
         undefined,
         false
       );
-      return out;
     } finally {
       setBusy(false);
     }
@@ -162,7 +176,7 @@ export function usePaletteOptimizer() {
 ```javascript
 import { calculate_palette_loss } from "psudo";
 
-const loss = calculate_palette_loss(
+const loss = await calculate_palette_loss(
   intensities,
   colors,
   contrastLimits,
@@ -189,7 +203,7 @@ console.log(loss.perceptual_distance, loss.name_distance, loss.min_display_rgb_d
 ```bash
 # From the psudo repo root
 pnpm run wasm-build
-# Artifacts: lib/pkg/ (psudo.js, psudo_bg.wasm, psudo.d.ts)
+# Artifacts: lib/pkg/ (index.js, psudo.worker.js, psudo.js, psudo_bg.wasm, …)
 ```
 
 Publish to npm from `lib/pkg` after `wasm-pack build` (see repo root README).

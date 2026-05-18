@@ -205,7 +205,7 @@ function ChannelColorDisplay(props) {
           }
         }
 
-        const optColors = psudo.optimize(
+        const optColors = await psudo.optimize(
           colorArray,
           lockedList,
           intensityArray,

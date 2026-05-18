@@ -32,7 +32,7 @@ npm install psudo
 import * as psudo from "psudo";
 // or: import { optimize, calculate_palette_loss } from "psudo";
 
-const optimized = psudo.optimize(
+const optimized = await psudo.optimize(
   colors,           // Uint16Array — flat RGB 0–255 per channel
   locked,           // Uint16Array — 1 = locked, 0 = free
   intensities,      // Uint16Array — nRows × nChannels, column-major
@@ -47,7 +47,7 @@ const optimized = psudo.optimize(
 // optimized: Float32Array linear sRGB 0–1, length 3 × nChannels
 ```
 
-Full API, Vite setup, React notes, and parameter tables: **[lib/README.md](lib/README.md)** (also shipped on [npm](https://www.npmjs.com/package/psudo)).
+Full API, Web Worker + Vite setup, React notes, and parameter tables: **[lib/README.md](lib/README.md)** (also shipped on [npm](https://www.npmjs.com/package/psudo)). Sync main-thread API: `import from "psudo/sync"`.
 
 ### WASM build prerequisites
 

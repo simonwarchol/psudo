@@ -246,7 +246,7 @@ export const useImage = (source, history) => {
       }
 
 
-      const optColors = psudo.optimize(
+      const optColors = await psudo.optimize(
         colorArray,
         lockedList,
         intensityArray,

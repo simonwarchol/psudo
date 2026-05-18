@@ -278,7 +278,7 @@ function PsudoToolbar() {
 
     // console.log("LumVal", context.luminanceValue);
 
-    const optColors = psudo.optimize(
+    const optColors = await psudo.optimize(
       colorArray,
       lockedList,
       intensityArray,

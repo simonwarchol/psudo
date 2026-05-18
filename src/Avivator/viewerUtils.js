@@ -339,7 +339,7 @@ export async function calculateLensPaletteLoss(channelsPayload, luminanceValue, 
   const { intensityArray, colorArray, contrastLimitsArray } =
     createContiguousArrays(channelsPayload);
   if (intensityArray.length == 0) return null;
-  let paletteCost = psudo.calculate_palette_loss(
+  let paletteCost = await psudo.calculate_palette_loss(
     intensityArray,
     colorArray,
     contrastLimitsArray,
@@ -385,7 +385,7 @@ export async function calculatePaletteLoss(
   console.log('CNL', colorNamesList);
 
 
-  let paletteCost = psudo.calculate_palette_loss(
+  let paletteCost = await psudo.calculate_palette_loss(
     intensityArray,
     colorArray,
     contrastLimitsArray,
@@ -472,7 +472,7 @@ export async function getGMMContrastLimits({
     let raster = await loader?.[pyramidResolution]?.getRaster({
       selection: selection,
     });
-    const contrastLimits = psudo.channel_gmm(raster.data);
+    const contrastLimits = await psudo.channel_gmm(raster.data);
     const intContrastLimits = [
       _.toInteger(contrastLimits[0]),
       _.toInteger(contrastLimits[1]),
@@ -484,11 +484,11 @@ export async function getGMMContrastLimits({
   }
 }
 
-export function getChannelGraphData({ data, color, selection }) {
+export async function getChannelGraphData({ data, color, selection }) {
   const numBins = 50;
   let channelData = {};
   channelData["data"] = data;
-  channelData["logData"] = psudo.ln(data);
+  channelData["logData"] = await psudo.ln(data);
   // Number of bins you want
   const binF = bin()
     .domain([0, Math.log(65535)]) // Setting the range of your data
@@ -505,7 +505,7 @@ export function getChannelGraphData({ data, color, selection }) {
   return channelData;
 }
 
-export function getGraphData(
+export async function getGraphData(
   channelData,
   colors,
   lensSelection,
@@ -514,35 +514,33 @@ export function getGraphData(
 ) {
   let graphData = [];
   if (_.every(lensSelection, (num) => num === 0)) {
-    (channelsVisible || []).forEach((d, i) => {
-      if (d == true) {
-        const selection = selections[i];
-        let thisChannelsData = channelData.filter((d) => {
-          return _.isEqual(d.selection, selection);
-        })[0];
-        const color = colors[i];
-        let thisChannelsGraphData = getChannelGraphData({
-          ...thisChannelsData,
-          color: color,
-        });
-        graphData.push(thisChannelsGraphData);
-      }
-    });
+    for (let i = 0; i < (channelsVisible || []).length; i += 1) {
+      if (channelsVisible[i] !== true) continue;
+      const selection = selections[i];
+      let thisChannelsData = channelData.filter((d) => {
+        return _.isEqual(d.selection, selection);
+      })[0];
+      const color = colors[i];
+      let thisChannelsGraphData = await getChannelGraphData({
+        ...thisChannelsData,
+        color: color,
+      });
+      graphData.push(thisChannelsGraphData);
+    }
   } else {
-    lensSelection.forEach((d, i) => {
-      if (d == 1) {
-        const selection = selections[i];
-        let thisChannelsData = channelData.filter((d) => {
-          return _.isEqual(d.selection, selection);
-        })[0];
-        const color = colors[i];
-        let thisChannelsGraphData = getChannelGraphData({
-          ...thisChannelsData,
-          color: color,
-        });
-        graphData.push(thisChannelsGraphData);
-      }
-    });
+    for (let i = 0; i < lensSelection.length; i += 1) {
+      if (lensSelection[i] !== 1) continue;
+      const selection = selections[i];
+      let thisChannelsData = channelData.filter((d) => {
+        return _.isEqual(d.selection, selection);
+      })[0];
+      const color = colors[i];
+      let thisChannelsGraphData = await getChannelGraphData({
+        ...thisChannelsData,
+        color: color,
+      });
+      graphData.push(thisChannelsGraphData);
+    }
   }
   return graphData;
 }
@@ -784,7 +782,7 @@ export async function optimizeInLens(channelData, contrastLimits) {
     delete d.data;
     return d;
   });
-  return psudo.optimize_in_lens(allData, _colors, _contrastLimits);
+  return await psudo.optimize_in_lens(allData, _colors, _contrastLimits);
 }
 
 export function savePastPalette(
@@ -841,7 +839,7 @@ export async function getGlobalGraphData(
       let raster = await loader?.[_.size(loader) - 1]?.getRaster({
         selection: selections[i],
       });
-      let channelGraphData = getChannelGraphData({
+      let channelGraphData = await getChannelGraphData({
         data: raster.data,
         color: colors[i],
         selection: selections[i],

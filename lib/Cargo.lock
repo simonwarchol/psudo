@@ -914,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "psudo"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "argmin",
  "console_error_panic_hook",
