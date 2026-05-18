@@ -285,7 +285,10 @@ function PsudoToolbar() {
       contrastLimitsArray,
       context?.luminanceValue,
       context?.colorExcluded,
-      colorNamesList
+      colorNamesList,
+      undefined,
+      undefined,
+      false
     );
     console.log("Post Call Opt colors", optColors);
     console.log("Colors Before", colors);

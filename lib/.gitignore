@@ -2,5 +2,6 @@
 **/*.rs.bk
 Cargo.lock
 bin/
-pkg/
+/pkg/*
+!/pkg/package.json
 wasm-pack.log

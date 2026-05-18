@@ -1,15 +1,11 @@
 use std::collections::HashMap;
 use std::f64::consts::LN_2;
-use std::fs;
-use std::io::Cursor;
 use std::iter::FromIterator;
-use std::io::{ self };
-use web_sys::console;
 
 use kd_tree::{ KdPoint, KdTree };
 use ndarray::Array1;
 use ndarray::Array2;
-use serde_json::{ json, Value };
+use serde_json::Value;
 
 // define your own item type.
 struct Item {
@@ -364,6 +360,17 @@ impl C3 {
         self.color_index(color)
     }
 
+    /// Top C3 color-name label for a CIELAB point (for debugging / UI).
+    pub fn dominant_term_name(&self, lab: [f64; 3]) -> String {
+        let c = self.color_index(lab);
+        let related = self.color_related_terms(c, Some(1), Some(10), Some(0.1));
+        related
+            .first()
+            .and_then(|t| self.terms.get(t["index"] as usize))
+            .cloned()
+            .unwrap_or_else(|| "unknown".to_string())
+    }
+
     pub(crate) fn get_palette_terms(
         &self,
         palette: Array2<f64>,
@@ -382,27 +389,26 @@ impl C3 {
         }
         terms
     }
-    pub(crate) fn compute_color_name_distance_matrix(
-        &self,
-        data: Vec<HashMap<&str, f64>>
-    ) -> Array2<f64> {
-        let n = data.len();
-        let mut matrix = Array2::zeros((n, n));
 
+    /// Average pairwise color-name distance (`1 - cosine_similarity` of term histograms), without allocating `n×n`.
+    pub(crate) fn average_pairwise_color_name_distance(&self, data: &[HashMap<&str, f64>]) -> f64 {
+        let n = data.len();
+        if n < 2 {
+            return 0.0;
+        }
+        let mut total_distance = 0.0;
+        let mut total_pairs = 0usize;
         for i in 0..n {
+            let ci = *data[i].get("c").unwrap() as usize;
             for j in 0..i {
-                let cosine_distance =
-                    1.0 -
-                    self.color_cosine(
-                        *data[i].get("c").unwrap() as usize,
-                        *data[j].get("c").unwrap() as usize
-                    );
-                matrix[[i, j]] = cosine_distance;
-                matrix[[j, i]] = cosine_distance;
+                let cj = *data[j].get("c").unwrap() as usize;
+                total_distance += 1.0 - self.color_cosine(ci, cj);
+                total_pairs += 1;
             }
         }
-        matrix
+        total_distance / (total_pairs as f64)
     }
+
     pub(crate) fn get_term_index(&self, term: &str) -> Option<usize> {
         for (index, item) in self.terms.iter().enumerate() {
             if item == term {
@@ -437,8 +443,6 @@ impl C3 {
 //     println!("Analyzed Palette: {:?}", analyzed_palette);
 //     let palette_terms = c_3.get_palette_terms(palette.clone(), 10);
 //     println!("Analyzed Palette Terms: {:?}", palette_terms);
-//     let cosine_matrix = c_3.compute_color_name_distance_matrix(analyzed_palette);
-//     println!("Cosine Matrix: {:?}", cosine_matrix[[2, 1]]);
-// //     print shape of cosine matrix
-//     println!("Cosine Matrix: {:?}", cosine_matrix.shape());
+//     let avg_d = c_3.average_pairwise_color_name_distance(&analyzed_palette);
+//     println!("Avg cos dist: {:?}", avg_d);
 // }

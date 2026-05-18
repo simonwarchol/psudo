@@ -344,7 +344,8 @@ export async function calculateLensPaletteLoss(channelsPayload, luminanceValue, 
     colorArray,
     contrastLimitsArray,
     luminanceValue,
-    colorExcluded, Array(channelsPayload.length).fill("")
+    colorExcluded, Array(channelsPayload.length).fill(""),
+    false
   );
   return paletteCost;
 }
@@ -390,7 +391,8 @@ export async function calculatePaletteLoss(
     contrastLimitsArray,
     luminanceValue,
     colorExcluded,
-    colorNamesList
+    colorNamesList,
+    false
   );
   return paletteCost;
 }

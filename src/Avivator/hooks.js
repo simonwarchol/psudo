@@ -253,7 +253,10 @@ export const useImage = (source, history) => {
         contrastLimitsArray,
         context?.luminanceValue,
         context?.colorExcluded,
-        colorNamesList
+        colorNamesList,
+        undefined,
+        undefined,
+        false
       );
       console.log("Post Call Opt colors", optColors);
       let colorCounter = 0;
