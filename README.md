@@ -64,3 +64,9 @@ If both are installed, `pnpm run wasm-build` prepends rustup’s toolchain so th
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
+
+## CI / deploy
+
+GitHub Actions (`.github/workflows/deploy.yml`) uses **pnpm**, **Node 24**, and **wasm-pack** to build `dist/`, then packages it into an nginx Docker image for ECR.
+
+**npm publish** (`.github/workflows/publish-npm.yml`): on release or manual dispatch. Add repo secret `NPM_TOKEN` — a granular npm access token with **publish** permission (create at [npmjs.com](https://www.npmjs.com/settings/~youruser/tokens); do not commit tokens or CLI auth URLs).

@@ -1,12 +1,15 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # === Configuration ===
 ECR_IMAGE="337392631707.dkr.ecr.us-east-1.amazonaws.com/psudo:latest"
 REGION="us-east-1"
-PORT="80"  # <-- Change this if your app uses a different port
 
-# === Build and Push ===
+echo "📦 Installing dependencies and building frontend..."
+pnpm install --frozen-lockfile
+pnpm run wasm-build
+pnpm run build
+
 echo "🔨 Building Docker image..."
 docker build --platform linux/amd64 -t psudo .
 

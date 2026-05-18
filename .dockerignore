@@ -1,0 +1,9 @@
+node_modules
+lib/target
+lib/pkg/psudo_bg.wasm.d.ts
+.git
+.github
+*.md
+psudo-study-data
+.env
+.env.*
