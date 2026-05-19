@@ -15,6 +15,37 @@ mod tests {
         assert_eq!(c3.color_index([60.3, 98.2, -60.8]), 7271);
     }
 
+    #[test]
+    fn fast_eval_matches_breakdown_api() {
+        use crate::palette_eval::{evaluate_objective_fast, with_eval_scratch};
+        use std::collections::HashSet;
+        let c3 = C3::new();
+        let mut oklab = Vec::with_capacity(18);
+        let l = 0.58f32;
+        for i in 0..6 {
+            let angle = std::f32::consts::TAU * (i as f32) / 6.0;
+            let chroma = 0.28f32;
+            let okl = Oklab::new(l, chroma * angle.cos(), chroma * angle.sin());
+            oklab.extend([okl.l, okl.a, okl.b]);
+        }
+        let intensity = Arc::new(Array2::<f32>::zeros((384, 6)));
+        let names = [-1.0; 6];
+        let direct = evaluate_palette_objective_breakdown(&c3, &oklab, &intensity, 1.0, 0.0, &[], &names);
+        let fast = with_eval_scratch(|s| {
+            evaluate_objective_fast(
+                &c3,
+                &oklab,
+                &intensity,
+                1.0,
+                0.0,
+                &HashSet::new(),
+                &names,
+                s,
+            )
+        });
+        assert!((direct.total - fast.total).abs() < 1e-4, "{} vs {}", direct.total, fast.total);
+    }
+
     /// Six-channel spread palette: objective should be finite and in a stable band.
     #[test]
     fn six_channel_objective_in_expected_band() {

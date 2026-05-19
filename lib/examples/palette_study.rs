@@ -17,6 +17,14 @@
 //! - `PALETTE_STUDY_SPATIAL=1` — spatial channel-overlap in the objective (default off)
 //! - `PALETTE_STUDY_SPREAD_INIT=0` — random saturated sRGB starts instead of hue-spread OKLab inits
 //!
+//! Timing is printed to stderr and embedded in `report.html` (per palette + batch totals).
+//!
+//! Profiling (native):
+//! - `cargo instruments -t time --example palette_study --release` (macOS Instruments)
+//! - `cargo flamegraph --example palette_study --release` (`cargo install flamegraph`)
+//! - `samply record cargo run --example palette_study --release` (Firefox Profiler)
+//! - Quick micro-bench: `cargo test -p psudo study_convergence_profiles -- --ignored --nocapture`
+//!
 //! Compare convergence profiles (ignored test):
 //! `cargo test study_convergence_profiles -- --ignored --nocapture`
 
@@ -35,6 +43,7 @@ use rand::{ Rng, SeedableRng };
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 const DEFAULT_CHANNEL_COUNTS: &str = "4,6";
 
@@ -82,6 +91,45 @@ fn parse_channel_counts() -> Vec<usize> {
 
 fn scaled_budget(base: u32, channels: usize) -> u32 {
     ((base as u64 * channels as u64) / 3).max(1) as u32
+}
+
+fn format_duration(d: Duration) -> String {
+    let ms = d.as_secs_f64() * 1000.0;
+    if ms >= 10_000.0 {
+        format!("{:.2}s", ms / 1000.0)
+    } else if ms >= 1000.0 {
+        format!("{:.2}s", ms / 1000.0)
+    } else {
+        format!("{:.0}ms", ms)
+    }
+}
+
+fn log_timing_stats(phase: &str, times: &[Duration]) {
+    if times.is_empty() {
+        return;
+    }
+    let n = times.len() as f64;
+    let secs: Vec<f64> = times.iter().map(|d| d.as_secs_f64()).collect();
+    let sum: f64 = secs.iter().sum();
+    let mean = sum / n;
+    let var = secs.iter().map(|t| (t - mean).powi(2)).sum::<f64>() / n;
+    let mut sorted = secs.clone();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let median = if sorted.len() % 2 == 0 {
+        (sorted[sorted.len() / 2 - 1] + sorted[sorted.len() / 2]) / 2.0
+    } else {
+        sorted[sorted.len() / 2]
+    };
+    eprintln!(
+        "[palette_study] {phase} timing: n={} total={} mean={} median={} min={} max={} σ={}",
+        times.len(),
+        format_duration(Duration::from_secs_f64(sum)),
+        format_duration(Duration::from_secs_f64(mean)),
+        format_duration(Duration::from_secs_f64(median)),
+        format_duration(Duration::from_secs_f64(sorted[0])),
+        format_duration(Duration::from_secs_f64(sorted[sorted.len() - 1])),
+        format_duration(Duration::from_secs_f64(var.sqrt()))
+    );
 }
 
 fn log_loss_stats(phase: &str, totals: &[f32]) {
@@ -310,9 +358,16 @@ fn svg_swatches(rgb: &[[u8; 3]], sw: i32, sh: i32) -> String {
     s
 }
 
+struct PaletteRun {
+    result: OptimizePipelineResult,
+    breakdown: PaletteObjectiveBreakdown,
+    optimize_elapsed: Duration,
+}
+
 struct StudyBatch {
     channels: usize,
-    parents: Vec<(OptimizePipelineResult, PaletteObjectiveBreakdown)>,
+    parents: Vec<PaletteRun>,
+    batch_elapsed: Duration,
 }
 
 fn run_channel_batch(
@@ -328,9 +383,11 @@ fn run_channel_batch(
     c3_eval: &C3,
     spatial_w: f32,
 ) -> StudyBatch {
+    let batch_start = Instant::now();
+    let scaled_restarts = scaled_budget(num_restarts, channels);
     let nm_iters = scaled_budget(max_iters, channels) / 2;
     eprintln!(
-        "[palette_study] {channels}ch: NM ~{nm_iters} iters/run, {num_restarts} restarts, {n_parents} palettes"
+        "[palette_study] {channels}ch: NM ~{nm_iters} iters/restart, {scaled_restarts} restarts (base {num_restarts}), {n_parents} palettes"
     );
 
     let mut shared_intensity_rng = StdRng::seed_from_u64(9000 + channels as u64);
@@ -348,6 +405,7 @@ fn run_channel_batch(
         let locked = vec![0u16; channels];
         let contrast = contrast_all(channels);
         let lum = luminance_u16();
+        let t0 = Instant::now();
         let run = optimize_palette_pipeline(
             &colors,
             &locked,
@@ -362,6 +420,7 @@ fn run_channel_batch(
             Some(num_restarts),
             Some(postprocess),
         );
+        let optimize_elapsed = t0.elapsed();
         let bd = evaluate_palette_objective_breakdown(
             c3_eval,
             &run.oklab_best,
@@ -373,37 +432,60 @@ fn run_channel_batch(
         );
         let dbg = format_channel_debug(&run.oklab_best, c3_eval);
         eprintln!(
-            "[palette_study] {channels}ch #{}/{} L_tot={:.4} min_rgb={:.0} | {}",
+            "[palette_study] {channels}ch #{}/{} L_tot={:.4} min_rgb={:.0} time={} | {}",
             i + 1,
             n_parents,
             bd.total,
             bd.min_display_rgb_distance,
+            format_duration(optimize_elapsed),
             dbg
         );
-        parents.push((run, bd));
+        parents.push(PaletteRun {
+            result: run,
+            breakdown: bd,
+            optimize_elapsed,
+        });
         if (i + 1) % 5 == 0 || i == 0 {
             eprintln!("[palette_study] {channels}ch finished {}/{}", i + 1, n_parents);
         }
     }
 
+    let batch_elapsed = batch_start.elapsed();
     log_loss_stats(
         &format!("{channels}-color palettes"),
-        &parents.iter().map(|(_, bd)| bd.total).collect::<Vec<_>>(),
+        &parents.iter().map(|p| p.breakdown.total).collect::<Vec<_>>(),
     );
-    StudyBatch { channels, parents }
+    log_timing_stats(
+        &format!("{channels}-color optimize"),
+        &parents
+            .iter()
+            .map(|p| p.optimize_elapsed)
+            .collect::<Vec<_>>(),
+    );
+    eprintln!(
+        "[palette_study] {channels}ch batch wall time {} ({} palettes)",
+        format_duration(batch_elapsed),
+        n_parents
+    );
+    StudyBatch {
+        channels,
+        parents,
+        batch_elapsed,
+    }
 }
 
 fn append_section_html(html: &mut String, batch: &StudyBatch, c3_eval: &C3, sw: i32, sh: i32) {
     let parents = &batch.parents;
     let channels = batch.channels;
-    let mut parent_rows: Vec<(usize, Vec<[u8; 3]>, PaletteObjectiveBreakdown, f32)> =
+    let mut parent_rows: Vec<(usize, Vec<[u8; 3]>, PaletteObjectiveBreakdown, f32, Duration)> =
         Vec::with_capacity(parents.len());
-    for (i, (run, bd)) in parents.iter().enumerate() {
+    for (i, pr) in parents.iter().enumerate() {
         parent_rows.push((
             i,
-            optimized_to_rgb8(&run.srgb_linear),
-            bd.clone(),
-            run.sa_best_cost,
+            optimized_to_rgb8(&pr.result.srgb_linear),
+            pr.breakdown.clone(),
+            pr.result.sa_best_cost,
+            pr.optimize_elapsed,
         ));
     }
     parent_rows.sort_by(|a, b| {
@@ -412,22 +494,57 @@ fn append_section_html(html: &mut String, batch: &StudyBatch, c3_eval: &C3, sw: 
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
+    let time_secs: Vec<f64> = parents
+        .iter()
+        .map(|p| p.optimize_elapsed.as_secs_f64())
+        .collect();
+    let time_sum: f64 = time_secs.iter().sum();
+    let time_mean = time_sum / time_secs.len().max(1) as f64;
+    let mut time_sorted = time_secs.clone();
+    time_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let time_median = if time_sorted.is_empty() {
+        0.0
+    } else if time_sorted.len() % 2 == 0 {
+        (time_sorted[time_sorted.len() / 2 - 1] + time_sorted[time_sorted.len() / 2]) / 2.0
+    } else {
+        time_sorted[time_sorted.len() / 2]
+    };
+    let n_good_rgb = parents
+        .iter()
+        .filter(|p| p.breakdown.min_display_rgb_distance >= 190.0)
+        .count();
+
     html.push_str(&format!(
         r#"<h2>{channels}-color palettes (n={}, sorted by L_tot)</h2>
-<p class="sort-note">Best (lowest L_tot) appears first.</p>
+<p class="sort-note">Best (lowest L_tot) appears first. {timing}</p>
 <div class="grid3">"#,
-        parents.len()
+        parents.len(),
+        timing = format!(
+            "Batch wall {} · optimize mean {} · median {} · range {}–{} · {}/{} with min RGB Δ≥190.",
+            format_duration(batch.batch_elapsed),
+            format_duration(Duration::from_secs_f64(time_mean)),
+            format_duration(Duration::from_secs_f64(time_median)),
+            format_duration(Duration::from_secs_f64(
+                time_sorted.first().copied().unwrap_or(0.0)
+            )),
+            format_duration(Duration::from_secs_f64(
+                time_sorted.last().copied().unwrap_or(0.0)
+            )),
+            n_good_rgb,
+            parents.len(),
+        ),
     ));
 
-    for (rank, (orig, rgb, bd, solver_cost)) in parent_rows.iter().enumerate() {
+    for (rank, (orig, rgb, bd, solver_cost, elapsed)) in parent_rows.iter().enumerate() {
         html.push_str(r#"<div class="card">"#);
-        let dbg = format_channel_debug(&parents[*orig].0.oklab_best, c3_eval);
+        let dbg = format_channel_debug(&parents[*orig].result.oklab_best, c3_eval);
         html.push_str(&format!(
-            r#"<div class="label">#{} · run {} · L_tot={:.4} · min RGB Δ≥{:.1}<br/><span class="names">{}</span></div>"#,
+            r#"<div class="label">#{} · run {} · L_tot={:.4} · min RGB Δ≥{:.1} · <span class="time">{}</span><br/><span class="names">{}</span></div>"#,
             rank + 1,
             orig + 1,
             bd.total,
             bd.min_display_rgb_distance,
+            format_duration(*elapsed),
             dbg
         ));
         html.push_str(r#"<div class="card-body">"#);
@@ -502,6 +619,7 @@ const HTML_HEAD: &str = r#"<!DOCTYPE html>
   .loss-meta { color: #666; font-size: 0.6rem; margin-bottom: 4px; }
   .better { color: #7dcea0; font-weight: normal; }
   .sort-note { color: #9cf; font-size: 0.85rem; margin-bottom: 8px; }
+  .time { color: #f5b041; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -549,6 +667,7 @@ fn main() {
     let c3_eval = C3::new();
     let spatial_w = if include_spatial { 0.1 } else { 0.0 };
 
+    let study_start = Instant::now();
     let mut batches = Vec::new();
     for &channels in &channel_counts {
         batches.push(run_channel_batch(
@@ -566,6 +685,7 @@ fn main() {
         ));
     }
 
+    let study_elapsed = study_start.elapsed();
     let sw = 40i32;
     let sh = 100i32;
     let total_palettes = n_parents * channel_counts.len();
@@ -577,10 +697,13 @@ fn main() {
   Defaults: <code>max_iters={max_iters}</code>, <code>restarts={num_restarts}</code>,
   <code>confusion_samples={confusion_samples}</code>; Nelder–Mead multistart; spatial <strong>{spatial}</strong>.
   <br/><br/>
+  Total study wall time: <strong>{study_time}</strong> (see per-section timing below).
+  <br/><br/>
   Lower <code>L_tot</code> is better. Sorted by loss within each section.
 </p>
 "#,
-        spatial = if include_spatial { "on" } else { "off" }
+        spatial = if include_spatial { "on" } else { "off" },
+        study_time = format_duration(study_elapsed),
     ));
 
     for batch in &batches {
@@ -590,6 +713,10 @@ fn main() {
 
     let path = out_dir.join("report.html");
     fs::write(&path, &html).expect("write report");
+    eprintln!(
+        "[palette_study] total study wall time {}",
+        format_duration(study_elapsed)
+    );
     eprintln!(
         "[palette_study] wrote {} ({} bytes)",
         path.display(),

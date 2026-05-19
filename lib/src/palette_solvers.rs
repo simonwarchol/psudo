@@ -2,8 +2,8 @@
 
 use crate::{
     annealing, enforce_channel_saturation,
-    evaluate_palette_objective_breakdown_with_excluded_set, polish_oklab_palette, refine_oklab_palette,
-    sa_initial_oklab, Loss, PaletteObjectiveBreakdown,
+    evaluate_palette_objective_breakdown_with_excluded_set, polish_oklab_palette,
+    random_initial_oklab, refine_oklab_palette, sa_initial_oklab, Loss, PaletteObjectiveBreakdown,
 };
 use argmin::core::{CostFunction, Error, Executor, Gradient, State};
 use argmin::solver::gradientdescent::SteepestDescent;
@@ -83,6 +83,8 @@ pub struct PaletteSolverParams {
     pub sa_initial_temp: Option<f32>,
     /// Nelder–Mead simplex axis perturbation scale (default 1.0).
     pub nm_perturb_scale: f32,
+    /// Skip hue-spread init; use random saturated OKLab (rescue restarts at 6ch).
+    pub force_random_nm_init: bool,
     /// L-BFGS history length (default 7).
     pub lbfgs_history: usize,
 }
@@ -275,7 +277,17 @@ pub fn run_palette_argmin_solver(
     let avg_confusion = precomputed_avg_confusion.unwrap_or(1.0);
 
     let mut rng = StdRng::seed_from_u64(init_seed);
-    let start_param = sa_initial_oklab(start_oklab, locked_colors, luminance_values, &mut rng);
+    let start_param = if params.force_random_nm_init {
+        random_initial_oklab(start_oklab, locked_colors, luminance_values, &mut rng)
+    } else {
+        sa_initial_oklab(
+            start_oklab,
+            locked_colors,
+            luminance_values,
+            init_seed,
+            &mut rng,
+        )
+    };
 
     let cost_function = make_loss(
         locked_colors,

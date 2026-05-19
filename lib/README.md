@@ -33,7 +33,7 @@ export default {
 
 ## Import (Web Worker by default)
 
-All exports are **async** and run in a **shared module worker** so the UI thread stays responsive.
+All exports are **async**. `optimize()` uses a **pool of module workers** (up to 4) so NM multistarts—and the 6ch rescue pass—run in parallel off the main thread. Other calls use one worker from the pool.
 
 ```javascript
 import * as psudo from "psudo";
@@ -197,6 +197,8 @@ console.log(loss.perceptual_distance, loss.name_distance, loss.min_display_rgb_d
 | `confusion_baseline_samples` | 32 | MC samples when spatial overlap is on |
 | `include_spatial_channel_overlap` | `false` | `true` uses image intensities in objective (slower) |
 | `num_restarts` | 6 (× channels/3, max 12 WASM) | Nelder–Mead multistarts; best total wins |
+
+On **native** builds, multistarts run in parallel via `rayon`. In the browser, `optimize()` parallelizes the same multistarts across workers (`setParallelMultistart(false)` falls back to one sequential WASM run per call).
 
 ## Building from source
 

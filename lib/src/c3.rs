@@ -44,6 +44,28 @@ impl C3 {
         self.inner.get_palette_terms(palette, color_term_limit)
     }
 
+    /// One KD lookup per channel: entropy sample + top terms (no `Array2` build).
+    pub fn fill_palette_c3(
+        &self,
+        labs: &[[f64; 3]],
+        color_term_limit: usize,
+        samples: &mut Vec<rust_c3::ColorSample>,
+        terms: &mut Vec<Vec<rust_c3::RelatedTerm>>,
+    ) {
+        samples.clear();
+        terms.clear();
+        samples.reserve(labs.len());
+        terms.reserve(labs.len());
+        for lab in labs {
+            let sample = self.inner.color(*lab);
+            let t = self
+                .inner
+                .color_related_terms(sample.c, Some(color_term_limit), None, None);
+            samples.push(sample);
+            terms.push(t);
+        }
+    }
+
     /// Average pairwise color-name distance (`1 - cosine_similarity`), lower triangle only.
     pub fn average_pairwise_color_name_distance(&self, data: &[rust_c3::ColorSample]) -> f64 {
         let n = data.len();

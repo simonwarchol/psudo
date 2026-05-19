@@ -1,6 +1,9 @@
 /* Async worker-backed API (default package entry). */
 
-export function warmup(): Promise<boolean>;
+export function warmup(): Promise<boolean[]>;
+
+/** Toggle parallel NM multistarts across a worker pool (default on). */
+export function setParallelMultistart(enabled: boolean): void;
 
 export function ln(array: Uint16Array): Promise<Float32Array>;
 

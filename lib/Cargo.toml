@@ -1,6 +1,6 @@
 [package]
 name = "psudo"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Simon Warchol <simonwarchol@g.harvard.edu>"]
 edition = "2018"
 license = "MIT"
@@ -45,7 +45,6 @@ instant = { version = "0.1", features = [ "wasm-bindgen"]}
 
 rand_xoshiro = "0.6.0"
 libc = "0.2.150"
-
 
 [package.metadata.wasm-pack.profile.release]
 # Runtime speed over binary size for interactive palette optimization.

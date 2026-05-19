@@ -2,6 +2,7 @@
 //! (C3 name distance + regression confusion each iteration). Profiling: browser Performance panel
 //! around `optimize`, or `cargo build --release` timings on native tests.
 
+mod palette_eval;
 mod utils;
 use ndarray::{ Array1, Array2 };
 use web_sys::console;
@@ -139,6 +140,10 @@ pub enum OptimizePostprocess {
 
 /// Golden-ratio stride for per-restart RNG seeds derived from [`problem_seed`].
 const RESTART_SEED_STRIDE: u64 = 0x9E3779B97F4A7C15;
+/// Extra NM restarts when a 6-channel result is still weak (duplicate hues / low RGB gap).
+const SIX_CH_RESCUE_RESTARTS: u32 = 4;
+const SIX_CH_MIN_RGB_RESCUE: f32 = 190.0;
+const SIX_CH_L_TOT_RESCUE: f32 = -3.85;
 /// Weight on the multi-channel spatial confusion term (`compute_confusion_loss`).
 pub(crate) const SPATIAL_CONFUSION_WEIGHT: f32 = 0.1;
 
@@ -155,9 +160,9 @@ const SATURATION_DEFICIT_WEIGHT: f32 = 10.0;
 /// Reward on the *dullest* channel: `-weight * min(min_oklab_chroma, min_srgb_sat)`.
 const MIN_SAT_REWARD_WEIGHT: f32 = 2.5;
 /// Target minimum display-sRGB distance (0–255 scale) between channel colors.
-const MIN_DISPLAY_RGB_DISTANCE: f64 = 90.0;
-const PERCEPTUAL_SCALE: f64 = 255.0;
-const PERCEPTUAL_DEFICIT_WEIGHT: f32 = 6.0;
+pub(crate) const MIN_DISPLAY_RGB_DISTANCE: f64 = 90.0;
+pub(crate) const PERCEPTUAL_SCALE: f64 = 255.0;
+pub(crate) const PERCEPTUAL_DEFICIT_WEIGHT: f32 = 6.0;
 /// C3 color-name terms always penalized unless the user explicitly allows them.
 const DEFAULT_EXCLUDED_COLOR_NAMES: &[&str] = &[
     "grey",
@@ -202,7 +207,7 @@ fn min_channel_srgb_saturation(oklab_flat: &[f32]) -> f32 {
 }
 
 /// OKLab chroma + display saturation: one deficit term, one min-channel reward.
-fn saturation_objective_terms(oklab_flat: &[f32]) -> (f32, f32, f32, f32) {
+pub(crate) fn saturation_objective_terms(oklab_flat: &[f32]) -> (f32, f32, f32, f32) {
     let min_ch = min_channel_oklab_chroma(oklab_flat);
     let min_sat = min_channel_srgb_saturation(oklab_flat);
     let mut deficit_sq = 0.0f32;
@@ -583,31 +588,23 @@ fn spread_initial_oklab(
     out
 }
 
+/// Per-restart NM/SA start. At 6+ channels, ~⅓ of seeds use random saturated OKLab for basin diversity.
 #[inline]
 pub(crate) fn sa_initial_oklab(
     oklab_flat: &[f32],
     locked_colors: &[bool],
     luminance_values: &[f32],
-    rng: &mut impl Rng
+    init_seed: u64,
+    rng: &mut impl Rng,
 ) -> Vec<f32> {
-    #[cfg(target_arch = "wasm32")]
-    {
-        spread_initial_oklab(
-            oklab_flat,
-            locked_colors,
-            luminance_values,
-            oklab_flat.len() / 3,
-            rng
-        )
+    let n_colors = oklab_flat.len() / 3;
+    if n_colors >= 6 && init_seed % 3 == 0 {
+        return random_initial_oklab(oklab_flat, locked_colors, luminance_values, rng);
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let n_colors = oklab_flat.len() / 3;
-        if n_colors >= 2 {
-            spread_initial_oklab(oklab_flat, locked_colors, luminance_values, n_colors, rng)
-        } else {
-            random_initial_oklab(oklab_flat, locked_colors, luminance_values, rng)
-        }
+    if n_colors >= 2 {
+        spread_initial_oklab(oklab_flat, locked_colors, luminance_values, n_colors, rng)
+    } else {
+        random_initial_oklab(oklab_flat, locked_colors, luminance_values, rng)
     }
 }
 
@@ -873,7 +870,7 @@ impl Loss {
     }
 }
 
-fn term_loss(
+pub(crate) fn term_loss(
     palette_terms: &[Vec<c3::RelatedTerm>],
     excluded_colors: &HashSet<usize>,
     color_name_indices: &[f32]
@@ -888,19 +885,22 @@ fn term_loss(
         }
     }
 
-    let mut iter = 0;
-    for term in palette_terms {
-        if iter >= color_name_indices.len() || color_name_indices[iter] == -1.0 {
-            iter += 1;
-            continue;
-        }
-        let want = color_name_indices[iter] as usize;
-        for rt in term {
-            if rt.index == want {
-                loss -= rt.score;
+    let any_named = color_name_indices.iter().any(|&x| x >= 0.0);
+    if any_named {
+        let mut iter = 0;
+        for term in palette_terms {
+            if iter >= color_name_indices.len() || color_name_indices[iter] < 0.0 {
+                iter += 1;
+                continue;
             }
+            let want = color_name_indices[iter] as usize;
+            for rt in term {
+                if rt.index == want {
+                    loss -= rt.score;
+                }
+            }
+            iter += 1;
         }
-        iter += 1;
     }
 
     loss as f32
@@ -967,57 +967,18 @@ pub(crate) fn evaluate_palette_objective_breakdown_with_excluded_set(
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32]
 ) -> PaletteObjectiveBreakdown {
-    let mut cielab_colors: Vec<Vec<f32>> = Vec::new();
-    for color in oklab_flat.chunks(3) {
-        let okl = Oklab::new(color[0] as f32, color[1] as f32, color[2] as f32);
-        let lab: Lab = Lab::from_color(okl);
-        cielab_colors.push(vec![lab.l, lab.a, lab.b]);
-    }
-    let lab_palette = Array2::from_shape_vec(
-        (oklab_flat.len() / 3, 3),
-        cielab_colors
-            .iter()
-            .flatten()
-            .map(|&x| x as f64)
-            .collect::<Vec<f64>>()
-    ).unwrap();
-    let analyzed_palette = c3.analyze_palette(lab_palette.clone());
-    let palette_terms = c3.get_palette_terms(lab_palette, 10);
-
-    let average_cosine_distance = c3.average_pairwise_color_name_distance(&analyzed_palette);
-    let term = term_loss(&palette_terms, excluded_set, color_name_indices);
-
-    let minus_mean = -average_cosine_distance as f32;
-    let (minus_min_perceptual, perceptual_deficit_penalty, min_display_rgb_distance) =
-        perceptual_objective_terms(oklab_flat);
-    let (minus_min_saturation, saturation_deficit_penalty, min_srgb_saturation, min_oklab_chroma) =
-        saturation_objective_terms(oklab_flat);
-    let mut confusion_weighted = 0.0f32;
-    if spatial_confusion_weight > 0.0 {
-        confusion_weighted = spatial_confusion_weight *
-            compute_confusion_loss(oklab_flat, intensity_arc.as_ref(), avg_confusion);
-    }
-    let total = minus_mean
-        + minus_min_perceptual
-        + perceptual_deficit_penalty
-        + term
-        + confusion_weighted
-        + minus_min_saturation
-        + saturation_deficit_penalty;
-
-    PaletteObjectiveBreakdown {
-        total,
-        minus_mean_color_name_distance: minus_mean,
-        minus_min_perceptual_distance: minus_min_perceptual,
-        perceptual_deficit_penalty,
-        min_display_rgb_distance,
-        term_loss: term,
-        confusion_weighted,
-        minus_min_saturation,
-        saturation_deficit_penalty,
-        min_srgb_saturation,
-        min_oklab_chroma,
-    }
+    palette_eval::with_eval_scratch(|scratch| {
+        palette_eval::evaluate_objective_fast(
+            c3,
+            oklab_flat,
+            intensity_arc,
+            avg_confusion,
+            spatial_confusion_weight,
+            excluded_set,
+            color_name_indices,
+            scratch,
+        )
+    })
 }
 
 impl CostFunction for Loss {
@@ -1128,11 +1089,11 @@ pub(crate) fn annealing(
         match init_rng_seed {
             Some(seed) => {
                 let mut rng = StdRng::seed_from_u64(seed);
-                sa_initial_oklab(colors, locked_colors, luminance_values, &mut rng)
+                sa_initial_oklab(colors, locked_colors, luminance_values, seed, &mut rng)
             }
             None => {
                 let mut rng = thread_rng();
-                sa_initial_oklab(colors, locked_colors, luminance_values, &mut rng)
+                sa_initial_oklab(colors, locked_colors, luminance_values, 0, &mut rng)
             }
         }
     };
@@ -1179,7 +1140,36 @@ pub struct OptimizePipelineResult {
     pub color_name_indices: Vec<f32>,
 }
 
-pub fn optimize_palette_pipeline(
+struct NmRestartOutcome {
+    oklab: Vec<f32>,
+    total: f32,
+    min_display_rgb_distance: f32,
+    solver_cost: f32,
+}
+
+/// Shared inputs for NM multistart / finalize (native + WASM worker orchestration).
+struct PaletteOptContext {
+    n_channels: usize,
+    locked_colors_vec: Vec<bool>,
+    float_luminance_values: Vec<f32>,
+    oklab_color_map: Vec<f32>,
+    intensity_arc: Arc<Array2<f32>>,
+    excluded_colors_indices: Vec<f32>,
+    color_name_indices: Vec<f32>,
+    c3_eval: Arc<c3::C3>,
+    base_seed: u64,
+    spatial_w: f32,
+    avg_confusion: f32,
+    excluded_set: HashSet<usize>,
+    max_iters: u32,
+    confusion_baseline_samples: u32,
+    include_overlap: bool,
+    nm_params: PaletteSolverParams,
+    polish_each_restart: bool,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_palette_opt_context(
     colors: &[u16],
     locked_colors: &[u16],
     intensities: &[u16],
@@ -1190,54 +1180,33 @@ pub fn optimize_palette_pipeline(
     max_iters: Option<u32>,
     confusion_baseline_samples: Option<u32>,
     include_spatial_channel_overlap: Option<bool>,
-    num_restarts: Option<u32>,
-    postprocess: Option<OptimizePostprocess>
-) -> OptimizePipelineResult {
+) -> PaletteOptContext {
     let n_channels = colors.len() / 3;
-    let postprocess = postprocess.unwrap_or(OptimizePostprocess::Full);
-    let (restart_min, restart_max) = restart_count_bounds();
     let max_iters = scale_budget_for_channels(
         max_iters.unwrap_or_else(default_max_iters).max(1),
-        n_channels
+        n_channels,
     );
     let confusion_baseline_samples = confusion_baseline_samples
         .unwrap_or_else(default_confusion_baseline_samples)
         .max(1);
     let include_overlap =
         include_spatial_channel_overlap.unwrap_or_else(default_include_spatial_overlap);
-    let num_restarts = scale_budget_for_channels(
-        num_restarts.unwrap_or_else(default_num_restarts).max(1),
-        n_channels
-    )
-    .clamp(restart_min, restart_max);
-    let full_post = pipeline_use_full_postprocess();
-    let polish_fast = !full_post;
-    let polish_each_restart = full_post && postprocess == OptimizePostprocess::Full;
 
     let float_luminance_values: Vec<f32> = luminance_values
         .iter()
         .map(|&x| (x as f32) / 100.0)
-        .collect::<Vec<f32>>();
-
-    let float_color_map: Vec<f32> = colors
-        .iter()
-        .map(|&x| (x as f32) / 255.0)
-        .collect::<Vec<f32>>();
-
-    let locked_colors_vec = locked_colors
-        .iter()
-        .map(|&x| x == 1)
-        .collect::<Vec<bool>>();
-
+        .collect();
+    let float_color_map: Vec<f32> = colors.iter().map(|&x| (x as f32) / 255.0).collect();
+    let locked_colors_vec: Vec<bool> = locked_colors.iter().map(|&x| x == 1).collect();
     let oklab_color_map: Vec<f32> = float_color_map
         .chunks(3)
         .map(|color| {
-            let rgb = Srgb::new(color[0] as f32, color[1] as f32, color[2] as f32);
+            let rgb = Srgb::new(color[0], color[1], color[2]);
             let oklab: Oklab = Oklab::from_color(rgb);
             vec![oklab.l, oklab.a, oklab.b]
         })
         .flatten()
-        .collect::<Vec<f32>>();
+        .collect();
     let intensity_array = preprocess_data(colors, intensities, contrast_limits);
     let excluded_colors = merge_excluded_color_names(excluded_colors);
     let c3_eval = Arc::new(c3::C3::new());
@@ -1247,10 +1216,9 @@ pub fn optimize_palette_pipeline(
             excluded_colors_indices.push(index as f32);
         }
     }
-
     let mut color_name_indices = Vec::new();
     for color in color_names {
-        if color == "" {
+        if color.is_empty() {
             color_name_indices.push(-1.0f32);
             continue;
         }
@@ -1258,7 +1226,6 @@ pub fn optimize_palette_pipeline(
             color_name_indices.push(index as f32);
         }
     }
-
     let intensity_arc = Arc::new(intensity_array);
     let base_seed = problem_seed(colors, intensities, contrast_limits, luminance_values);
     let spatial_w = if include_overlap {
@@ -1272,128 +1239,501 @@ pub fn optimize_palette_pipeline(
             &oklab_color_map,
             &intensity_arc,
             confusion_baseline_samples,
-            Some(base_seed.wrapping_add(0xA5A5_5A5A_5A5A_5A5A))
+            Some(base_seed.wrapping_add(0xA5A5_5A5A_5A5A_5A5A)),
         )
     } else {
         1.0
     };
-
     let excluded_set: HashSet<usize> = excluded_colors_indices
         .iter()
         .map(|&x| x as usize)
         .collect();
-
-    let eval_total = |oklab: &[f32]| {
-        evaluate_palette_objective_breakdown_with_excluded_set(
-            &c3_eval,
-            oklab,
-            &intensity_arc,
-            avg_confusion,
-            spatial_w,
-            &excluded_set,
-            &color_name_indices
-        )
-        .total
-    };
-
+    let nm_perturb_scale = if n_channels >= 6 { 1.35 } else { 1.0 };
     let nm_params = PaletteSolverParams {
         argmin_max_iters: Some(scaled_solver_iters(
             PaletteArgminSolver::NelderMead,
             max_iters,
         )),
+        nm_perturb_scale,
         ..PaletteSolverParams::default()
     };
+    PaletteOptContext {
+        n_channels,
+        locked_colors_vec,
+        float_luminance_values,
+        oklab_color_map,
+        intensity_arc,
+        excluded_colors_indices,
+        color_name_indices,
+        c3_eval,
+        base_seed,
+        spatial_w,
+        avg_confusion,
+        excluded_set,
+        max_iters,
+        confusion_baseline_samples,
+        include_overlap,
+        nm_params,
+        polish_each_restart: true,
+    }
+}
 
-    let mut best_oklab = oklab_color_map.clone();
-    let mut best_total = f32::INFINITY;
-    let mut best_solver_cost = f32::INFINITY;
+/// One NM restart result for WASM worker pools (`run_nm_restart`).
+#[wasm_bindgen]
+pub struct NmRestartWasmResult {
+    oklab: Vec<f32>,
+    total: f32,
+    min_display_rgb_distance: f32,
+}
 
-    for restart in 0..num_restarts {
-        let init_seed = base_seed.wrapping_add((restart as u64).wrapping_mul(RESTART_SEED_STRIDE));
-        let solver_seed = init_seed.wrapping_add(0x517C_C1B0_2722_0A95);
-        let (mut candidate, solver_cost) = run_palette_argmin_solver(
-            PaletteArgminSolver::NelderMead,
-            &oklab_color_map,
-            &locked_colors_vec,
-            Arc::clone(&intensity_arc),
-            &float_luminance_values,
-            &excluded_colors_indices,
-            &color_name_indices,
-            Arc::clone(&c3_eval),
+#[wasm_bindgen]
+impl NmRestartWasmResult {
+    #[wasm_bindgen(getter)]
+    pub fn oklab(&self) -> Vec<f32> {
+        self.oklab.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn total(&self) -> f32 {
+        self.total
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn min_display_rgb_distance(&self) -> f32 {
+        self.min_display_rgb_distance
+    }
+}
+
+/// Run a single Nelder–Mead multistart (for parallel Web Workers). Matches one leg of [`optimize_palette_pipeline`].
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn run_nm_restart(
+    colors: &[u16],
+    locked_colors: &[u16],
+    intensities: &[u16],
+    contrast_limits: &[u16],
+    luminance_values: &[u16],
+    excluded_colors: Vec<String>,
+    color_names: Vec<String>,
+    max_iters: Option<u32>,
+    confusion_baseline_samples: Option<u32>,
+    include_spatial_channel_overlap: Option<bool>,
+    restart_index: u32,
+    seed_salt: u32,
+    rescue_random_init: bool,
+) -> NmRestartWasmResult {
+    utils::set_panic_hook();
+    let mut ctx = build_palette_opt_context(
+        colors,
+        locked_colors,
+        intensities,
+        contrast_limits,
+        luminance_values,
+        excluded_colors,
+        color_names,
+        max_iters,
+        confusion_baseline_samples,
+        include_spatial_channel_overlap,
+    );
+    if rescue_random_init {
+        ctx.nm_params.force_random_nm_init = true;
+        ctx.nm_params.nm_perturb_scale = ctx.nm_params.nm_perturb_scale.max(1.35);
+    }
+    let o = run_nm_multistart_attempt(
+        restart_index,
+        ctx.base_seed,
+        seed_salt as u64,
+        &ctx.oklab_color_map,
+        &ctx.locked_colors_vec,
+        &ctx.intensity_arc,
+        &ctx.float_luminance_values,
+        &ctx.excluded_colors_indices,
+        &ctx.color_name_indices,
+        &ctx.c3_eval,
+        ctx.max_iters,
+        ctx.confusion_baseline_samples,
+        ctx.include_overlap,
+        ctx.avg_confusion,
+        ctx.spatial_w,
+        &ctx.excluded_set,
+        &ctx.nm_params,
+        ctx.polish_each_restart,
+    );
+    NmRestartWasmResult {
+        oklab: o.oklab,
+        total: o.total,
+        min_display_rgb_distance: o.min_display_rgb_distance,
+    }
+}
+
+/// Polish + refine best OKLab and return linear sRGB (after parallel restarts).
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn finalize_palette_optimize(
+    colors: &[u16],
+    locked_colors: &[u16],
+    intensities: &[u16],
+    contrast_limits: &[u16],
+    luminance_values: &[u16],
+    excluded_colors: Vec<String>,
+    color_names: Vec<String>,
+    max_iters: Option<u32>,
+    confusion_baseline_samples: Option<u32>,
+    include_spatial_channel_overlap: Option<bool>,
+    oklab_best: Vec<f32>,
+) -> Vec<f32> {
+    utils::set_panic_hook();
+    let mut ctx = build_palette_opt_context(
+        colors,
+        locked_colors,
+        intensities,
+        contrast_limits,
+        luminance_values,
+        excluded_colors,
+        color_names,
+        max_iters,
+        confusion_baseline_samples,
+        include_spatial_channel_overlap,
+    );
+    let mut best_oklab = oklab_best;
+    polish_oklab_palette(
+        &mut best_oklab,
+        &ctx.locked_colors_vec,
+        &ctx.float_luminance_values,
+        &ctx.c3_eval,
+        &ctx.intensity_arc,
+        ctx.avg_confusion,
+        ctx.spatial_w,
+        &ctx.excluded_set,
+        &ctx.color_name_indices,
+        false,
+    );
+    refine_oklab_palette(
+        &mut best_oklab,
+        &ctx.locked_colors_vec,
+        &ctx.float_luminance_values,
+        &ctx.c3_eval,
+        &ctx.intensity_arc,
+        ctx.avg_confusion,
+        ctx.spatial_w,
+        &ctx.excluded_set,
+        &ctx.color_name_indices,
+        ctx.base_seed.wrapping_add(0xA11CE),
+    );
+    best_oklab
+        .chunks(3)
+        .map(|color| {
+            let okl = Oklab::new(color[0], color[1], color[2]);
+            let rgb: Srgb = Srgb::from_color(okl);
+            vec![
+                rgb.red.clamp(0.0, 1.0),
+                rgb.green.clamp(0.0, 1.0),
+                rgb.blue.clamp(0.0, 1.0),
+            ]
+        })
+        .flatten()
+        .collect()
+}
+
+/// One Nelder–Mead multistart (+ optional per-restart polish and total re-eval).
+fn run_nm_multistart_attempt(
+    restart: u32,
+    base_seed: u64,
+    seed_salt: u64,
+    start_oklab: &[f32],
+    locked_colors: &[bool],
+    intensity_arc: &Arc<Array2<f32>>,
+    luminance_values: &[f32],
+    excluded_colors_indices: &[f32],
+    color_name_indices: &[f32],
+    c3_eval: &Arc<c3::C3>,
+    max_iters: u32,
+    confusion_baseline_samples: u32,
+    include_overlap: bool,
+    avg_confusion: f32,
+    spatial_w: f32,
+    excluded_set: &HashSet<usize>,
+    nm_params: &PaletteSolverParams,
+    polish_each_restart: bool,
+) -> NmRestartOutcome {
+    let init_seed = base_seed
+        .wrapping_add(seed_salt)
+        .wrapping_add((restart as u64).wrapping_mul(RESTART_SEED_STRIDE));
+    let solver_seed = init_seed.wrapping_add(0x517C_C1B0_2722_0A95);
+    let (mut candidate, solver_cost) = run_palette_argmin_solver(
+        PaletteArgminSolver::NelderMead,
+        start_oklab,
+        locked_colors,
+        Arc::clone(intensity_arc),
+        luminance_values,
+        excluded_colors_indices,
+        color_name_indices,
+        Arc::clone(c3_eval),
+        max_iters,
+        init_seed,
+        solver_seed,
+        confusion_baseline_samples,
+        include_overlap,
+        Some(avg_confusion),
+        nm_params,
+    )
+    .expect("nelder-mead");
+
+    if polish_each_restart {
+        polish_oklab_palette(
+            &mut candidate,
+            locked_colors,
+            luminance_values,
+            c3_eval,
+            intensity_arc,
+            avg_confusion,
+            spatial_w,
+            excluded_set,
+            color_name_indices,
+            false,
+        );
+    }
+    let bd = evaluate_palette_objective_breakdown_with_excluded_set(
+        c3_eval,
+        &candidate,
+        intensity_arc,
+        avg_confusion,
+        spatial_w,
+        excluded_set,
+        color_name_indices,
+    );
+    NmRestartOutcome {
+        oklab: candidate,
+        total: bd.total,
+        min_display_rgb_distance: bd.min_display_rgb_distance,
+        solver_cost,
+    }
+}
+
+/// Native: parallel multistarts via rayon. WASM: sequential (single worker thread).
+fn nm_multistart_outcomes(
+    num_restarts: u32,
+    base_seed: u64,
+    seed_salt: u64,
+    start_oklab: &[f32],
+    locked_colors: &[bool],
+    intensity_arc: Arc<Array2<f32>>,
+    luminance_values: &[f32],
+    excluded_colors_indices: &[f32],
+    color_name_indices: &[f32],
+    c3_eval: Arc<c3::C3>,
+    max_iters: u32,
+    confusion_baseline_samples: u32,
+    include_overlap: bool,
+    avg_confusion: f32,
+    spatial_w: f32,
+    excluded_set: HashSet<usize>,
+    nm_params: PaletteSolverParams,
+    polish_each_restart: bool,
+) -> Vec<NmRestartOutcome> {
+    let run = |restart: u32| {
+        run_nm_multistart_attempt(
+            restart,
+            base_seed,
+            seed_salt,
+            start_oklab,
+            locked_colors,
+            &intensity_arc,
+            luminance_values,
+            excluded_colors_indices,
+            color_name_indices,
+            &c3_eval,
             max_iters,
-            init_seed,
-            solver_seed,
             confusion_baseline_samples,
             include_overlap,
-            Some(avg_confusion),
+            avg_confusion,
+            spatial_w,
+            &excluded_set,
             &nm_params,
+            polish_each_restart,
         )
-        .expect("nelder-mead");
+    };
 
-        if polish_each_restart {
-            polish_oklab_palette(
-                &mut candidate,
-                &locked_colors_vec,
-                &float_luminance_values,
-                &c3_eval,
-                &intensity_arc,
-                avg_confusion,
-                spatial_w,
-                &excluded_set,
-                &color_name_indices,
-                false
-            );
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return (0..num_restarts).into_par_iter().map(run).collect();
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        return (0..num_restarts).map(run).collect();
+    }
+}
+
+fn fold_best_nm_restart(outcomes: Vec<NmRestartOutcome>) -> (Vec<f32>, f32, f32) {
+    let mut best_oklab = Vec::new();
+    let mut best_total = f32::INFINITY;
+    let mut best_solver_cost = f32::INFINITY;
+    for o in outcomes {
+        if o.total < best_total {
+            best_total = o.total;
+            best_oklab = o.oklab;
+            best_solver_cost = o.solver_cost;
         }
-        let total = eval_total(&candidate);
-        if total < best_total {
-            best_total = total;
-            best_oklab = candidate;
-            best_solver_cost = solver_cost;
+    }
+    (best_oklab, best_total, best_solver_cost)
+}
+
+pub fn optimize_palette_pipeline(
+    colors: &[u16],
+    locked_colors: &[u16],
+    intensities: &[u16],
+    contrast_limits: &[u16],
+    luminance_values: &[u16],
+    excluded_colors: Vec<String>,
+    color_names: Vec<String>,
+    max_iters: Option<u32>,
+    confusion_baseline_samples: Option<u32>,
+    include_spatial_channel_overlap: Option<bool>,
+    num_restarts: Option<u32>,
+    postprocess: Option<OptimizePostprocess>,
+) -> OptimizePipelineResult {
+    let postprocess = postprocess.unwrap_or(OptimizePostprocess::Full);
+    let (restart_min, restart_max) = restart_count_bounds();
+    let mut ctx = build_palette_opt_context(
+        colors,
+        locked_colors,
+        intensities,
+        contrast_limits,
+        luminance_values,
+        excluded_colors,
+        color_names,
+        max_iters,
+        confusion_baseline_samples,
+        include_spatial_channel_overlap,
+    );
+    let num_restarts = scale_budget_for_channels(
+        num_restarts.unwrap_or_else(default_num_restarts).max(1),
+        ctx.n_channels,
+    )
+    .clamp(restart_min, restart_max);
+    let full_post = pipeline_use_full_postprocess();
+    let polish_fast = !full_post;
+    let polish_each_restart = full_post && postprocess == OptimizePostprocess::Full;
+    ctx.polish_each_restart = polish_each_restart;
+
+    let outcomes = nm_multistart_outcomes(
+        num_restarts,
+        ctx.base_seed,
+        0,
+        &ctx.oklab_color_map,
+        &ctx.locked_colors_vec,
+        Arc::clone(&ctx.intensity_arc),
+        &ctx.float_luminance_values,
+        &ctx.excluded_colors_indices,
+        &ctx.color_name_indices,
+        Arc::clone(&ctx.c3_eval),
+        ctx.max_iters,
+        ctx.confusion_baseline_samples,
+        ctx.include_overlap,
+        ctx.avg_confusion,
+        ctx.spatial_w,
+        ctx.excluded_set.clone(),
+        ctx.nm_params.clone(),
+        polish_each_restart,
+    );
+    let (mut best_oklab, mut best_total, mut best_solver_cost) = fold_best_nm_restart(outcomes);
+
+    if ctx.n_channels >= 6 {
+        let check = evaluate_palette_objective_breakdown_with_excluded_set(
+            &ctx.c3_eval,
+            &best_oklab,
+            &ctx.intensity_arc,
+            ctx.avg_confusion,
+            ctx.spatial_w,
+            &ctx.excluded_set,
+            &ctx.color_name_indices,
+        );
+        if check.min_display_rgb_distance < SIX_CH_MIN_RGB_RESCUE
+            || check.total > SIX_CH_L_TOT_RESCUE
+        {
+            let mut rescue_params = ctx.nm_params.clone();
+            rescue_params.force_random_nm_init = true;
+            rescue_params.nm_perturb_scale = rescue_params.nm_perturb_scale.max(1.35);
+            let rescue_outcomes = nm_multistart_outcomes(
+                SIX_CH_RESCUE_RESTARTS,
+                ctx.base_seed,
+                0x8E5C_E500,
+                &ctx.oklab_color_map,
+                &ctx.locked_colors_vec,
+                Arc::clone(&ctx.intensity_arc),
+                &ctx.float_luminance_values,
+                &ctx.excluded_colors_indices,
+                &ctx.color_name_indices,
+                Arc::clone(&ctx.c3_eval),
+                ctx.max_iters,
+                ctx.confusion_baseline_samples,
+                ctx.include_overlap,
+                ctx.avg_confusion,
+                ctx.spatial_w,
+                ctx.excluded_set.clone(),
+                rescue_params,
+                polish_each_restart,
+            );
+            let (r_oklab, r_total, r_cost) = fold_best_nm_restart(rescue_outcomes);
+            if r_total < best_total {
+                best_oklab = r_oklab;
+                best_total = r_total;
+                best_solver_cost = r_cost;
+            }
         }
     }
 
     if full_post && postprocess == OptimizePostprocess::Study {
         study_postprocess_oklab(
             &mut best_oklab,
-            &locked_colors_vec,
-            &float_luminance_values,
-            &c3_eval,
-            &intensity_arc,
-            avg_confusion,
-            spatial_w,
-            &excluded_set,
-            &color_name_indices,
-            base_seed,
+            &ctx.locked_colors_vec,
+            &ctx.float_luminance_values,
+            &ctx.c3_eval,
+            &ctx.intensity_arc,
+            ctx.avg_confusion,
+            ctx.spatial_w,
+            &ctx.excluded_set,
+            &ctx.color_name_indices,
+            ctx.base_seed,
         );
     } else {
         polish_oklab_palette(
             &mut best_oklab,
-            &locked_colors_vec,
-            &float_luminance_values,
-            &c3_eval,
-            &intensity_arc,
-            avg_confusion,
-            spatial_w,
-            &excluded_set,
-            &color_name_indices,
+            &ctx.locked_colors_vec,
+            &ctx.float_luminance_values,
+            &ctx.c3_eval,
+            &ctx.intensity_arc,
+            ctx.avg_confusion,
+            ctx.spatial_w,
+            &ctx.excluded_set,
+            &ctx.color_name_indices,
             polish_fast,
         );
         if full_post {
             refine_oklab_palette(
                 &mut best_oklab,
-                &locked_colors_vec,
-                &float_luminance_values,
-                &c3_eval,
-                &intensity_arc,
-                avg_confusion,
-                spatial_w,
-                &excluded_set,
-                &color_name_indices,
-                base_seed.wrapping_add(0xA11CE),
+                &ctx.locked_colors_vec,
+                &ctx.float_luminance_values,
+                &ctx.c3_eval,
+                &ctx.intensity_arc,
+                ctx.avg_confusion,
+                ctx.spatial_w,
+                &ctx.excluded_set,
+                &ctx.color_name_indices,
+                ctx.base_seed.wrapping_add(0xA11CE),
             );
         }
     }
-    best_total = eval_total(&best_oklab);
+    best_total = evaluate_palette_objective_breakdown_with_excluded_set(
+        &ctx.c3_eval,
+        &best_oklab,
+        &ctx.intensity_arc,
+        ctx.avg_confusion,
+        ctx.spatial_w,
+        &ctx.excluded_set,
+        &ctx.color_name_indices,
+    )
+    .total;
 
     let optimized_oklab = best_oklab;
     let sa_best_cost = best_solver_cost;
@@ -1412,9 +1752,9 @@ pub fn optimize_palette_pipeline(
         srgb_linear,
         sa_best_cost,
         oklab_best: optimized_oklab,
-        intensity_arc,
-        excluded_colors_indices,
-        color_name_indices,
+        intensity_arc: ctx.intensity_arc,
+        excluded_colors_indices: ctx.excluded_colors_indices,
+        color_name_indices: ctx.color_name_indices,
     }
 }
 
@@ -1647,7 +1987,7 @@ pub fn optimize(
         confusion_baseline_samples,
         include_spatial_channel_overlap,
         num_restarts,
-        None
+        None,
     );
 
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
@@ -1671,25 +2011,8 @@ fn color_only_loss(
     color_names: Vec<String>
 ) -> Result<HashMap<String, f32>, Error> {
     let excluded_colors = merge_excluded_color_names(excluded_colors);
-    let mut cielab_colors: Vec<Vec<f32>> = Vec::new();
     let oklab_colors = param;
     let c3_instance = c3::C3::new();
-    for color in oklab_colors.chunks(3) {
-        let okl = Oklab::new(color[0] as f32, color[1] as f32, color[2] as f32);
-        let lab: Lab = Lab::from_color(okl);
-        cielab_colors.push(vec![lab.l, lab.a, lab.b]);
-    }
-
-    let lab_palette = Array2::from_shape_vec(
-        (oklab_colors.len() / 3, 3),
-        cielab_colors
-            .iter()
-            .flatten()
-            .map(|&x| x as f64)
-            .collect::<Vec<f64>>()
-    ).unwrap();
-
-    let analyzed_palette = c3_instance.analyze_palette(lab_palette.clone());
 
     let mut excluded_colors_indices = Vec::new();
     for color in excluded_colors {
@@ -1717,18 +2040,23 @@ fn color_only_loss(
         .iter()
         .map(|&x| x as usize)
         .collect();
-    let palette_terms = c3_instance.get_palette_terms(lab_palette, 10);
-    let term_loss_val = term_loss(
-        &palette_terms,
-        &excluded_set,
-        &color_name_indices
-    );
 
-    let average_cosine_distance = c3_instance.average_pairwise_color_name_distance(
-        &analyzed_palette
-    );
-    let (minus_min_perceptual, perceptual_deficit_penalty, min_display_rgb_distance) =
-        perceptual_objective_terms(param);
+    let (average_cosine_distance, term_loss_val, minus_min_perceptual, perceptual_deficit_penalty, min_display_rgb_distance) =
+        palette_eval::with_eval_scratch(|scratch| {
+            palette_eval::fill_labs_from_oklab(oklab_colors, &mut scratch.labs);
+            palette_eval::fill_display_srgb255(oklab_colors, &mut scratch.display_rgb);
+            c3_instance.fill_palette_c3(
+                &scratch.labs,
+                10,
+                &mut scratch.c3_samples,
+                &mut scratch.palette_terms,
+            );
+            let avg = c3_instance.average_pairwise_color_name_distance(&scratch.c3_samples);
+            let term = term_loss(&scratch.palette_terms, &excluded_set, &color_name_indices);
+            let (mp, pd, md) =
+                palette_eval::perceptual_objective_terms_from_display(&scratch.display_rgb);
+            (avg, term, mp, pd, md)
+        });
     let (minus_min_saturation, saturation_deficit_penalty, min_srgb_saturation, min_oklab_chroma) =
         saturation_objective_terms(param);
 
@@ -1826,72 +2154,83 @@ pub fn calculate_palette_loss(
     JsValue::from_serde(&loss).unwrap()
 }
 
-fn calculate_ols_msre(dataset: Dataset<f32, f32>) -> Result<f32, Box<dyn std::error::Error>> {
-    let num_targets = dataset.targets().dim().1;
-    let mut total_mse = 0.0;
-
-    // Fit a model on each target individually
-    for i in 0..num_targets {
-        let target_column = dataset.targets().column(i).to_owned();
-
-        let dataset_with_single_target = Dataset::new(
-            dataset.records().to_owned(),
-            target_column.clone()
-        );
-        let model = LinearRegression::new();
-        let fitted_model = model.fit(&dataset_with_single_target)?;
-        let predictions = fitted_model.predict(&dataset_with_single_target);
-
-        let mse = (predictions - target_column)
-            .mapv(|x| x.powi(2))
-            .mean()
-            .unwrap();
-        #[cfg(debug_assertions)]
-        println!("mse: {:?}", mse);
-        total_mse += mse;
-    }
-
-    // Calculate Avg MSE
-    let avg_mse = total_mse / (num_targets as f32);
-    // Take log of avg_mse
-    let sqrt_mse = avg_mse.sqrt() * 10.0;
-    // let cbrt_mse = avg_mse.cbrt();
-    Ok(sqrt_mse)
-}
-
 fn compute_confusion_loss(
     oklab_color_map: &[f32],
     intensities_array_float: &Array2<f32>,
     avg_confusion: f32
 ) -> f32 {
-    let num_channels = intensities_array_float.shape()[1];
-    let num_rows = intensities_array_float.shape()[0];
-    let mut mixed_array: Array2<f32> = Array2::zeros((num_rows, 3));
+    palette_eval::with_eval_scratch(|scratch| {
+        compute_confusion_loss_fast(
+            oklab_color_map,
+            intensities_array_float,
+            avg_confusion,
+            &mut scratch.mixed_oklab,
+        )
+    })
+}
+
+/// Spatial confusion term; reuses `mixed_out` buffer (rows × 3) across calls.
+pub(crate) fn compute_confusion_loss_fast(
+    oklab_color_map: &[f32],
+    intensities_array_float: &Array2<f32>,
+    avg_confusion: f32,
+    mixed_out: &mut Array2<f32>,
+) -> f32 {
+    let num_channels = intensities_array_float.ncols();
+    let num_rows = intensities_array_float.nrows();
+    if mixed_out.nrows() != num_rows || mixed_out.ncols() != 3 {
+        *mixed_out = Array2::zeros((num_rows, 3));
+    }
     for row in 0..num_rows {
+        let mut x = 0.0f32;
+        let mut y = 0.0f32;
+        let mut z = 0.0f32;
         for channel in 0..num_channels {
             let intensity_value = intensities_array_float[[row, channel]];
             let oklab_colored = Oklab::new(
                 oklab_color_map[channel * 3] * intensity_value,
                 oklab_color_map[channel * 3 + 1] * intensity_value,
-                oklab_color_map[channel * 3 + 2] * intensity_value
+                oklab_color_map[channel * 3 + 2] * intensity_value,
             );
             let xyz: Xyz = Xyz::from_color(oklab_colored);
-            mixed_array[[row, 0]] += xyz.x;
-            mixed_array[[row, 1]] += xyz.y;
-            mixed_array[[row, 2]] += xyz.z;
+            x += xyz.x;
+            y += xyz.y;
+            z += xyz.z;
         }
-        let okl = Oklab::from_color(
-            Xyz::new(mixed_array[[row, 0]], mixed_array[[row, 1]], mixed_array[[row, 2]])
-        );
-        mixed_array[[row, 0]] = okl.l;
-        mixed_array[[row, 1]] = okl.a;
-        mixed_array[[row, 2]] = okl.b;
+        let okl = Oklab::from_color(Xyz::new(x, y, z));
+        mixed_out[[row, 0]] = okl.l;
+        mixed_out[[row, 1]] = okl.a;
+        mixed_out[[row, 2]] = okl.b;
     }
 
-    let dataset = Dataset::new(intensities_array_float.clone(), mixed_array);
-    let rmse = calculate_ols_msre(dataset);
-    // console::log_1(&format!("rmse: {:?}", rmse).into());
+    let rmse = calculate_ols_msre_borrowed(intensities_array_float, mixed_out);
     rmse.unwrap() / avg_confusion
+}
+
+fn calculate_ols_msre_borrowed(
+    records: &Array2<f32>,
+    targets: &Array2<f32>
+) -> Result<f32, Box<dyn std::error::Error>> {
+    let num_targets = targets.ncols();
+    let mut total_mse = 0.0f32;
+    let records_owned = records.to_owned();
+
+    for i in 0..num_targets {
+        let target_column = targets.column(i).to_owned();
+        let dataset_with_single_target =
+            Dataset::new(records_owned.clone(), target_column.clone());
+        let model = LinearRegression::new();
+        let fitted_model = model.fit(&dataset_with_single_target)?;
+        let predictions = fitted_model.predict(&dataset_with_single_target);
+        let mse = (predictions - target_column)
+            .mapv(|x| x.powi(2))
+            .mean()
+            .unwrap();
+        total_mse += mse;
+    }
+
+    let avg_mse = total_mse / (num_targets as f32);
+    Ok(avg_mse.sqrt() * 10.0)
 }
 
 fn calculate_average_confusion(
