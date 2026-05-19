@@ -62,7 +62,7 @@ path = "examples/palette_study.rs"
 name = "param_sweep"
 path = "examples/param_sweep.rs"
 
-[[example]]cd
+[[example]]
 name = "solver_benchmark"
 path = "examples/solver_benchmark.rs"
 
