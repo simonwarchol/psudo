@@ -1,18 +1,24 @@
-//! Palette consistency study: random optimized **6-color** palettes.
+//! Palette consistency study: random optimized palettes per channel count.
 //! Writes `target/palette_study/report.html`.
 //!
 //! ```bash
 //! cd lib && cargo run --example palette_study --release
+//! PALETTE_STUDY_PARENTS=20 PALETTE_STUDY_CHANNELS=4,6 cargo run --example palette_study --release
 //! ```
 //!
 //! Environment (optional):
-//! - `PALETTE_STUDY_PARENTS` (default 20)
+//! - `PALETTE_STUDY_PARENTS` (default 20) — palettes per channel count
+//! - `PALETTE_STUDY_CHANNELS` (default `4,6`) — comma-separated channel counts
 //! - `PALETTE_STUDY_ROWS` (default 384) — synthetic intensity rows per run
-//! - `PALETTE_STUDY_MAX_ITERS` (default 3000, same as app)
+//! - `PALETTE_STUDY_MAX_ITERS` (default 3000 — matches production / npm)
 //! - `PALETTE_STUDY_CONFUSION_SAMPLES` (default 32)
-//! - `PALETTE_STUDY_RESTARTS` (default 8); set to 1 for faster but weaker runs
-//! - `PALETTE_STUDY_SPATIAL=1` — include spatial channel-overlap in the objective (default off)
+//! - `PALETTE_STUDY_RESTARTS` (default 6) — Nelder–Mead multistarts
+//! - `PALETTE_STUDY_STUDY=1` — lighter Study postprocess (benchmark-style; default is Full)
+//! - `PALETTE_STUDY_SPATIAL=1` — spatial channel-overlap in the objective (default off)
 //! - `PALETTE_STUDY_SPREAD_INIT=0` — random saturated sRGB starts instead of hue-spread OKLab inits
+//!
+//! Compare convergence profiles (ignored test):
+//! `cargo test study_convergence_profiles -- --ignored --nocapture`
 
 use palette::{FromColor, Oklab, Srgb};
 use psudo::c3::C3;
@@ -21,6 +27,7 @@ use psudo::{
     evaluate_palette_objective_breakdown,
     optimize_palette_pipeline,
     OptimizePipelineResult,
+    OptimizePostprocess,
     PaletteObjectiveBreakdown,
 };
 use rand::rngs::StdRng;
@@ -29,7 +36,12 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-const STUDY_CHANNELS: usize = 6;
+const DEFAULT_CHANNEL_COUNTS: &str = "4,6";
+
+/// Same defaults as WASM / npm `optimize()` (spatial off).
+const DEFAULT_MAX_ITERS: u32 = 3000;
+const DEFAULT_CONFUSION_SAMPLES: u32 = 32;
+const DEFAULT_RESTARTS: u32 = 6;
 
 fn parse_env_usize(key: &str, default: usize) -> usize {
     env::var(key)
@@ -51,6 +63,25 @@ fn parse_env_bool(key: &str) -> bool {
     env::var(key)
         .map(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
+}
+
+fn parse_channel_counts() -> Vec<usize> {
+    let raw = env::var("PALETTE_STUDY_CHANNELS").unwrap_or_else(|_| DEFAULT_CHANNEL_COUNTS.to_string());
+    let mut out: Vec<usize> = raw
+        .split(',')
+        .filter_map(|s| s.trim().parse::<usize>().ok())
+        .filter(|&n| n >= 2)
+        .collect();
+    if out.is_empty() {
+        out.push(6);
+    }
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+fn scaled_budget(base: u32, channels: usize) -> u32 {
+    ((base as u64 * channels as u64) / 3).max(1) as u32
 }
 
 fn log_loss_stats(phase: &str, totals: &[f32]) {
@@ -250,7 +281,7 @@ fn svg_loss_bars(bd: &PaletteObjectiveBreakdown) -> String {
 fn format_loss_panel(bd: &PaletteObjectiveBreakdown, sa: f32) -> String {
     let gap = (sa - bd.total).abs();
     format!(
-        r#"<div class="loss-panel"><div class="loss-total">L_tot={:.4} <span class="better">lower is better</span></div><div class="loss-meta">SA={:.4} |delta|={:.4}</div>{}</div>"#,
+        r#"<div class="loss-panel"><div class="loss-total">L_tot={:.4} <span class="better">lower is better</span></div><div class="loss-meta">solver={:.4} |delta|={:.4}</div>{}</div>"#,
         bd.total,
         sa,
         gap,
@@ -279,70 +310,60 @@ fn svg_swatches(rgb: &[[u8; 3]], sw: i32, sh: i32) -> String {
     s
 }
 
-fn main() {
-    let n_parents = parse_env_usize("PALETTE_STUDY_PARENTS", 20);
-    let n_rows = parse_env_usize("PALETTE_STUDY_ROWS", 384);
-    let max_iters = parse_env_u32("PALETTE_STUDY_MAX_ITERS", 3000);
-    let confusion_samples = parse_env_u32("PALETTE_STUDY_CONFUSION_SAMPLES", 32);
-    let num_restarts = parse_env_u32("PALETTE_STUDY_RESTARTS", 8);
-    let include_spatial = parse_env_bool("PALETTE_STUDY_SPATIAL");
-    let spread_init = env::var("PALETTE_STUDY_SPREAD_INIT")
-        .map(|s| !matches!(s.as_str(), "0" | "false" | "FALSE" | "no" | "NO"))
-        .unwrap_or(true);
+struct StudyBatch {
+    channels: usize,
+    parents: Vec<(OptimizePipelineResult, PaletteObjectiveBreakdown)>,
+}
 
-    let out_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/palette_study");
-    fs::create_dir_all(&out_dir).expect("mkdir");
-
-    let mut parents: Vec<(OptimizePipelineResult, PaletteObjectiveBreakdown)> =
-        Vec::with_capacity(n_parents);
-
-    let effective_iters = (max_iters as u64 * STUDY_CHANNELS as u64 / 3).max(1) as u32;
-    let effective_restarts = ((num_restarts as u64 * STUDY_CHANNELS as u64) / 3)
-        .clamp(4, 16) as u32;
+fn run_channel_batch(
+    channels: usize,
+    n_parents: usize,
+    n_rows: usize,
+    max_iters: u32,
+    confusion_samples: u32,
+    num_restarts: u32,
+    include_spatial: bool,
+    postprocess: OptimizePostprocess,
+    spread_init: bool,
+    c3_eval: &C3,
+    spatial_w: f32,
+) -> StudyBatch {
+    let nm_iters = scaled_budget(max_iters, channels) / 2;
     eprintln!(
-        "[palette_study] {} palettes, {} rows, iters={} (scaled {}), restarts={} (scaled {}), spatial={}, spread_init={}",
-        n_parents,
-        n_rows,
-        effective_iters,
-        max_iters,
-        effective_restarts,
-        num_restarts,
-        include_spatial,
-        spread_init
+        "[palette_study] {channels}ch: NM ~{nm_iters} iters/run, {num_restarts} restarts, {n_parents} palettes"
     );
 
-    let c3_eval = C3::new();
-    let spatial_w = if include_spatial { 0.1 } else { 0.0 };
-
-    let mut shared_intensity_rng = StdRng::seed_from_u64(9000);
-    let shared_intensities = random_intensities(n_rows, STUDY_CHANNELS, &mut shared_intensity_rng);
+    let mut shared_intensity_rng = StdRng::seed_from_u64(9000 + channels as u64);
+    let shared_intensities = random_intensities(n_rows, channels, &mut shared_intensity_rng);
+    let mut parents = Vec::with_capacity(n_parents);
+    let seed_base = 50_000u64 + (channels as u64) * 10_000;
 
     for i in 0..n_parents {
-        let mut rng = StdRng::seed_from_u64(50_000 + i as u64);
+        let mut rng = StdRng::seed_from_u64(seed_base + i as u64);
         let colors = if spread_init {
-            spread_initial_colors_u16(STUDY_CHANNELS, &mut rng)
+            spread_initial_colors_u16(channels, &mut rng)
         } else {
-            random_initial_colors_u16(STUDY_CHANNELS, &mut rng)
+            random_initial_colors_u16(channels, &mut rng)
         };
-        let locked = vec![0u16; STUDY_CHANNELS];
-        let intensities = shared_intensities.clone();
-        let contrast = contrast_all(STUDY_CHANNELS);
+        let locked = vec![0u16; channels];
+        let contrast = contrast_all(channels);
         let lum = luminance_u16();
         let run = optimize_palette_pipeline(
             &colors,
             &locked,
-            &intensities,
+            &shared_intensities,
             &contrast,
             &lum,
             vec![],
-            empty_names(STUDY_CHANNELS),
+            empty_names(channels),
             Some(max_iters),
             Some(confusion_samples),
             Some(include_spatial),
             Some(num_restarts),
+            Some(postprocess),
         );
         let bd = evaluate_palette_objective_breakdown(
-            &c3_eval,
+            c3_eval,
             &run.oklab_best,
             &run.intensity_arc,
             1.0,
@@ -350,115 +371,31 @@ fn main() {
             &run.excluded_colors_indices,
             &run.color_name_indices,
         );
-        let dbg = format_channel_debug(&run.oklab_best, &c3_eval);
+        let dbg = format_channel_debug(&run.oklab_best, c3_eval);
         eprintln!(
-            "[palette_study] #{} L_tot={:.4} min_rgb={:.0} perc+={:.3} | {}",
+            "[palette_study] {channels}ch #{}/{} L_tot={:.4} min_rgb={:.0} | {}",
             i + 1,
+            n_parents,
             bd.total,
             bd.min_display_rgb_distance,
-            bd.perceptual_deficit_penalty,
             dbg
         );
         parents.push((run, bd));
         if (i + 1) % 5 == 0 || i == 0 {
-            eprintln!("[palette_study] finished {}/{}", i + 1, n_parents);
+            eprintln!("[palette_study] {channels}ch finished {}/{}", i + 1, n_parents);
         }
     }
+
     log_loss_stats(
-        "6-color palettes",
+        &format!("{channels}-color palettes"),
         &parents.iter().map(|(_, bd)| bd.total).collect::<Vec<_>>(),
     );
+    StudyBatch { channels, parents }
+}
 
-    let sw = 40i32;
-    let sh = 100i32;
-    let mut html = format!(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Palette study — 6-color palettes</title>
-<style>
-  body {{ font-family: system-ui, sans-serif; margin: 24px; background: #111; color: #e8e8e8; overflow-x: auto; }}
-  h1 {{ font-size: 1.35rem; }}
-  h2 {{ font-size: 1rem; margin-top: 2rem; color: #9cf; }}
-  p.note {{ color: #888; max-width: 72ch; line-height: 1.45; }}
-  .grid3 {{
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-    gap: 16px;
-    max-width: 1600px;
-  }}
-  .card {{
-    background: #1c1c1c;
-    border-radius: 8px;
-    padding: 10px;
-    border: 1px solid #333;
-    min-width: 0;
-    overflow: visible;
-  }}
-  .card .label {{ font-size: 0.75rem; color: #888; margin-bottom: 6px; word-break: break-word; }}
-  .names {{ font-size: 0.65rem; color: #9ab; line-height: 1.35; }}
-  .card-body {{
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: flex-start;
-    min-width: 0;
-  }}
-  .swatches-wrap {{
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-  }}
-  .swatches-wrap svg.swatches {{
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    height: auto;
-    max-height: 100px;
-  }}
-  .loss-panel {{
-    font-size: 0.68rem;
-    color: #bbb;
-    font-family: ui-monospace, Menlo, monospace;
-    flex: 0 0 auto;
-    min-width: 118px;
-  }}
-  @media (max-width: 520px) {{
-    .card-body {{ flex-direction: column; }}
-    .loss-panel {{ width: 100%; }}
-  }}
-  .loss-total {{ font-size: 0.75rem; color: #eee; margin-bottom: 4px; }}
-  .loss-meta {{ color: #666; font-size: 0.6rem; margin-bottom: 4px; }}
-  .better {{ color: #7dcea0; font-weight: normal; }}
-  .sort-note {{ color: #9cf; font-size: 0.85rem; margin-bottom: 8px; }}
-</style>
-</head>
-<body>
-<h1>Palette study</h1>
-<p class="note">
-  <strong>{0}</strong> optimized <strong>6-color</strong> palettes from random starts
-  (spatial overlap <strong>{1}</strong>).
-  Generate with <code>cargo run --example palette_study --release</code> from the <code>lib/</code> crate.
-  <br/><br/>
-  <strong>Loss:</strong> lower <code>L_tot</code> is better.
-  <span style="color:#7dcea0">RGB</span> rewards min display-sRGB distance;
-  <span style="color:#58d68d">perc+</span> penalizes pairs closer than ~90 in 0–255 RGB;
-  <span style="color:#e67e22">sat-</span>/<span style="color:#e74c3c">sat+</span> push display saturation.
-  Sorted by <code>L_tot</code> ascending.
-</p>
-<h2>Optimized 6-color palettes (sorted by loss)</h2>
-<p class="sort-note">Best (lowest L_tot) appears first.</p>
-<div class="grid3">
-"#,
-        n_parents,
-        if include_spatial { "on" } else { "off" }
-    );
-
+fn append_section_html(html: &mut String, batch: &StudyBatch, c3_eval: &C3, sw: i32, sh: i32) {
+    let parents = &batch.parents;
+    let channels = batch.channels;
     let mut parent_rows: Vec<(usize, Vec<[u8; 3]>, PaletteObjectiveBreakdown, f32)> =
         Vec::with_capacity(parents.len());
     for (i, (run, bd)) in parents.iter().enumerate() {
@@ -475,11 +412,18 @@ fn main() {
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    for (rank, (orig, rgb, bd, sa)) in parent_rows.iter().enumerate() {
+    html.push_str(&format!(
+        r#"<h2>{channels}-color palettes (n={}, sorted by L_tot)</h2>
+<p class="sort-note">Best (lowest L_tot) appears first.</p>
+<div class="grid3">"#,
+        parents.len()
+    ));
+
+    for (rank, (orig, rgb, bd, solver_cost)) in parent_rows.iter().enumerate() {
         html.push_str(r#"<div class="card">"#);
-        let dbg = format_channel_debug(&parents[*orig].0.oklab_best, &c3_eval);
+        let dbg = format_channel_debug(&parents[*orig].0.oklab_best, c3_eval);
         html.push_str(&format!(
-            r#"<div class="label">#{} · run {} · L_tot={:.4} · ΔE00≥{:.1}<br/><span class="names">{}</span></div>"#,
+            r#"<div class="label">#{} · run {} · L_tot={:.4} · min RGB Δ≥{:.1}<br/><span class="names">{}</span></div>"#,
             rank + 1,
             orig + 1,
             bd.total,
@@ -488,10 +432,161 @@ fn main() {
         ));
         html.push_str(r#"<div class="card-body">"#);
         html.push_str(&svg_swatches(rgb, sw, sh));
-        html.push_str(&format_loss_panel(bd, *sa));
+        html.push_str(&format_loss_panel(bd, *solver_cost));
         html.push_str("</div></div>");
     }
-    html.push_str("</div></body></html>");
+    html.push_str("</div>");
+}
+
+const HTML_HEAD: &str = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Palette study</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; background: #111; color: #e8e8e8; overflow-x: auto; }
+  h1 { font-size: 1.35rem; }
+  h2 { font-size: 1rem; margin-top: 2rem; color: #9cf; }
+  p.note { color: #888; max-width: 72ch; line-height: 1.45; }
+  .grid3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: 16px;
+    max-width: 1600px;
+  }
+  .card {
+    background: #1c1c1c;
+    border-radius: 8px;
+    padding: 10px;
+    border: 1px solid #333;
+    min-width: 0;
+    overflow: visible;
+  }
+  .card .label { font-size: 0.75rem; color: #888; margin-bottom: 6px; word-break: break-word; }
+  .names { font-size: 0.65rem; color: #9ab; line-height: 1.35; }
+  .card-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-start;
+    min-width: 0;
+  }
+  .swatches-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .swatches-wrap svg.swatches {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 100px;
+  }
+  .loss-panel {
+    font-size: 0.68rem;
+    color: #bbb;
+    font-family: ui-monospace, Menlo, monospace;
+    flex: 0 0 auto;
+    min-width: 118px;
+  }
+  @media (max-width: 520px) {
+    .card-body { flex-direction: column; }
+    .loss-panel { width: 100%; }
+  }
+  .loss-total { font-size: 0.75rem; color: #eee; margin-bottom: 4px; }
+  .loss-meta { color: #666; font-size: 0.6rem; margin-bottom: 4px; }
+  .better { color: #7dcea0; font-weight: normal; }
+  .sort-note { color: #9cf; font-size: 0.85rem; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+"#;
+
+fn main() {
+    let channel_counts = parse_channel_counts();
+    let n_parents = parse_env_usize("PALETTE_STUDY_PARENTS", 20);
+    let n_rows = parse_env_usize("PALETTE_STUDY_ROWS", 384);
+    let max_iters = parse_env_u32("PALETTE_STUDY_MAX_ITERS", DEFAULT_MAX_ITERS);
+    let confusion_samples =
+        parse_env_u32("PALETTE_STUDY_CONFUSION_SAMPLES", DEFAULT_CONFUSION_SAMPLES);
+    let num_restarts = parse_env_u32("PALETTE_STUDY_RESTARTS", DEFAULT_RESTARTS);
+    let include_spatial = parse_env_bool("PALETTE_STUDY_SPATIAL");
+    let study_post = parse_env_bool("PALETTE_STUDY_STUDY");
+    let postprocess = if study_post {
+        OptimizePostprocess::Study
+    } else {
+        OptimizePostprocess::Full
+    };
+    let spread_init = env::var("PALETTE_STUDY_SPREAD_INIT")
+        .map(|s| !matches!(s.as_str(), "0" | "false" | "FALSE" | "no" | "NO"))
+        .unwrap_or(true);
+
+    let out_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/palette_study");
+    fs::create_dir_all(&out_dir).expect("mkdir");
+
+    let channels_label: String = channel_counts
+        .iter()
+        .map(|c| c.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    eprintln!(
+        "[palette_study] Nelder–Mead · max_iters={} restarts={} confusion={} · channels=[{}] · {} palettes/ch · spatial={} post={:?}",
+        max_iters,
+        num_restarts,
+        confusion_samples,
+        channels_label,
+        n_parents,
+        include_spatial,
+        postprocess
+    );
+
+    let c3_eval = C3::new();
+    let spatial_w = if include_spatial { 0.1 } else { 0.0 };
+
+    let mut batches = Vec::new();
+    for &channels in &channel_counts {
+        batches.push(run_channel_batch(
+            channels,
+            n_parents,
+            n_rows,
+            max_iters,
+            confusion_samples,
+            num_restarts,
+            include_spatial,
+            postprocess,
+            spread_init,
+            &c3_eval,
+            spatial_w,
+        ));
+    }
+
+    let sw = 40i32;
+    let sh = 100i32;
+    let total_palettes = n_parents * channel_counts.len();
+    let mut html = String::from(HTML_HEAD);
+    html.push_str(&format!(
+        r#"<h1>Palette study</h1>
+<p class="note">
+  <strong>{total_palettes}</strong> optimized palettes ({n_parents} per channel count: <strong>{channels_label}</strong>).
+  Defaults: <code>max_iters={max_iters}</code>, <code>restarts={num_restarts}</code>,
+  <code>confusion_samples={confusion_samples}</code>; Nelder–Mead multistart; spatial <strong>{spatial}</strong>.
+  <br/><br/>
+  Lower <code>L_tot</code> is better. Sorted by loss within each section.
+</p>
+"#,
+        spatial = if include_spatial { "on" } else { "off" }
+    ));
+
+    for batch in &batches {
+        append_section_html(&mut html, batch, &c3_eval, sw, sh);
+    }
+    html.push_str("</body></html>");
 
     let path = out_dir.join("report.html");
     fs::write(&path, &html).expect("write report");
@@ -502,6 +597,6 @@ fn main() {
     );
     eprintln!(
         "[palette_study] open in browser: file://{}",
-        path.canonicalize().unwrap_or(path.clone()).display()
+        path.canonicalize().unwrap_or(path).display()
     );
 }

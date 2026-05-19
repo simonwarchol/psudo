@@ -1,6 +1,6 @@
 [package]
 name = "psudo"
-version = "0.2.6"
+version = "0.3.0"
 authors = ["Simon Warchol <simonwarchol@g.harvard.edu>"]
 edition = "2018"
 license = "MIT"
@@ -38,8 +38,8 @@ palette = "0.7.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 typenum = "1.17.0"
-kd-tree = "0.5.1"
 argmin = "0.8.1"
+rust_c3 = "0.3.0"
 instant = { version = "0.1", features = [ "wasm-bindgen"]}
 
 
@@ -58,6 +58,18 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 [[example]]
 name = "palette_study"
 path = "examples/palette_study.rs"
+
+[[example]]
+name = "param_sweep"
+path = "examples/param_sweep.rs"
+
+[[example]]
+name = "solver_benchmark"
+path = "examples/solver_benchmark.rs"
+
+[[example]]
+name = "solver_hyperparam_sweep"
+path = "examples/solver_hyperparam_sweep.rs"
 
 [profile.release]
 # Optimize for runtime throughput on color optimization (wasm binary size vs speed tradeoff).

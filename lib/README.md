@@ -108,7 +108,7 @@ const optimized = await psudo.optimize(
   luminance,
   excluded,
   colorNames,
-  undefined, // max_iters (WASM default ~1500, scaled by channel count)
+  undefined, // max_iters (default 3000, scaled by channel count)
   undefined, // confusion_baseline_samples
   false,     // include_spatial_channel_overlap (false = fast color-only path)
   undefined  // num_restarts
@@ -193,10 +193,10 @@ console.log(loss.perceptual_distance, loss.name_distance, loss.min_display_rgb_d
 
 | Argument | Default (WASM) | Notes |
 |----------|----------------|-------|
-| `max_iters` | ~1500 (× channels/3) | Higher = slower, often better |
-| `confusion_baseline_samples` | 16 | MC samples when spatial overlap is on |
+| `max_iters` | 3000 (× channels/3) | Higher = slower, often better |
+| `confusion_baseline_samples` | 32 | MC samples when spatial overlap is on |
 | `include_spatial_channel_overlap` | `false` | `true` uses image intensities in objective (slower) |
-| `num_restarts` | 2 (× channels/3) | Independent SA runs; best total wins |
+| `num_restarts` | 6 (× channels/3, max 12 WASM) | Nelder–Mead multistarts; best total wins |
 
 ## Building from source
 

@@ -45,7 +45,7 @@ fn seeded_annealing_is_repeatable() {
             &lum,
             &excl,
             &names,
-            c3::C3::new(),
+            Arc::new(c3::C3::new()),
             96,
             6,
             Some(9001),
@@ -87,7 +87,7 @@ fn multi_start_exhibits_bounded_cost_spread() {
             &lum,
             &excl,
             &names,
-            c3::C3::new(),
+            Arc::new(c3::C3::new()),
             120,
             6,
             Some(10_000 + seed),
@@ -233,4 +233,127 @@ fn high_l_pastel_oklab_can_still_fail_srgb_floor() {
     assert!(bd.min_oklab_chroma >= 0.05);
     assert!(bd.min_srgb_saturation < 0.35);
     assert!(bd.saturation_deficit_penalty > 0.05);
+}
+
+/// Compares loss spread vs wall time for study-style configs (not run in CI).
+/// Run: `cargo test study_convergence_profiles -- --ignored --nocapture`
+#[test]
+#[ignore = "benchmark: cargo test study_convergence_profiles -- --ignored --nocapture"]
+fn study_convergence_profiles() {
+    use rand::rngs::StdRng;
+    use rand::{ Rng, SeedableRng };
+    use std::time::Instant;
+
+    const CHANNELS: usize = 6;
+    const N_SEEDS: usize = 4;
+    const N_ROWS: usize = 128;
+
+    let mut rng = StdRng::seed_from_u64(9000);
+    let mut intensities = vec![0u16; N_ROWS * CHANNELS];
+    for ch in 0..CHANNELS {
+        for row in 0..N_ROWS {
+            intensities[ch * N_ROWS + row] = rng.gen_range(2000u16..62000u16);
+        }
+    }
+    let contrast = (0..CHANNELS).flat_map(|_| [0u16, 65535]).collect::<Vec<_>>();
+    let lum = vec![45u16, 92];
+    let locked = vec![0u16; CHANNELS];
+    let names: Vec<String> = (0..CHANNELS).map(|_| String::new()).collect();
+
+    struct Profile {
+        label: &'static str,
+        max_iters: u32,
+        restarts: u32,
+        post: OptimizePostprocess,
+    }
+
+    let profiles = [
+        Profile {
+            label: "study (3r, 800 it, Study post)",
+            max_iters: 800,
+            restarts: 3,
+            post: OptimizePostprocess::Study,
+        },
+        Profile {
+            label: "full post (3r, 800 it, Full)",
+            max_iters: 800,
+            restarts: 3,
+            post: OptimizePostprocess::Full,
+        },
+        Profile {
+            label: "more restarts (6r, 800 it, Study post)",
+            max_iters: 800,
+            restarts: 6,
+            post: OptimizePostprocess::Study,
+        },
+    ];
+
+    let c3_eval = c3::C3::new();
+
+    eprintln!(
+        "\n{:42} {:>7} {:>7} {:>7} {:>6} {:>6}",
+        "profile", "mean_L", "std_L", "best_L", "uniq", "ms/run"
+    );
+
+    for p in profiles {
+        let t0 = Instant::now();
+        let mut totals = Vec::with_capacity(N_SEEDS);
+        for seed in 0..N_SEEDS {
+            let mut srng = StdRng::seed_from_u64(50_000 + seed as u64);
+            let mut colors = Vec::with_capacity(CHANNELS * 3);
+            let l = 0.58f32;
+            for i in 0..CHANNELS {
+                let angle = std::f32::consts::TAU * (i as f32) / (CHANNELS as f32)
+                    + srng.gen_range(-0.12f32..0.12f32);
+                let chroma = srng.gen_range(0.18f32..0.34f32);
+                let okl = palette::Oklab::new(l, chroma * angle.cos(), chroma * angle.sin());
+                let rgb: palette::Srgb = palette::FromColor::from_color(okl);
+                colors.push((rgb.red.clamp(0.0, 1.0) * 255.0) as u16);
+                colors.push((rgb.green.clamp(0.0, 1.0) * 255.0) as u16);
+                colors.push((rgb.blue.clamp(0.0, 1.0) * 255.0) as u16);
+            }
+            let run = optimize_palette_pipeline(
+                &colors,
+                &locked,
+                &intensities,
+                &contrast,
+                &lum,
+                vec![],
+                names.clone(),
+                Some(p.max_iters),
+                Some(32),
+                Some(false),
+                Some(p.restarts),
+                Some(p.post),
+            );
+            let bd = evaluate_palette_objective_breakdown(
+                &c3_eval,
+                &run.oklab_best,
+                &run.intensity_arc,
+                1.0,
+                0.0,
+                &run.excluded_colors_indices,
+                &run.color_name_indices,
+            );
+            totals.push(bd.total);
+        }
+        let elapsed = t0.elapsed();
+        let n = totals.len() as f32;
+        let mean = totals.iter().sum::<f32>() / n;
+        let var = totals.iter().map(|t| (t - mean).powi(2)).sum::<f32>() / n;
+        let best = totals.iter().cloned().fold(f32::INFINITY, f32::min);
+        let mut sorted = totals.clone();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let mut uniq = sorted.clone();
+        uniq.dedup_by(|a, b| (*a - *b).abs() < 1e-3);
+        eprintln!(
+            "{:42} {:7.3} {:7.3} {:7.3} {:6} {:6.0}",
+            p.label,
+            mean,
+            var.sqrt(),
+            best,
+            uniq.len(),
+            elapsed.as_secs_f64() * 1000.0 / n as f64
+        );
+    }
 }
