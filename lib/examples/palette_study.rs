@@ -6,6 +6,13 @@
 //! PALETTE_STUDY_PARENTS=20 PALETTE_STUDY_CHANNELS=4,6 cargo run --example palette_study --release
 //! ```
 //!
+//! WASM / npm (same env vars, uses `psudo/sync` from repo root):
+//! ```bash
+//! pnpm run palette-study-wasm
+//! pnpm run palette-study-wasm -- --document path/to/story.json
+//! ```
+//! Report: `lib/target/palette_study_wasm/report.html`
+//!
 //! Environment (optional):
 //! - `PALETTE_STUDY_PARENTS` (default 20) — palettes per channel count
 //! - `PALETTE_STUDY_CHANNELS` (default `4,6`) — comma-separated channel counts

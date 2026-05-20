@@ -1956,6 +1956,56 @@ pub fn optimize_palette_with_solver(
 ///
 /// `num_restarts`: independent Nelder–Mead multistarts (default 6, scaled by channel count); best total wins.
 ///
+/// Same objective as native `palette_study` (`evaluate_palette_objective_breakdown` on `oklab_best`).
+fn pipeline_study_breakdown(
+    run: &OptimizePipelineResult,
+    include_spatial_channel_overlap: Option<bool>,
+) -> PaletteObjectiveBreakdown {
+    let include_overlap =
+        include_spatial_channel_overlap.unwrap_or_else(default_include_spatial_overlap);
+    let spatial_w = if include_overlap {
+        SPATIAL_CONFUSION_WEIGHT
+    } else {
+        0.0
+    };
+    let c3_eval = c3::C3::new();
+    evaluate_palette_objective_breakdown(
+        &c3_eval,
+        &run.oklab_best,
+        &run.intensity_arc,
+        1.0,
+        spatial_w,
+        &run.excluded_colors_indices,
+        &run.color_name_indices,
+    )
+}
+
+/// WASM / JS study reports: linear sRGB plus `L_tot` / `min_rgb` matching native `palette_study`.
+#[wasm_bindgen]
+pub struct OptimizeMetricsResult {
+    srgb_linear: Vec<f32>,
+    l_tot: f32,
+    min_display_rgb_distance: f32,
+}
+
+#[wasm_bindgen]
+impl OptimizeMetricsResult {
+    #[wasm_bindgen(getter)]
+    pub fn srgb_linear(&self) -> Vec<f32> {
+        self.srgb_linear.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn l_tot(&self) -> f32 {
+        self.l_tot
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn min_display_rgb_distance(&self) -> f32 {
+        self.min_display_rgb_distance
+    }
+}
+
 /// Defaults: `max_iters` 3000, `confusion_baseline_samples` 32, full polish + refine after search.
 #[wasm_bindgen]
 pub fn optimize(
@@ -1971,6 +2021,36 @@ pub fn optimize(
     include_spatial_channel_overlap: Option<bool>,
     num_restarts: Option<u32>
 ) -> Vec<f32> {
+    optimize_with_metrics(
+        colors,
+        locked_colors,
+        intensities,
+        contrast_limits,
+        luminance_values,
+        excluded_colors,
+        color_names,
+        max_iters,
+        confusion_baseline_samples,
+        include_spatial_channel_overlap,
+        num_restarts,
+    )
+    .srgb_linear
+}
+
+#[wasm_bindgen]
+pub fn optimize_with_metrics(
+    colors: &[u16],
+    locked_colors: &[u16],
+    intensities: &[u16],
+    contrast_limits: &[u16],
+    luminance_values: &[u16],
+    excluded_colors: Vec<String>,
+    color_names: Vec<String>,
+    max_iters: Option<u32>,
+    confusion_baseline_samples: Option<u32>,
+    include_spatial_channel_overlap: Option<bool>,
+    num_restarts: Option<u32>,
+) -> OptimizeMetricsResult {
     utils::set_panic_hook();
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
     let now = instant::Instant::now();
@@ -1989,20 +2069,27 @@ pub fn optimize(
         num_restarts,
         None,
     );
+    let bd = pipeline_study_breakdown(&r, include_spatial_channel_overlap);
 
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
     {
         let elapsed = now.elapsed();
         console::log_1(
             &format!(
-                "optimize ({} restarts) took: {:?}",
+                "optimize_with_metrics ({} restarts) L_tot={:.4} took: {:?}",
                 num_restarts.unwrap_or_else(default_num_restarts),
+                bd.total,
                 elapsed
             )
-            .into()
+            .into(),
         );
     }
-    r.srgb_linear
+
+    OptimizeMetricsResult {
+        srgb_linear: r.srgb_linear,
+        l_tot: bd.total,
+        min_display_rgb_distance: bd.min_display_rgb_distance,
+    }
 }
 
 fn color_only_loss(

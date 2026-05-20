@@ -1,6 +1,6 @@
 [package]
 name = "psudo"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Simon Warchol <simonwarchol@g.harvard.edu>"]
 edition = "2018"
 license = "MIT"
@@ -57,6 +57,10 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 [[example]]
 name = "palette_study"
 path = "examples/palette_study.rs"
+
+[[example]]
+name = "palette_study_fixture"
+path = "examples/palette_study_fixture.rs"
 
 [[example]]
 name = "param_sweep"
