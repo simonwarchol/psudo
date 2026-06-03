@@ -67,6 +67,28 @@ rustup target add wasm32-unknown-unknown
 
 ## CI / deploy
 
-GitHub Actions (`.github/workflows/deploy.yml`) uses **pnpm**, **Node 24**, and **wasm-pack** to build `dist/`, then packages it into an nginx Docker image for ECR.
+The web app is a static SPA (Vite + in-browser WASM). Production hosting is **GitHub Pages** — there is no application backend.
 
-**npm publish** (`.github/workflows/publish-npm.yml`): on release or manual dispatch. Add repo secret `NPM_TOKEN` — a granular npm access token with **publish** permission (create at [npmjs.com](https://www.npmjs.com/settings/~youruser/tokens); do not commit tokens or CLI auth URLs).
+### GitHub Pages (production)
+
+On every push to `main`, [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs **pnpm**, **Node 24**, and **wasm-pack** to build `dist/`, then deploys it with `actions/deploy-pages`.
+
+**One-time repo setup** (maintainer, in GitHub):
+
+1. **Settings → Pages → Build and deployment**: set **Source** to **GitHub Actions**.
+2. **Custom domain**: enter your production hostname (e.g. `psudo.example.com`). GitHub shows the DNS records to add at your registrar (apex often uses A/AAAA records; subdomains use `CNAME` to `<user>.github.io`).
+3. After DNS propagates, enable **Enforce HTTPS**.
+
+Preview production builds locally: `pnpm run build && pnpm run preview`.
+
+### npm publish
+
+[`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml): on release or manual dispatch. Add repo secret `NPM_TOKEN` — a granular npm access token with **publish** permission (create at [npmjs.com](https://www.npmjs.com/settings/~youruser/tokens); do not commit tokens or CLI auth URLs).
+
+### Decommissioning AWS (after GitHub Pages cutover)
+
+Once the custom domain serves the new deployment:
+
+1. Stop or delete the **App Runner** service (`psudo-app`, `us-east-1`).
+2. Optionally empty the **ECR** repository `psudo` in account `337392631707`.
+3. Remove GitHub repo secrets **`AWS_ACCESS_KEY_ID`** and **`AWS_SECRET_ACCESS_KEY`** if they are no longer used.
