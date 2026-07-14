@@ -51,9 +51,9 @@ const DEFAULT_MAX_ITERS: u32 = 3000;
 #[cfg(target_arch = "wasm32")]
 const DEFAULT_MAX_ITERS_WASM: u32 = 3000;
 /// Independent global-search runs per `optimize` (Nelder–Mead multistart).
-const DEFAULT_NUM_RESTARTS: u32 = 6;
+const DEFAULT_NUM_RESTARTS: u32 = 12;
 #[cfg(target_arch = "wasm32")]
-const DEFAULT_NUM_RESTARTS_WASM: u32 = 6;
+const DEFAULT_NUM_RESTARTS_WASM: u32 = 12;
 /// Initial SA temperature (must match [`build_simulated_annealing_solver`] and [`Loss::anneal`] scaling).
 const SA_INITIAL_TEMP: f32 = 12.0;
 /// Exponential cooling factor per SA iteration: `T_i = T_0 * factor^i`.
@@ -103,11 +103,11 @@ fn default_confusion_baseline_samples() -> u32 {
 fn restart_count_bounds() -> (u32, u32) {
     #[cfg(target_arch = "wasm32")]
     {
-        (1, 12)
+        (1, 32)
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        (4, 16)
+        (4, 40)
     }
 }
 
@@ -140,12 +140,50 @@ pub enum OptimizePostprocess {
 
 /// Golden-ratio stride for per-restart RNG seeds derived from [`problem_seed`].
 const RESTART_SEED_STRIDE: u64 = 0x9E3779B97F4A7C15;
-/// Extra NM restarts when a 6-channel result is still weak (duplicate hues / low RGB gap).
-const SIX_CH_RESCUE_RESTARTS: u32 = 4;
-const SIX_CH_MIN_RGB_RESCUE: f32 = 190.0;
-const SIX_CH_L_TOT_RESCUE: f32 = -3.85;
+/// Base rescue multistarts (scaled by channel count).
+const HIGH_CH_RESCUE_RESTARTS_BASE: u32 = 5;
+const RESCUE_SEED_SALT_1: u64 = 0x8E5C_E500;
+const RESCUE_SEED_SALT_2: u64 = 0xA11C_E5C0;
 /// Weight on the multi-channel spatial confusion term (`compute_confusion_loss`).
 pub(crate) const SPATIAL_CONFUSION_WEIGHT: f32 = 0.1;
+
+/// NM simplex perturbation scale: grows gently with channel count.
+#[inline]
+fn nm_perturb_scale_for_channels(n_channels: usize) -> f32 {
+    1.0 + 0.06 * ((n_channels as f32) - 3.0).clamp(0.0, 8.0)
+}
+
+/// Adaptive rescue gates from a multistart wave: stay near that problem's best restart.
+/// Returns `(l_tot_rescue, rgb_rescue)` thresholds for [`outside_adaptive_band`].
+fn adaptive_rescue_band(outcomes: &[NmRestartOutcome]) -> (f32, f32) {
+    let mut best_l = f32::INFINITY;
+    let mut best_min_rgb = 0.0f32;
+    let mut sum = 0.0f32;
+    let mut sum_sq = 0.0f32;
+    let n = outcomes.len().max(1) as f32;
+    for o in outcomes {
+        sum += o.total;
+        sum_sq += o.total * o.total;
+        if o.total < best_l {
+            best_l = o.total;
+            best_min_rgb = o.min_display_rgb_distance;
+        }
+    }
+    let soft = MIN_DISPLAY_RGB_DISTANCE as f32 * 0.9;
+    if !best_l.is_finite() {
+        return (0.0, soft);
+    }
+    let mean = sum / n;
+    let var = (sum_sq / n - mean * mean).max(0.0);
+    let std = var.sqrt();
+    let margin = (0.5 * std).clamp(0.12, 0.35);
+    (best_l + margin, best_min_rgb.min(soft))
+}
+
+#[inline]
+fn outside_adaptive_band(total: f32, min_rgb: f32, l_tot_rescue: f32, rgb_rescue: f32) -> bool {
+    min_rgb < rgb_rescue || total > l_tot_rescue
+}
 
 // Palette objective (minimize total):
 //   −mean C3 name distance  −min display-sRGB Δ  + perc_deficit  + term_loss  + w·confusion
@@ -562,7 +600,19 @@ fn random_initial_oklab(
     out
 }
 
-/// Evenly spaced hues in OKLab — fewer SA restarts needed than fully random inits (WASM default).
+/// OKLab a/b (and L) of an sRGB primary (R, G, or B), chroma-clamped to the search box.
+fn srgb_primary_oklab(which: usize) -> (f32, f32, f32) {
+    let rgb = match which % 3 {
+        0 => Srgb::new(1.0, 0.0, 0.0),
+        1 => Srgb::new(0.0, 1.0, 0.0),
+        _ => Srgb::new(0.0, 0.0, 1.0),
+    };
+    let okl: Oklab = Oklab::from_color(rgb);
+    (okl.l, okl.a.clamp(-0.4, 0.4), okl.b.clamp(-0.4, 0.4))
+}
+
+/// RGB primaries first (R, G, B), then evenly spaced hues for any remaining channels.
+/// Leading with saturated primaries gives Nelder–Mead a strong, distinct basin to refine.
 fn spread_initial_oklab(
     fallback: &[f32],
     locked_colors: &[bool],
@@ -571,14 +621,31 @@ fn spread_initial_oklab(
     rng: &mut impl Rng
 ) -> Vec<f32> {
     let mut out = fallback.to_vec();
-    let l = 0.58f32;
-    for color_idx in 0..n_colors {
+    let n_primaries = n_colors.min(3);
+    for color_idx in 0..n_primaries {
         if locked_colors[color_idx] {
             continue;
         }
         let base = color_idx * 3;
-        let angle = std::f32::consts::TAU * (color_idx as f32) / (n_colors as f32)
-            + rng.gen_range(-0.12f32..0.12f32);
+        let (l, a, b) = srgb_primary_oklab(color_idx);
+        out[base] = l.clamp(luminance_values[0], luminance_values[1]);
+        out[base + 1] = a;
+        out[base + 2] = b;
+        enforce_channel_saturation(&mut out, color_idx, rng);
+    }
+    if n_colors <= 3 {
+        return out;
+    }
+    let l = 0.58f32;
+    let extra = n_colors - 3;
+    for i in 0..extra {
+        let color_idx = 3 + i;
+        if locked_colors[color_idx] {
+            continue;
+        }
+        let base = color_idx * 3;
+        let angle = std::f32::consts::TAU * ((i as f32) + 0.5) / (extra as f32)
+            + rng.gen_range(-0.08f32..0.08f32);
         let chroma = rng.gen_range(0.18f32..0.34f32);
         out[base] = l.clamp(luminance_values[0], luminance_values[1]);
         out[base + 1] = chroma * angle.cos();
@@ -588,7 +655,7 @@ fn spread_initial_oklab(
     out
 }
 
-/// Per-restart NM/SA start. At 6+ channels, ~⅓ of seeds use random saturated OKLab for basin diversity.
+/// Per-restart NM/SA start (restart 0). See [`sa_initial_oklab_for_restart`].
 #[inline]
 pub(crate) fn sa_initial_oklab(
     oklab_flat: &[f32],
@@ -597,11 +664,27 @@ pub(crate) fn sa_initial_oklab(
     init_seed: u64,
     rng: &mut impl Rng,
 ) -> Vec<f32> {
+    sa_initial_oklab_for_restart(oklab_flat, locked_colors, luminance_values, init_seed, 0, rng)
+}
+
+/// Per-restart NM/SA start. Restart 0 leads with the RGB-primary spread; some later
+/// restarts use random saturated OKLab for basin diversity (fraction shrinks with `n`).
+#[inline]
+pub(crate) fn sa_initial_oklab_for_restart(
+    oklab_flat: &[f32],
+    locked_colors: &[bool],
+    luminance_values: &[f32],
+    init_seed: u64,
+    restart: u32,
+    rng: &mut impl Rng,
+) -> Vec<f32> {
     let n_colors = oklab_flat.len() / 3;
-    if n_colors >= 6 && init_seed % 3 == 0 {
+    // Random fraction shrinks with n: k = max(2, 12/n) → more often random at low n.
+    let k = (12usize / n_colors.max(1)).max(2) as u64;
+    if restart > 0 && n_colors >= 2 && init_seed % k == 0 {
         return random_initial_oklab(oklab_flat, locked_colors, luminance_values, rng);
     }
-    if n_colors >= 2 {
+    if n_colors >= 1 {
         spread_initial_oklab(oklab_flat, locked_colors, luminance_values, n_colors, rng)
     } else {
         random_initial_oklab(oklab_flat, locked_colors, luminance_values, rng)
@@ -1248,7 +1331,7 @@ fn build_palette_opt_context(
         .iter()
         .map(|&x| x as usize)
         .collect();
-    let nm_perturb_scale = if n_channels >= 6 { 1.35 } else { 1.0 };
+    let nm_perturb_scale = nm_perturb_scale_for_channels(n_channels);
     let nm_params = PaletteSolverParams {
         argmin_max_iters: Some(scaled_solver_iters(
             PaletteArgminSolver::NelderMead,
@@ -1460,7 +1543,7 @@ fn run_nm_multistart_attempt(
         .wrapping_add(seed_salt)
         .wrapping_add((restart as u64).wrapping_mul(RESTART_SEED_STRIDE));
     let solver_seed = init_seed.wrapping_add(0x517C_C1B0_2722_0A95);
-    let (mut candidate, solver_cost) = run_palette_argmin_solver(
+    let (mut candidate, solver_cost) = match run_palette_argmin_solver(
         PaletteArgminSolver::NelderMead,
         start_oklab,
         locked_colors,
@@ -1476,8 +1559,38 @@ fn run_nm_multistart_attempt(
         include_overlap,
         Some(avg_confusion),
         nm_params,
-    )
-    .expect("nelder-mead");
+        restart,
+    ) {
+        Ok(v) => v,
+        Err(err) => {
+            // Argmin NelderMead can error on degenerate simplex / NaN costs; keep searching.
+            eprintln!("[psudo] nelder-mead restart {restart} failed: {err}; using init");
+            let mut rng = StdRng::seed_from_u64(init_seed);
+            let fallback = if nm_params.force_random_nm_init {
+                random_initial_oklab(start_oklab, locked_colors, luminance_values, &mut rng)
+            } else {
+                sa_initial_oklab_for_restart(
+                    start_oklab,
+                    locked_colors,
+                    luminance_values,
+                    init_seed,
+                    restart,
+                    &mut rng,
+                )
+            };
+            let cost = evaluate_palette_objective_breakdown_with_excluded_set(
+                c3_eval,
+                &fallback,
+                intensity_arc,
+                avg_confusion,
+                spatial_w,
+                excluded_set,
+                color_name_indices,
+            )
+            .total;
+            (fallback, cost)
+        }
+    };
 
     if polish_each_restart {
         polish_oklab_palette(
@@ -1636,28 +1749,52 @@ pub fn optimize_palette_pipeline(
         ctx.nm_params.clone(),
         polish_each_restart,
     );
+    let (l_tot_rescue, rgb_rescue) = adaptive_rescue_band(&outcomes);
+    let soft_rgb = MIN_DISPLAY_RGB_DISTANCE as f32 * 0.9;
+    let wave_best_min_rgb = outcomes
+        .iter()
+        .min_by(|a, b| a.total.partial_cmp(&b.total).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|o| o.min_display_rgb_distance)
+        .unwrap_or(0.0);
     let (mut best_oklab, mut best_total, mut best_solver_cost) = fold_best_nm_restart(outcomes);
 
     if ctx.n_channels >= 6 {
-        let check = evaluate_palette_objective_breakdown_with_excluded_set(
-            &ctx.c3_eval,
-            &best_oklab,
-            &ctx.intensity_arc,
-            ctx.avg_confusion,
-            ctx.spatial_w,
-            &ctx.excluded_set,
-            &ctx.color_name_indices,
-        );
-        if check.min_display_rgb_distance < SIX_CH_MIN_RGB_RESCUE
-            || check.total > SIX_CH_L_TOT_RESCUE
-        {
+        let rescue_restarts =
+            scale_budget_for_channels(HIGH_CH_RESCUE_RESTARTS_BASE, ctx.n_channels).max(4);
+        let mut prefer_random = wave_best_min_rgb < soft_rgb;
+        for wave in 0..2u32 {
+            let check = evaluate_palette_objective_breakdown_with_excluded_set(
+                &ctx.c3_eval,
+                &best_oklab,
+                &ctx.intensity_arc,
+                ctx.avg_confusion,
+                ctx.spatial_w,
+                &ctx.excluded_set,
+                &ctx.color_name_indices,
+            );
+            if !outside_adaptive_band(
+                check.total,
+                check.min_display_rgb_distance,
+                l_tot_rescue,
+                rgb_rescue,
+            ) {
+                break;
+            }
             let mut rescue_params = ctx.nm_params.clone();
-            rescue_params.force_random_nm_init = true;
-            rescue_params.nm_perturb_scale = rescue_params.nm_perturb_scale.max(1.35);
+            rescue_params.force_random_nm_init = prefer_random;
+            prefer_random = !prefer_random;
+            rescue_params.nm_perturb_scale = rescue_params
+                .nm_perturb_scale
+                .max(nm_perturb_scale_for_channels(ctx.n_channels) + 0.15);
+            let salt = if wave == 0 {
+                RESCUE_SEED_SALT_1
+            } else {
+                RESCUE_SEED_SALT_2
+            };
             let rescue_outcomes = nm_multistart_outcomes(
-                SIX_CH_RESCUE_RESTARTS,
+                rescue_restarts,
                 ctx.base_seed,
-                0x8E5C_E500,
+                salt,
                 &ctx.oklab_color_map,
                 &ctx.locked_colors_vec,
                 Arc::clone(&ctx.intensity_arc),
@@ -1884,6 +2021,7 @@ pub fn optimize_palette_with_solver(
                 include_overlap,
                 Some(avg_confusion),
                 &params,
+                restart,
             )
             .expect("solver run");
             let total = evaluate_palette_objective_breakdown_with_excluded_set(

@@ -3,7 +3,8 @@
 use crate::{
     annealing, enforce_channel_saturation,
     evaluate_palette_objective_breakdown_with_excluded_set, polish_oklab_palette,
-    random_initial_oklab, refine_oklab_palette, sa_initial_oklab, Loss, PaletteObjectiveBreakdown,
+    random_initial_oklab, refine_oklab_palette, sa_initial_oklab_for_restart, Loss,
+    PaletteObjectiveBreakdown,
 };
 use argmin::core::{CostFunction, Error, Executor, Gradient, State};
 use argmin::solver::gradientdescent::SteepestDescent;
@@ -237,7 +238,9 @@ pub fn run_palette_argmin_solver(
     confusion_baseline_samples: u32,
     include_spatial_channel_overlap: bool,
     precomputed_avg_confusion: Option<f32>,
-    params: &PaletteSolverParams
+    params: &PaletteSolverParams,
+    // Multistart index; restart 0 always uses the RGB-primary spread init.
+    restart: u32,
 ) -> Result<(Vec<f32>, f32), Error> {
     if solver == PaletteArgminSolver::PolishOnly {
         return Ok((start_oklab.to_vec(), f32::NAN));
@@ -280,11 +283,12 @@ pub fn run_palette_argmin_solver(
     let start_param = if params.force_random_nm_init {
         random_initial_oklab(start_oklab, locked_colors, luminance_values, &mut rng)
     } else {
-        sa_initial_oklab(
+        sa_initial_oklab_for_restart(
             start_oklab,
             locked_colors,
             luminance_values,
             init_seed,
+            restart,
             &mut rng,
         )
     };

@@ -196,7 +196,7 @@ console.log(loss.perceptual_distance, loss.name_distance, loss.min_display_rgb_d
 | `max_iters` | 3000 (× channels/3) | Higher = slower, often better |
 | `confusion_baseline_samples` | 32 | MC samples when spatial overlap is on |
 | `include_spatial_channel_overlap` | `false` | `true` uses image intensities in objective (slower) |
-| `num_restarts` | 6 (× channels/3, max 12 WASM) | Nelder–Mead multistarts; best total wins |
+| `num_restarts` | 12 (× channels/3, max 32 WASM) | Nelder–Mead multistarts; best total wins |
 
 On **native** builds, multistarts run in parallel via `rayon`. In the browser, `optimize()` parallelizes the same multistarts across workers (`setParallelMultistart(false)` falls back to one sequential WASM run per call).
 

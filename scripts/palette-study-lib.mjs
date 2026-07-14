@@ -5,7 +5,7 @@
 export const DEFAULT_LUMINANCE = new Uint16Array([45, 92]);
 export const DEFAULT_MAX_ITERS = 3000;
 export const DEFAULT_CONFUSION_SAMPLES = 32;
-export const DEFAULT_RESTARTS = 6;
+export const DEFAULT_RESTARTS = 12;
 export const DEFAULT_CHANNEL_COUNTS = [4, 6];
 export const DEFAULT_PARENTS = 20;
 export const DEFAULT_ROWS = 384;
@@ -106,17 +106,31 @@ function oklabToSrgb8(L, a, b) {
 export function spreadInitialColorsU16(nChannels, seed) {
   const rnd = mulberry32(seed);
   const colors = new Uint16Array(nChannels * 3);
+  const primaries = [
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255],
+  ];
+  const nPrimaries = Math.min(3, nChannels);
+  for (let i = 0; i < nPrimaries; i++) {
+    colors[i * 3] = primaries[i][0];
+    colors[i * 3 + 1] = primaries[i][1];
+    colors[i * 3 + 2] = primaries[i][2];
+  }
+  if (nChannels <= 3) return colors;
   const l = 0.58;
   const TAU = Math.PI * 2;
-  for (let i = 0; i < nChannels; i++) {
-    const angle = (TAU * i) / nChannels + (rnd() * 0.24 - 0.12);
+  const extra = nChannels - 3;
+  for (let i = 0; i < extra; i++) {
+    const angle = (TAU * (i + 0.5)) / extra + (rnd() * 0.16 - 0.08);
     const chroma = 0.18 + rnd() * (0.34 - 0.18);
     const a = chroma * Math.cos(angle);
     const b = chroma * Math.sin(angle);
     const [r, g, bl] = oklabToSrgb8(l, a, b);
-    colors[i * 3] = r;
-    colors[i * 3 + 1] = g;
-    colors[i * 3 + 2] = bl;
+    const idx = 3 + i;
+    colors[idx * 3] = r;
+    colors[idx * 3 + 1] = g;
+    colors[idx * 3 + 2] = bl;
   }
   return colors;
 }

@@ -23,6 +23,7 @@ import {
   channelGroupsFromDocument,
   colorsU16FromRgb,
   DEFAULT_PARENTS,
+  DEFAULT_RESTARTS,
   DEFAULT_ROWS,
   formatDuration,
   htmlReportHeader,
@@ -197,7 +198,7 @@ Document JSON: channelGroups[].channels[].color { r,g,b } (Minerva / validateDoc
   const config = {
     maxIters: parseEnvInt("PALETTE_STUDY_MAX_ITERS", 3000),
     confusionSamples: parseEnvInt("PALETTE_STUDY_CONFUSION_SAMPLES", 32),
-    numRestarts: parseEnvInt("PALETTE_STUDY_RESTARTS", 6),
+    numRestarts: parseEnvInt("PALETTE_STUDY_RESTARTS", DEFAULT_RESTARTS),
     spatial: parseEnvBool("PALETTE_STUDY_SPATIAL"),
   };
   const nRows = parseEnvInt("PALETTE_STUDY_ROWS", DEFAULT_ROWS);
