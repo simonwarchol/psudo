@@ -1,10 +1,9 @@
 //! Argmin solver dispatch for palette OKLab optimization (native benchmarks / tooling).
 
 use crate::{
-    annealing, enforce_channel_saturation,
-    evaluate_palette_objective_breakdown_with_excluded_set, polish_oklab_palette,
-    random_initial_oklab, refine_oklab_palette, sa_initial_oklab_for_restart, Loss,
-    PaletteObjectiveBreakdown,
+    annealing, enforce_channel_saturation, evaluate_palette_objective_breakdown_with_excluded_set,
+    polish_oklab_palette, random_initial_oklab, refine_oklab_palette, sa_initial_oklab_for_restart,
+    Loss, PaletteObjectiveBreakdown,
 };
 use argmin::core::{CostFunction, Error, Executor, Gradient, State};
 use argmin::solver::gradientdescent::SteepestDescent;
@@ -14,7 +13,7 @@ use argmin::solver::particleswarm::ParticleSwarm;
 use argmin::solver::quasinewton::LBFGS;
 use ndarray::Array2;
 use rand::rngs::StdRng;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -66,10 +65,23 @@ impl PaletteArgminSolver {
 
     /// Gradient-based solvers use fewer outer iterations (each step is ~O(dim) cost evals).
     pub fn uses_gradient(self) -> bool {
-        matches!(
-            self,
-            Self::SteepestDescent | Self::LBfgs
-        )
+        matches!(self, Self::SteepestDescent | Self::LBfgs)
+    }
+}
+
+/// How [`PaletteSolverParams::seed_oklab_override`] is applied to multistart inits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SeedOverrideMode {
+    None,
+    /// Use the override as the exact NM start for this restart index only.
+    ExactRestart(u32),
+    /// Restart 0 uses the override exactly; later non-random restarts get a small jitter.
+    Restart0AndJitter,
+}
+
+impl Default for SeedOverrideMode {
+    fn default() -> Self {
+        Self::None
     }
 }
 
@@ -88,6 +100,9 @@ pub struct PaletteSolverParams {
     pub force_random_nm_init: bool,
     /// L-BFGS history length (default 7).
     pub lbfgs_history: usize,
+    /// Optional OKLab seed palette (flat L,a,b × n) for Glasbey / study inits.
+    pub seed_oklab_override: Option<Vec<f32>>,
+    pub seed_override_mode: SeedOverrideMode,
 }
 
 /// Map a nominal SA iteration budget to per-solver `max_iters` for the argmin executor.
@@ -104,16 +119,23 @@ pub fn scaled_solver_iters(solver: PaletteArgminSolver, sa_budget: u32) -> u32 {
     }
 }
 
-fn clamp_param_component(
-    param: &mut [f32],
-    idx: usize,
-    luminance_values: &[f32]
-) {
+fn clamp_param_component(param: &mut [f32], idx: usize, luminance_values: &[f32]) {
     let comp = idx % 3;
     if comp == 0 {
         param[idx] = param[idx].clamp(luminance_values[0], luminance_values[1]);
     } else {
         param[idx] = param[idx].clamp(-0.4, 0.4);
+    }
+}
+
+/// Project every channel into the OKLab search box: L ∈ `[lo, hi]`, a/b ∈ `[-0.4, 0.4]`.
+/// Nelder–Mead reflections are unbounded; without this, L can drift below the luminance floor.
+pub(crate) fn clamp_oklab_to_luminance_bounds(param: &mut [f32], luminance_values: &[f32]) {
+    if luminance_values.len() < 2 {
+        return;
+    }
+    for i in 0..param.len() {
+        clamp_param_component(param, i, luminance_values);
     }
 }
 
@@ -132,7 +154,7 @@ fn build_nelder_mead_simplex(
     locked_colors: &[bool],
     luminance_values: &[f32],
     seed: u64,
-    perturb_scale: f32
+    perturb_scale: f32,
 ) -> Vec<Vec<f32>> {
     let s = perturb_scale.max(0.25);
     let n = start.len();
@@ -162,11 +184,64 @@ fn build_nelder_mead_simplex(
     simplex
 }
 
-type PaletteLineSearch =
-    BacktrackingLineSearch<Vec<f32>, Vec<f32>, ArmijoCondition<f32>, f32>;
+type PaletteLineSearch = BacktrackingLineSearch<Vec<f32>, Vec<f32>, ArmijoCondition<f32>, f32>;
 
 fn palette_linesearch() -> PaletteLineSearch {
     BacktrackingLineSearch::new(ArmijoCondition::new(1e-4f32).expect("armijo c"))
+}
+
+fn resolve_nm_start_param(
+    start_oklab: &[f32],
+    locked_colors: &[bool],
+    luminance_values: &[f32],
+    init_seed: u64,
+    restart: u32,
+    params: &PaletteSolverParams,
+    rng: &mut StdRng,
+) -> Vec<f32> {
+    if params.force_random_nm_init {
+        return random_initial_oklab(start_oklab, locked_colors, luminance_values, rng);
+    }
+    if let Some(ref seed) = params.seed_oklab_override {
+        if seed.len() == start_oklab.len() {
+            match params.seed_override_mode {
+                SeedOverrideMode::ExactRestart(r) if r == restart => {
+                    return seed.clone();
+                }
+                SeedOverrideMode::Restart0AndJitter if restart == 0 => {
+                    return seed.clone();
+                }
+                SeedOverrideMode::Restart0AndJitter if restart > 0 && restart % 3 == 0 => {
+                    // Jittered Glasbey seed (keeps basin near farthest-first).
+                    let mut out = seed.clone();
+                    for ch in 0..(out.len() / 3) {
+                        if locked_colors[ch] {
+                            continue;
+                        }
+                        let base = ch * 3;
+                        out[base] = (out[base] + rng.gen_range(-0.04f32..0.04))
+                            .clamp(luminance_values[0], luminance_values[1]);
+                        out[base + 1] =
+                            (out[base + 1] + rng.gen_range(-0.06f32..0.06)).clamp(-0.4, 0.4);
+                        out[base + 2] =
+                            (out[base + 2] + rng.gen_range(-0.06f32..0.06)).clamp(-0.4, 0.4);
+                        enforce_channel_saturation(&mut out, ch, rng);
+                    }
+                    return out;
+                }
+                _ => {}
+            }
+        }
+    }
+    let _ = init_seed;
+    sa_initial_oklab_for_restart(
+        start_oklab,
+        locked_colors,
+        luminance_values,
+        init_seed,
+        restart,
+        rng,
+    )
 }
 
 fn make_loss(
@@ -178,7 +253,7 @@ fn make_loss(
     excluded_colors_indices: &[f32],
     color_name_indices: &[f32],
     c3_instance: Arc<c3::C3>,
-    rng_seed: Option<u64>
+    rng_seed: Option<u64>,
 ) -> Loss {
     Loss::new(
         locked_colors.to_vec(),
@@ -280,18 +355,15 @@ pub fn run_palette_argmin_solver(
     let avg_confusion = precomputed_avg_confusion.unwrap_or(1.0);
 
     let mut rng = StdRng::seed_from_u64(init_seed);
-    let start_param = if params.force_random_nm_init {
-        random_initial_oklab(start_oklab, locked_colors, luminance_values, &mut rng)
-    } else {
-        sa_initial_oklab_for_restart(
-            start_oklab,
-            locked_colors,
-            luminance_values,
-            init_seed,
-            restart,
-            &mut rng,
-        )
-    };
+    let start_param = resolve_nm_start_param(
+        start_oklab,
+        locked_colors,
+        luminance_values,
+        init_seed,
+        restart,
+        params,
+        &mut rng,
+    );
 
     let cost_function = make_loss(
         locked_colors,
@@ -301,11 +373,30 @@ pub fn run_palette_argmin_solver(
         spatial_w,
         excluded_colors_indices,
         color_name_indices,
-        c3_instance,
+        Arc::clone(&c3_instance),
         Some(anneal_rng_seed),
     );
 
     let max_iters_u64 = max_iters as u64;
+
+    let finish = |mut best_param: Vec<f32>| -> Result<(Vec<f32>, f32), Error> {
+        clamp_oklab_to_luminance_bounds(&mut best_param, luminance_values);
+        let excluded_set: HashSet<usize> = excluded_colors_indices
+            .iter()
+            .map(|&x| x as usize)
+            .collect();
+        let best_cost = evaluate_palette_objective_breakdown_with_excluded_set(
+            c3_instance.as_ref(),
+            &best_param,
+            &intensity_arc,
+            avg_confusion,
+            spatial_w,
+            &excluded_set,
+            color_name_indices,
+        )
+        .total;
+        Ok((best_param, best_cost))
+    };
 
     match solver {
         PaletteArgminSolver::NelderMead => {
@@ -320,9 +411,7 @@ pub fn run_palette_argmin_solver(
             let res = Executor::new(cost_function, nm)
                 .configure(|state| state.max_iters(max_iters_u64))
                 .run()?;
-            let best_param = res.state().get_best_param().unwrap().clone();
-            let best_cost = res.state().get_best_cost();
-            Ok((best_param, best_cost))
+            finish(res.state().get_best_param().unwrap().clone())
         }
         PaletteArgminSolver::ParticleSwarm => {
             let (lb, ub) = build_oklab_bounds(n_channels, luminance_values);
@@ -334,25 +423,21 @@ pub fn run_palette_argmin_solver(
                 .configure(|state| state.max_iters(max_iters_u64))
                 .run()?;
             let particle = res.state().get_best_param().unwrap().clone();
-            Ok((particle.position, particle.cost))
+            finish(particle.position)
         }
         PaletteArgminSolver::SteepestDescent => {
             let sd = SteepestDescent::new(palette_linesearch());
             let res = Executor::new(cost_function, sd)
                 .configure(|state| state.param(start_param).max_iters(max_iters_u64))
                 .run()?;
-            let best_param = res.state().get_best_param().unwrap().clone();
-            let best_cost = res.state().get_best_cost();
-            Ok((best_param, best_cost))
+            finish(res.state().get_best_param().unwrap().clone())
         }
         PaletteArgminSolver::LBfgs => {
             let lbfgs = LBFGS::new(palette_linesearch(), params.lbfgs_history.max(2));
             let res = Executor::new(cost_function, lbfgs)
                 .configure(|state| state.param(start_param).max_iters(max_iters_u64))
                 .run()?;
-            let best_param = res.state().get_best_param().unwrap().clone();
-            let best_cost = res.state().get_best_cost();
-            Ok((best_param, best_cost))
+            finish(res.state().get_best_param().unwrap().clone())
         }
         PaletteArgminSolver::SimulatedAnnealing | PaletteArgminSolver::PolishOnly => unreachable!(),
     }
@@ -370,7 +455,7 @@ pub fn study_postprocess_oklab(
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
-    base_seed: u64
+    base_seed: u64,
 ) {
     polish_oklab_palette(
         oklab,
@@ -396,6 +481,7 @@ pub fn study_postprocess_oklab(
         color_name_indices,
         base_seed.wrapping_add(0xA11CE),
     );
+    clamp_oklab_to_luminance_bounds(oklab, luminance_values);
 }
 
 /// Recompute breakdown after optimization (for benchmarks).
@@ -406,7 +492,7 @@ pub fn objective_total_for_oklab(
     avg_confusion: f32,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
-    color_name_indices: &[f32]
+    color_name_indices: &[f32],
 ) -> PaletteObjectiveBreakdown {
     evaluate_palette_objective_breakdown_with_excluded_set(
         c3,

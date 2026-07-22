@@ -56,6 +56,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "argmin"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "523c0b5258fa1fb9072748b7306fb0db1625cf235ec6da4d05de2560ef56f882"
+dependencies = [
+ "anyhow",
+ "argmin-math",
+ "instant",
+ "num-traits",
+ "paste",
+ "rand",
+ "rand_xoshiro",
+ "thiserror",
+]
+
+[[package]]
 name = "argmin-math"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -527,11 +543,12 @@ dependencies = [
 
 [[package]]
 name = "kdtree"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80ee359328fc9087e9e3fc0a4567c4dd27ec69a127d6a70e8d9dd22845b8b1a2"
+checksum = "0f0a0e9f770b65bac9aad00f97a67ab5c5319effed07f6da385da3c2115e47ba"
 dependencies = [
  "num-traits",
+ "thiserror",
 ]
 
 [[package]]
@@ -565,9 +582,9 @@ dependencies = [
 
 [[package]]
 name = "linfa"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cab423110bc374e4cfa915da88952e2c6a4a5a6300ac0a0e68022bff2ace0b3"
+checksum = "56f9097edc7c89d03d526efbacf6d90914e3a8fa53bd56c2d1489e3a90819370"
 dependencies = [
  "approx 0.4.0",
  "ndarray",
@@ -579,9 +596,9 @@ dependencies = [
 
 [[package]]
 name = "linfa-clustering"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6aef28a433e8cf5301a878b8bb36d5de6d6ff9895245b358dc6039bf9cf4438b"
+checksum = "be0bc52d5e4da397609cd0e6007efc6bd278158d1803673bd936c374f27513c5"
 dependencies = [
  "linfa",
  "linfa-linalg",
@@ -598,9 +615,9 @@ dependencies = [
 
 [[package]]
 name = "linfa-datasets"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64dae01fe9bdd87d3e40e469ebd7cf1bedde8f37b584ea8356ea06f063dfc4bf"
+checksum = "b29424da940509c7f8c9236392aeef31c95ceee5a72d97491fc708aac1684c35"
 dependencies = [
  "csv",
  "flate2",
@@ -622,11 +639,11 @@ dependencies = [
 
 [[package]]
 name = "linfa-linear"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6de3901a9283cb0f5403c9d6fc9b4045cef5c98df2ad9efcb13b5875b734e2df"
+checksum = "7be4e4dbd8c0bb7522438e3660a6f1c730b7093e61836573d0729b7dae3a7c9b"
 dependencies = [
- "argmin",
+ "argmin 0.9.0",
  "argmin-math",
  "linfa",
  "linfa-linalg",
@@ -637,9 +654,9 @@ dependencies = [
 
 [[package]]
 name = "linfa-nn"
-version = "0.7.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1945b1a1435e885b4743dad94f9676c0bf65d6cce102e96c753f93b4cfe68d0"
+checksum = "b31aeb1beadf239210aa6bc142d95aba626b729da707e2a38e7e953ad2775653"
 dependencies = [
  "kdtree",
  "linfa",
@@ -1059,7 +1076,7 @@ dependencies = [
 name = "psudo"
 version = "0.4.1"
 dependencies = [
- "argmin",
+ "argmin 0.8.1",
  "console_error_panic_hook",
  "getrandom",
  "image",

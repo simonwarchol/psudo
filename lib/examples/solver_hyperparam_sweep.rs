@@ -88,7 +88,7 @@ fn quality_score(mean_l: f32, std_l: f32, ms: f64) -> f64 {
 
 fn run_config(cfg: &Config, n_seeds: usize, n_rows: usize, intensities: &[u16]) -> RunStats {
     let contrast: Vec<u16> = (0..CHANNELS).flat_map(|_| [0u16, 65535]).collect();
-    let lum = vec![45u16, 92];
+    let lum = vec![50u16, 92];
     let locked = vec![0u16; CHANNELS];
     let names: Vec<String> = (0..CHANNELS).map(|_| String::new()).collect();
     let c3 = psudo::c3::C3::new();
@@ -182,7 +182,11 @@ fn build_grid(quick: bool) -> Vec<Config> {
         }
     }
 
-    let sa_temps: &[f32] = if quick { &[10.0, 12.0, 16.0] } else { &[8.0, 10.0, 12.0, 16.0, 20.0] };
+    let sa_temps: &[f32] = if quick {
+        &[10.0, 12.0, 16.0]
+    } else {
+        &[8.0, 10.0, 12.0, 16.0, 20.0]
+    };
     for &t in sa_temps {
         let mut p = PaletteSolverParams::default();
         p.sa_initial_temp = Some(t);
@@ -190,12 +194,7 @@ fn build_grid(quick: bool) -> Vec<Config> {
             id: format!("sa_t{t}_r2"),
             label: format!("SA T₀={t} budget=1800 restarts=2"),
             sa_pipeline: None,
-            argmin: Some((
-                PaletteArgminSolver::SimulatedAnnealing,
-                1800,
-                2,
-                p,
-            )),
+            argmin: Some((PaletteArgminSolver::SimulatedAnnealing, 1800, 2, p)),
         });
     }
 

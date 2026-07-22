@@ -1,6 +1,6 @@
 [package]
 name = "psudo"
-version = "0.4.1"
+version = "0.14.0"
 authors = ["Simon Warchol <simonwarchol@g.harvard.edu>"]
 edition = "2018"
 license = "MIT"
@@ -21,10 +21,10 @@ wasm-bindgen = { version = "0.2.88", features = ["serde-serialize"] }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 ndarray = { version = "0.15", features = ["serde"] }
 rayon = "1.8.0"
-linfa = "0.7.0"
-linfa-clustering = "0.7.0"
-linfa-linear = { version = "0.7.0"}
-linfa-datasets = { version = "0.7", features = ["iris"] }
+linfa = "0.7.1"
+linfa-clustering = "0.7.1"
+linfa-linear = { version = "0.7.1"}
+linfa-datasets = { version = "0.7.1", features = ["iris"] }
 
 statrs = "0.16.0"
 imp = "0.1.0"

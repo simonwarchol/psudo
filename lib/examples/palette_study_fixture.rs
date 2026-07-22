@@ -7,10 +7,8 @@
 //! ```
 
 use palette::{FromColor, Oklab, Srgb};
-use psudo::{
-    evaluate_palette_objective_breakdown, optimize_palette_pipeline, OptimizePostprocess,
-};
 use psudo::c3::C3;
+use psudo::{evaluate_palette_objective_breakdown, optimize_palette_pipeline, OptimizePostprocess};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde::Serialize;
@@ -43,7 +41,7 @@ struct Fixture {
 }
 
 fn luminance_u16() -> Vec<u16> {
-    vec![45, 92]
+    vec![50, 92]
 }
 
 fn contrast_all(channels: usize) -> Vec<u16> {

@@ -3,7 +3,7 @@
 //!
 //! ```bash
 //! cd lib && cargo run --example palette_study --release
-//! PALETTE_STUDY_PARENTS=20 PALETTE_STUDY_CHANNELS=4,6 cargo run --example palette_study --release
+//! PALETTE_STUDY_PARENTS=10 PALETTE_STUDY_CHANNELS=4,6,8 cargo run --example palette_study --release
 //! ```
 //!
 //! WASM / npm (same env vars, uses `psudo/sync` from repo root):
@@ -14,15 +14,27 @@
 //! Report: `lib/target/palette_study_wasm/report.html`
 //!
 //! Environment (optional):
-//! - `PALETTE_STUDY_PARENTS` (default 20) — palettes per channel count
-//! - `PALETTE_STUDY_CHANNELS` (default `4,6`) — comma-separated channel counts
+//! - `PALETTE_STUDY_PARENTS` (default 10) — palettes per channel count
+//! - `PALETTE_STUDY_CHANNELS` (default `4,6,8`) — comma-separated channel counts
 //! - `PALETTE_STUDY_ROWS` (default 384) — synthetic intensity rows per run
 //! - `PALETTE_STUDY_MAX_ITERS` (default 3000 — matches production / npm)
 //! - `PALETTE_STUDY_CONFUSION_SAMPLES` (default 32)
-//! - `PALETTE_STUDY_RESTARTS` (default 6) — Nelder–Mead multistarts
+//! - `PALETTE_STUDY_RESTARTS` (default 18) — Nelder–Mead multistarts
 //! - `PALETTE_STUDY_STUDY=1` — lighter Study postprocess (benchmark-style; default is Full)
 //! - `PALETTE_STUDY_SPATIAL=1` — spatial channel-overlap in the objective (default off)
 //! - `PALETTE_STUDY_SPREAD_INIT=0` — random saturated sRGB starts instead of hue-spread OKLab inits
+//! - `PSUDO_PALETTE_SELECTION` — selection modes for static report side-by-side (default `total`)
+//! - `PSUDO_INIT` (default `current`) — `current` | `glasbey_v1` | `mixed` initializer
+//! - `PSUDO_REFINE` (default `cartesian`) — refine used for `oklab_best` / report winner
+//! - `PSUDO_REVIEW_METHODS` (default `total,oklab_sep`) — cards in interactive review.html
+//!   (`total` = production mean C3 + sRGB sep; `oklab_sep` = mean C3 + OKLab sep;
+//!   also `min_name`, `polar`/`hybrid`)
+//! - `PSUDO_OBJECTIVE` (default `total`) — objective for the static report winner optimize
+//!
+//! Also writes:
+//! - `target/palette_study/candidates.json` — all restart-pool diagnostics
+//! - `target/palette_study/review.html` — interactive vote UI (pick best method per case → scoreboard)
+//! - `target/palette_study/review_data.json` — same payload embedded in review.html
 //!
 //! Timing is printed to stderr and embedded in `report.html` (per palette + batch totals).
 //!
@@ -38,26 +50,25 @@
 use palette::{FromColor, Oklab, Srgb};
 use psudo::c3::C3;
 use psudo::{
-    debug_palette_channels,
-    evaluate_palette_objective_breakdown,
-    optimize_palette_pipeline,
-    OptimizePipelineResult,
-    OptimizePostprocess,
-    PaletteObjectiveBreakdown,
+    apply_palette_refine_ex, compute_diagnostics, debug_palette_channels,
+    evaluate_palette_objective_breakdown, optimize_palette_pipeline_with_init, select_best_restart,
+    OptimizePipelineResult, OptimizePostprocess, PaletteInitMode, PaletteObjectiveBreakdown,
+    PaletteObjectiveMode, PaletteRefineMode, PaletteSelectionMode, RestartRecord,
 };
 use rand::rngs::StdRng;
-use rand::{ Rng, SeedableRng };
+use rand::{Rng, SeedableRng};
+use serde::Serialize;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-const DEFAULT_CHANNEL_COUNTS: &str = "4,6";
+const DEFAULT_CHANNEL_COUNTS: &str = "4,6,8";
 
 /// Same defaults as WASM / npm `optimize()` (spatial off).
 const DEFAULT_MAX_ITERS: u32 = 3000;
 const DEFAULT_CONFUSION_SAMPLES: u32 = 32;
-const DEFAULT_RESTARTS: u32 = 6;
+const DEFAULT_RESTARTS: u32 = 18;
 
 fn parse_env_usize(key: &str, default: usize) -> usize {
     env::var(key)
@@ -82,7 +93,8 @@ fn parse_env_bool(key: &str) -> bool {
 }
 
 fn parse_channel_counts() -> Vec<usize> {
-    let raw = env::var("PALETTE_STUDY_CHANNELS").unwrap_or_else(|_| DEFAULT_CHANNEL_COUNTS.to_string());
+    let raw =
+        env::var("PALETTE_STUDY_CHANNELS").unwrap_or_else(|_| DEFAULT_CHANNEL_COUNTS.to_string());
     let mut out: Vec<usize> = raw
         .split(',')
         .filter_map(|s| s.trim().parse::<usize>().ok())
@@ -94,6 +106,170 @@ fn parse_channel_counts() -> Vec<usize> {
     out.sort_unstable();
     out.dedup();
     out
+}
+
+fn parse_selection_modes() -> Vec<PaletteSelectionMode> {
+    // Static report still supports Lex A/B; default is production total only.
+    let raw = env::var("PSUDO_PALETTE_SELECTION").unwrap_or_else(|_| "total".into());
+    let mut modes: Vec<PaletteSelectionMode> = raw
+        .split(',')
+        .filter_map(|s| PaletteSelectionMode::parse(s.trim()))
+        .collect();
+    if modes.is_empty() {
+        modes.push(PaletteSelectionMode::TotalLoss);
+    }
+    modes
+}
+
+fn parse_init_mode() -> PaletteInitMode {
+    env::var("PSUDO_INIT")
+        .ok()
+        .and_then(|s| PaletteInitMode::parse(&s))
+        .unwrap_or(PaletteInitMode::Current)
+}
+
+fn parse_refine_mode() -> PaletteRefineMode {
+    env::var("PSUDO_REFINE")
+        .ok()
+        .and_then(|s| PaletteRefineMode::parse(&s))
+        .unwrap_or(PaletteRefineMode::Cartesian)
+}
+
+fn parse_objective_mode() -> PaletteObjectiveMode {
+    env::var("PSUDO_OBJECTIVE")
+        .ok()
+        .and_then(|s| PaletteObjectiveMode::parse(&s))
+        .unwrap_or(PaletteObjectiveMode::MeanOnly)
+}
+
+/// Review cards: objective variants, refine variants, and/or selection modes.
+#[derive(Clone, Copy, Debug)]
+enum ReviewMethodSpec {
+    Objective(PaletteObjectiveMode),
+    Refine(PaletteRefineMode),
+    Select(PaletteSelectionMode),
+}
+
+impl ReviewMethodSpec {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Objective(m) => m.id(),
+            Self::Refine(PaletteRefineMode::Cartesian) => "cartesian",
+            Self::Refine(m) => m.id(),
+            Self::Select(m) => m.id(),
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Objective(m) => m.label(),
+            Self::Refine(PaletteRefineMode::Cartesian) => "Cartesian refine (on total)",
+            Self::Refine(m) => m.label(),
+            Self::Select(m) => m.label(),
+        }
+    }
+}
+
+fn parse_review_methods() -> Vec<ReviewMethodSpec> {
+    let raw = env::var("PSUDO_REVIEW_METHODS").unwrap_or_else(|_| "total,oklab_sep".into());
+    let mut out = Vec::new();
+    for part in raw.split(',') {
+        let s = part.trim();
+        if s.is_empty() {
+            continue;
+        }
+        // Objective first so `total` / `oklab_sep` / `min_name` are not stolen by other aliases.
+        if let Some(o) = PaletteObjectiveMode::parse(s) {
+            out.push(ReviewMethodSpec::Objective(o));
+        } else if let Some(r) = PaletteRefineMode::parse(s) {
+            out.push(ReviewMethodSpec::Refine(r));
+        } else if let Some(sel) = PaletteSelectionMode::parse(s) {
+            out.push(ReviewMethodSpec::Select(sel));
+        }
+    }
+    if out.is_empty() {
+        out.push(ReviewMethodSpec::Objective(PaletteObjectiveMode::MeanOnly));
+        out.push(ReviewMethodSpec::Objective(PaletteObjectiveMode::OklabSep));
+    }
+    out
+}
+
+fn oklab_to_srgb_linear(oklab: &[f32]) -> Vec<f32> {
+    oklab
+        .chunks(3)
+        .flat_map(|c| {
+            let okl = Oklab::new(c[0], c[1], c[2]);
+            let rgb: Srgb = Srgb::from_color(okl);
+            [
+                rgb.red.clamp(0.0, 1.0),
+                rgb.green.clamp(0.0, 1.0),
+                rgb.blue.clamp(0.0, 1.0),
+            ]
+        })
+        .collect()
+}
+
+fn hex_colors_from_oklab(oklab: &[f32]) -> Vec<String> {
+    optimized_to_rgb8(&oklab_to_srgb_linear(oklab))
+        .iter()
+        .map(|c| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]))
+        .collect()
+}
+
+fn format_diag_badges(rec: &RestartRecord) -> String {
+    let d = &rec.diagnostics;
+    let mut badges = Vec::new();
+    if d.duplicate_family_pair_count > 0 {
+        badges.push(format!(
+            r#"<span class="badge bad">dup×{}</span>"#,
+            d.duplicate_family_pair_count
+        ));
+    }
+    if d.earth_term_mass >= 0.15 {
+        badges.push(format!(
+            r#"<span class="badge warn">earth={:.2}</span>"#,
+            d.earth_term_mass
+        ));
+    }
+    if let Some((i, j)) = d.worst_name_pair {
+        badges.push(format!(
+            r#"<span class="badge">worst-name {}:{} ({:.3})</span>"#,
+            i, j, d.min_c3_name_distance
+        ));
+    }
+    if badges.is_empty() {
+        badges.push(r#"<span class="badge ok">clean</span>"#.to_string());
+    }
+    badges.join(" ")
+}
+
+fn top_k_indices_by_total(pool: &[RestartRecord], k: usize) -> Vec<usize> {
+    let mut idx: Vec<usize> = (0..pool.len()).collect();
+    idx.sort_by(|&a, &b| {
+        pool[a]
+            .diagnostics
+            .total_loss
+            .partial_cmp(&pool[b].diagnostics.total_loss)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| pool[a].restart_id.cmp(&pool[b].restart_id))
+    });
+    idx.truncate(k.min(pool.len()));
+    idx
+}
+
+fn top_k_indices_by_lex(pool: &[RestartRecord], k: usize) -> Vec<usize> {
+    let mut idx: Vec<usize> = (0..pool.len()).collect();
+    // Rank by comparing each pair with LexV1 against a synthetic "first".
+    idx.sort_by(|&a, &b| {
+        let tmp = [pool[a].clone(), pool[b].clone()];
+        match select_best_restart(&tmp, PaletteSelectionMode::LexV1) {
+            Some(0) => std::cmp::Ordering::Less,
+            Some(1) => std::cmp::Ordering::Greater,
+            _ => std::cmp::Ordering::Equal,
+        }
+    });
+    idx.truncate(k.min(pool.len()));
+    idx
 }
 
 fn scaled_budget(base: u32, channels: usize) -> u32 {
@@ -162,7 +338,7 @@ fn log_loss_stats(phase: &str, totals: &[f32]) {
 }
 
 fn luminance_u16() -> Vec<u16> {
-    vec![45, 92]
+    vec![50, 92]
 }
 
 fn empty_names(n: usize) -> Vec<String> {
@@ -205,22 +381,23 @@ fn random_initial_colors_u16(channels: usize, rng: &mut StdRng) -> Vec<u16> {
     let mut c = Vec::with_capacity(channels * 3);
     for _ in 0..channels {
         let dominant = rng.gen_range(0u8..3);
-        let mut rgb = [rng.gen_range(40u16..80), rng.gen_range(40u16..80), rng.gen_range(40u16..80)];
+        let mut rgb = [
+            rng.gen_range(40u16..80),
+            rng.gen_range(40u16..80),
+            rng.gen_range(40u16..80),
+        ];
         rgb[dominant as usize] = rng.gen_range(200u16..255);
         c.extend_from_slice(&rgb);
     }
     c
 }
 
+/// `OptimizePipelineResult::srgb_linear` stores gamma-encoded (display) sRGB in 0–1
+/// (`Srgb::from_color(oklab)`), so just scale to 0–255. Re-applying the sRGB OETF
+/// here double-encodes gamma and washes swatches out vs. their C3 name.
 fn srgb_linear_to_display8(r: f32, g: f32, b: f32) -> [u8; 3] {
     fn comp(c: f32) -> u8 {
-        let c = c.clamp(0.0, 1.0);
-        let c = if c <= 0.0031308 {
-            12.92 * c
-        } else {
-            1.055 * c.powf(1.0 / 2.4) - 0.055
-        };
-        (c.clamp(0.0, 1.0) * 255.0) as u8
+        (c.clamp(0.0, 1.0) * 255.0).round() as u8
     }
     [comp(r), comp(g), comp(b)]
 }
@@ -252,16 +429,18 @@ fn format_channel_debug(oklab: &[f32], c3: &C3) -> String {
 
 /// Signed horizontal bar chart for loss components (lower total = better).
 fn svg_loss_bars(bd: &PaletteObjectiveBreakdown) -> String {
-    let parts: [(&str, f32, &str); 6] = [
+    let parts: [(&str, f32, &str); 8] = [
         ("name", bd.minus_mean_color_name_distance, "#6eb5ff"),
         ("RGB", bd.minus_min_perceptual_distance, "#7dcea0"),
         ("perc+", bd.perceptual_deficit_penalty, "#58d68d"),
+        ("hue-", bd.hue_separation_reward, "#af7ac5"),
+        ("hue+", bd.hue_separation_deficit, "#bb8fce"),
         ("sat-", bd.minus_min_saturation, "#e67e22"),
         ("sat+", bd.saturation_deficit_penalty, "#e74c3c"),
         ("term", bd.term_loss, "#f5b041"),
     ];
     let w = 118i32;
-    let h = 108i32;
+    let h = 138i32;
     let bar_h = 12i32;
     let bar_gap = 3i32;
     let label_w = 34i32;
@@ -366,9 +545,15 @@ fn svg_swatches(rgb: &[[u8; 3]], sw: i32, sh: i32) -> String {
 }
 
 struct PaletteRun {
+    case_id: String,
+    parent_seed: u64,
+    report_objective: PaletteObjectiveMode,
+    /// Optimize used for the static report (`report_objective`).
     result: OptimizePipelineResult,
     breakdown: PaletteObjectiveBreakdown,
     optimize_elapsed: Duration,
+    /// Extra objective-mode optimizes for review cards (same seed / intensities).
+    alt_objectives: Vec<(PaletteObjectiveMode, OptimizePipelineResult)>,
 }
 
 struct StudyBatch {
@@ -387,14 +572,29 @@ fn run_channel_batch(
     include_spatial: bool,
     postprocess: OptimizePostprocess,
     spread_init: bool,
+    init_mode: PaletteInitMode,
+    refine_mode: PaletteRefineMode,
+    report_objective: PaletteObjectiveMode,
+    review_objectives: &[PaletteObjectiveMode],
     c3_eval: &C3,
     spatial_w: f32,
 ) -> StudyBatch {
     let batch_start = Instant::now();
     let scaled_restarts = scaled_budget(num_restarts, channels);
     let nm_iters = scaled_budget(max_iters, channels) / 2;
+    let extra_obj: Vec<PaletteObjectiveMode> = review_objectives
+        .iter()
+        .copied()
+        .filter(|o| *o != report_objective)
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
     eprintln!(
-        "[palette_study] {channels}ch: NM ~{nm_iters} iters/restart, {scaled_restarts} restarts (base {num_restarts}), {n_parents} palettes"
+        "[palette_study] {channels}ch: NM ~{nm_iters} iters/restart, {scaled_restarts} restarts (base {num_restarts}), {n_parents} palettes, init={} refine={} objective={} (+{} review objs)",
+        init_mode.id(),
+        refine_mode.id(),
+        report_objective.id(),
+        extra_obj.len()
     );
 
     let mut shared_intensity_rng = StdRng::seed_from_u64(9000 + channels as u64);
@@ -403,7 +603,8 @@ fn run_channel_batch(
     let seed_base = 50_000u64 + (channels as u64) * 10_000;
 
     for i in 0..n_parents {
-        let mut rng = StdRng::seed_from_u64(seed_base + i as u64);
+        let parent_seed = seed_base + i as u64;
+        let mut rng = StdRng::seed_from_u64(parent_seed);
         let colors = if spread_init {
             spread_initial_colors_u16(channels, &mut rng)
         } else {
@@ -413,7 +614,7 @@ fn run_channel_batch(
         let contrast = contrast_all(channels);
         let lum = luminance_u16();
         let t0 = Instant::now();
-        let run = optimize_palette_pipeline(
+        let run = optimize_palette_pipeline_with_init(
             &colors,
             &locked,
             &shared_intensities,
@@ -426,7 +627,31 @@ fn run_channel_batch(
             Some(include_spatial),
             Some(num_restarts),
             Some(postprocess),
+            init_mode,
+            refine_mode,
+            report_objective,
         );
+        let mut alt_objectives = Vec::new();
+        for &obj in &extra_obj {
+            let alt = optimize_palette_pipeline_with_init(
+                &colors,
+                &locked,
+                &shared_intensities,
+                &contrast,
+                &lum,
+                vec![],
+                empty_names(channels),
+                Some(max_iters),
+                Some(confusion_samples),
+                Some(include_spatial),
+                Some(num_restarts),
+                Some(postprocess),
+                init_mode,
+                refine_mode,
+                obj,
+            );
+            alt_objectives.push((obj, alt));
+        }
         let optimize_elapsed = t0.elapsed();
         let bd = evaluate_palette_objective_breakdown(
             c3_eval,
@@ -439,28 +664,40 @@ fn run_channel_batch(
         );
         let dbg = format_channel_debug(&run.oklab_best, c3_eval);
         eprintln!(
-            "[palette_study] {channels}ch #{}/{} L_tot={:.4} min_rgb={:.0} time={} | {}",
+            "[palette_study] {channels}ch #{}/{} L_tot={:.4} min_rgb={:.0} pool={} time={} | {}",
             i + 1,
             n_parents,
             bd.total,
             bd.min_display_rgb_distance,
+            run.restart_pool.len(),
             format_duration(optimize_elapsed),
             dbg
         );
         parents.push(PaletteRun {
+            case_id: format!("{channels}ch_run{}", i + 1),
+            parent_seed,
+            report_objective,
             result: run,
             breakdown: bd,
             optimize_elapsed,
+            alt_objectives,
         });
         if (i + 1) % 5 == 0 || i == 0 {
-            eprintln!("[palette_study] {channels}ch finished {}/{}", i + 1, n_parents);
+            eprintln!(
+                "[palette_study] {channels}ch finished {}/{}",
+                i + 1,
+                n_parents
+            );
         }
     }
 
     let batch_elapsed = batch_start.elapsed();
     log_loss_stats(
         &format!("{channels}-color palettes"),
-        &parents.iter().map(|p| p.breakdown.total).collect::<Vec<_>>(),
+        &parents
+            .iter()
+            .map(|p| p.breakdown.total)
+            .collect::<Vec<_>>(),
     );
     log_timing_stats(
         &format!("{channels}-color optimize"),
@@ -481,85 +718,464 @@ fn run_channel_batch(
     }
 }
 
-fn append_section_html(html: &mut String, batch: &StudyBatch, c3_eval: &C3, sw: i32, sh: i32) {
+fn append_mode_card(
+    html: &mut String,
+    mode: PaletteSelectionMode,
+    pool: &[RestartRecord],
+    c3_eval: &C3,
+    sw: i32,
+    sh: i32,
+    production_bd: &PaletteObjectiveBreakdown,
+    solver_cost: f32,
+) {
+    let Some(idx) = select_best_restart(pool, mode) else {
+        html.push_str(r#"<div class="mode-card"><div class="label">no pool</div></div>"#);
+        return;
+    };
+    let rec = &pool[idx];
+    let srgb = oklab_to_srgb_linear(&rec.oklab);
+    let rgb = optimized_to_rgb8(&srgb);
+    let d = &rec.diagnostics;
+    let families = d.coarse_name_families.join(" · ");
+    let names = d.dominant_c3_names.join(" · ");
+    let hue_dbg = format_channel_debug(&rec.oklab, c3_eval);
+    let same_as_prod = (d.total_loss - production_bd.total).abs() < 1e-4
+        && mode == PaletteSelectionMode::TotalLoss;
+    html.push_str(r#"<div class="mode-card">"#);
+    html.push_str(&format!(
+        r#"<div class="mode-title">{} <code>{}</code>{}</div>"#,
+        mode.label(),
+        mode.id(),
+        if same_as_prod {
+            " · production fold"
+        } else {
+            ""
+        }
+    ));
+    html.push_str(&format!(
+        r#"<div class="label">restart {} · L_tot={:.4} · min RGB Δ={:.1} · hueΔ≥{:.0}° · min C3={:.3} · p10 C3={:.3}<br/>{}</div>"#,
+        rec.restart_id,
+        d.total_loss,
+        d.min_display_rgb_distance,
+        d.min_oklch_hue_gap_deg,
+        d.min_c3_name_distance,
+        d.p10_c3_name_distance,
+        format_diag_badges(rec)
+    ));
+    html.push_str(&format!(
+        r#"<div class="names">names: {}<br/>families: {}<br/>{}</div>"#,
+        names, families, hue_dbg
+    ));
+    html.push_str(r#"<div class="card-body">"#);
+    html.push_str(&svg_swatches(&rgb, sw, sh));
+    // Approximate bars from diagnostics (full breakdown remaining on production path).
+    let bd_for_bars = PaletteObjectiveBreakdown {
+        total: d.total_loss,
+        minus_mean_color_name_distance: -(d.mean_c3_name_distance as f32),
+        minus_min_color_name_distance: 0.0,
+        minus_min_perceptual_distance: -(d.min_display_rgb_distance / 255.0),
+        perceptual_deficit_penalty: 0.0,
+        min_display_rgb_distance: d.min_display_rgb_distance,
+        hue_separation_reward: 0.0,
+        hue_separation_deficit: 0.0,
+        min_hue_gap_deg: d.min_oklch_hue_gap_deg as f32,
+        term_loss: 0.0,
+        confusion_weighted: 0.0,
+        minus_min_saturation: 0.0,
+        saturation_deficit_penalty: 0.0,
+        min_srgb_saturation: d.min_srgb_saturation,
+        min_oklab_chroma: d.min_oklab_chroma,
+    };
+    html.push_str(&format_loss_panel(&bd_for_bars, solver_cost));
+    html.push_str("</div></div>");
+}
+
+fn append_section_html(
+    html: &mut String,
+    batch: &StudyBatch,
+    c3_eval: &C3,
+    modes: &[PaletteSelectionMode],
+    sw: i32,
+    sh: i32,
+) {
     let parents = &batch.parents;
     let channels = batch.channels;
-    let mut parent_rows: Vec<(usize, Vec<[u8; 3]>, PaletteObjectiveBreakdown, f32, Duration)> =
-        Vec::with_capacity(parents.len());
-    for (i, pr) in parents.iter().enumerate() {
-        parent_rows.push((
-            i,
-            optimized_to_rgb8(&pr.result.srgb_linear),
-            pr.breakdown.clone(),
-            pr.result.sa_best_cost,
-            pr.optimize_elapsed,
-        ));
-    }
-    parent_rows.sort_by(|a, b| {
-        a.2.total
-            .partial_cmp(&b.2.total)
+    let mut order: Vec<usize> = (0..parents.len()).collect();
+    order.sort_by(|&a, &b| {
+        parents[a]
+            .breakdown
+            .total
+            .partial_cmp(&parents[b].breakdown.total)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    let time_secs: Vec<f64> = parents
-        .iter()
-        .map(|p| p.optimize_elapsed.as_secs_f64())
-        .collect();
-    let time_sum: f64 = time_secs.iter().sum();
-    let time_mean = time_sum / time_secs.len().max(1) as f64;
-    let mut time_sorted = time_secs.clone();
-    time_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let time_median = if time_sorted.is_empty() {
-        0.0
-    } else if time_sorted.len() % 2 == 0 {
-        (time_sorted[time_sorted.len() / 2 - 1] + time_sorted[time_sorted.len() / 2]) / 2.0
-    } else {
-        time_sorted[time_sorted.len() / 2]
-    };
-    let n_good_rgb = parents
-        .iter()
-        .filter(|p| p.breakdown.min_display_rgb_distance >= 190.0)
-        .count();
-
     html.push_str(&format!(
-        r#"<h2>{channels}-color palettes (n={}, sorted by L_tot)</h2>
-<p class="sort-note">Best (lowest L_tot) appears first. {timing}</p>
-<div class="grid3">"#,
+        r#"<h2>{channels}-color palettes (n={}, sorted by production L_tot)</h2>
+<p class="sort-note">Each case shows selection modes side-by-side from the same restart pool. Batch wall {}.</p>
+"#,
         parents.len(),
-        timing = format!(
-            "Batch wall {} · optimize mean {} · median {} · range {}–{} · {}/{} with min RGB Δ≥190.",
-            format_duration(batch.batch_elapsed),
-            format_duration(Duration::from_secs_f64(time_mean)),
-            format_duration(Duration::from_secs_f64(time_median)),
-            format_duration(Duration::from_secs_f64(
-                time_sorted.first().copied().unwrap_or(0.0)
-            )),
-            format_duration(Duration::from_secs_f64(
-                time_sorted.last().copied().unwrap_or(0.0)
-            )),
-            n_good_rgb,
-            parents.len(),
-        ),
+        format_duration(batch.batch_elapsed),
     ));
 
-    for (rank, (orig, rgb, bd, solver_cost, elapsed)) in parent_rows.iter().enumerate() {
-        html.push_str(r#"<div class="card">"#);
-        let dbg = format_channel_debug(&parents[*orig].result.oklab_best, c3_eval);
+    // Per-mode summary table
+    html.push_str(r#"<table class="summary"><tr><th>mode</th><th>median L_tot</th><th>median min C3</th><th>median min RGB</th><th>dup failures</th><th>earth failures</th></tr>"#);
+    for &mode in modes {
+        let mut totals = Vec::new();
+        let mut min_c3 = Vec::new();
+        let mut min_rgb = Vec::new();
+        let mut dup_fail = 0usize;
+        let mut earth_fail = 0usize;
+        for pr in parents {
+            if let Some(i) = select_best_restart(&pr.result.restart_pool, mode) {
+                let d = &pr.result.restart_pool[i].diagnostics;
+                totals.push(d.total_loss);
+                min_c3.push(d.min_c3_name_distance);
+                min_rgb.push(d.min_display_rgb_distance);
+                if d.duplicate_family_pair_count > 0 {
+                    dup_fail += 1;
+                }
+                if d.earth_term_mass >= 0.30 {
+                    earth_fail += 1;
+                }
+            }
+        }
+        let med = |v: &mut [f32]| {
+            if v.is_empty() {
+                return 0.0;
+            }
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            v[v.len() / 2]
+        };
+        let med_f64 = |v: &mut [f64]| {
+            if v.is_empty() {
+                return 0.0;
+            }
+            v.sort_by(|a, b| a.total_cmp(b));
+            v[v.len() / 2]
+        };
         html.push_str(&format!(
-            r#"<div class="label">#{} · run {} · L_tot={:.4} · min RGB Δ≥{:.1} · <span class="time">{}</span><br/><span class="names">{}</span></div>"#,
-            rank + 1,
-            orig + 1,
-            bd.total,
-            bd.min_display_rgb_distance,
-            format_duration(*elapsed),
-            dbg
+            r#"<tr><td>{}</td><td>{:.4}</td><td>{:.3}</td><td>{:.1}</td><td>{}/{}</td><td>{}/{}</td></tr>"#,
+            mode.id(),
+            med(&mut totals),
+            med_f64(&mut min_c3),
+            med(&mut min_rgb),
+            dup_fail,
+            parents.len(),
+            earth_fail,
+            parents.len(),
         ));
-        html.push_str(r#"<div class="card-body">"#);
-        html.push_str(&svg_swatches(rgb, sw, sh));
-        html.push_str(&format_loss_panel(bd, *solver_cost));
-        html.push_str("</div></div>");
     }
-    html.push_str("</div>");
+    html.push_str("</table>");
+
+    for (rank, &orig) in order.iter().enumerate() {
+        let pr = &parents[orig];
+        let pool = &pr.result.restart_pool;
+        html.push_str(r#"<div class="case">"#);
+        html.push_str(&format!(
+            r#"<h3>#{} · {} · seed {} · pool {} · <span class="time">{}</span></h3>"#,
+            rank + 1,
+            pr.case_id,
+            pr.parent_seed,
+            pool.len(),
+            format_duration(pr.optimize_elapsed)
+        ));
+        html.push_str(r#"<div class="modes">"#);
+        for &mode in modes {
+            append_mode_card(
+                html,
+                mode,
+                pool,
+                c3_eval,
+                sw,
+                sh,
+                &pr.breakdown,
+                pr.result.sa_best_cost,
+            );
+        }
+        html.push_str("</div>");
+        html.push_str("</div>");
+    }
+}
+
+#[derive(Serialize)]
+struct CandidateJsonRow {
+    case_id: String,
+    channels: usize,
+    parent_seed: u64,
+    init_mode: String,
+    restart_id: u32,
+    rank_by_total: usize,
+    rank_by_lex_v1: usize,
+    hex_colors: Vec<String>,
+    dominant_names: Vec<String>,
+    families: Vec<String>,
+    total_loss: f32,
+    min_c3_name_distance: f64,
+    p10_c3_name_distance: f64,
+    mean_c3_name_distance: f64,
+    min_display_rgb_distance: f32,
+    min_oklab_distance: f64,
+    duplicate_family_pair_count: usize,
+    earth_term_mass: f64,
+    min_srgb_saturation: f32,
+    min_oklab_chroma: f32,
+}
+
+#[derive(Serialize)]
+struct ReviewModeMeta {
+    id: String,
+    label: String,
+}
+
+#[derive(Serialize)]
+struct ReviewMethodPalette {
+    mode_id: String,
+    mode_label: String,
+    restart_id: u32,
+    hex_colors: Vec<String>,
+    dominant_names: Vec<String>,
+    families: Vec<String>,
+    total_loss: f32,
+    min_c3_name_distance: f64,
+    min_display_rgb_distance: f32,
+    duplicate_family_pair_count: usize,
+    earth_term_mass: f64,
+}
+
+#[derive(Serialize)]
+struct ReviewCase {
+    case_id: String,
+    channels: usize,
+    parent_seed: u64,
+    methods: Vec<ReviewMethodPalette>,
+}
+
+#[derive(Serialize)]
+struct ReviewPayload {
+    run_id: String,
+    init_mode: String,
+    modes: Vec<ReviewModeMeta>,
+    cases: Vec<ReviewCase>,
+}
+
+fn build_review_payload(
+    batches: &[StudyBatch],
+    review_methods: &[ReviewMethodSpec],
+    init_mode: PaletteInitMode,
+    c3_eval: &C3,
+    spatial_w: f32,
+) -> ReviewPayload {
+    let lum = vec![0.50f32, 0.92];
+    let mut cases = Vec::new();
+    for batch in batches {
+        for pr in &batch.parents {
+            let pool = &pr.result.restart_pool;
+            let n = batch.channels;
+            let locked = vec![false; n];
+            let excluded: std::collections::HashSet<usize> = pr
+                .result
+                .excluded_colors_indices
+                .iter()
+                .map(|&x| x as usize)
+                .collect();
+
+            // Shared base: total-loss winner from the polished restart pool.
+            let Some(base_idx) = select_best_restart(pool, PaletteSelectionMode::TotalLoss) else {
+                continue;
+            };
+            let base_oklab = pool[base_idx].oklab.clone();
+            let base_restart = pool[base_idx].restart_id;
+
+            let mut methods = Vec::new();
+            for &spec in review_methods {
+                match spec {
+                    ReviewMethodSpec::Objective(obj) => {
+                        let run_ref = if obj == pr.report_objective {
+                            &pr.result
+                        } else if let Some((_, alt)) =
+                            pr.alt_objectives.iter().find(|(o, _)| *o == obj)
+                        {
+                            alt
+                        } else {
+                            continue;
+                        };
+                        let bd = evaluate_palette_objective_breakdown(
+                            c3_eval,
+                            &run_ref.oklab_best,
+                            &run_ref.intensity_arc,
+                            1.0,
+                            spatial_w,
+                            &run_ref.excluded_colors_indices,
+                            &run_ref.color_name_indices,
+                        );
+                        let d = compute_diagnostics(c3_eval, &run_ref.oklab_best, &bd);
+                        methods.push(ReviewMethodPalette {
+                            mode_id: spec.id().to_string(),
+                            mode_label: spec.label().to_string(),
+                            restart_id: 0,
+                            hex_colors: hex_colors_from_oklab(&run_ref.oklab_best),
+                            dominant_names: d.dominant_c3_names,
+                            families: d.coarse_name_families,
+                            total_loss: d.total_loss,
+                            min_c3_name_distance: d.min_c3_name_distance,
+                            min_display_rgb_distance: d.min_display_rgb_distance,
+                            duplicate_family_pair_count: d.duplicate_family_pair_count,
+                            earth_term_mass: d.earth_term_mass,
+                        });
+                    }
+                    ReviewMethodSpec::Select(sel) => {
+                        let Some(idx) = select_best_restart(pool, sel) else {
+                            continue;
+                        };
+                        let rec = &pool[idx];
+                        let d = &rec.diagnostics;
+                        methods.push(ReviewMethodPalette {
+                            mode_id: spec.id().to_string(),
+                            mode_label: spec.label().to_string(),
+                            restart_id: rec.restart_id,
+                            hex_colors: hex_colors_from_oklab(&rec.oklab),
+                            dominant_names: d.dominant_c3_names.clone(),
+                            families: d.coarse_name_families.clone(),
+                            total_loss: d.total_loss,
+                            min_c3_name_distance: d.min_c3_name_distance,
+                            min_display_rgb_distance: d.min_display_rgb_distance,
+                            duplicate_family_pair_count: d.duplicate_family_pair_count,
+                            earth_term_mass: d.earth_term_mass,
+                        });
+                    }
+                    ReviewMethodSpec::Refine(refine) => {
+                        let mut oklab = base_oklab.clone();
+                        apply_palette_refine_ex(
+                            &mut oklab,
+                            &locked,
+                            &lum,
+                            c3_eval,
+                            &pr.result.intensity_arc,
+                            1.0,
+                            spatial_w,
+                            &excluded,
+                            &pr.result.color_name_indices,
+                            pr.parent_seed.wrapping_add(0xA11CE),
+                            refine,
+                            true,
+                            false,
+                            // Study review: allow polar to separate bad name pairs even if L_tot
+                            // ticks up slightly (production apply_palette_refine stays strict).
+                            matches!(refine, PaletteRefineMode::Polar | PaletteRefineMode::Hybrid),
+                        );
+                        let bd = evaluate_palette_objective_breakdown(
+                            c3_eval,
+                            &oklab,
+                            &pr.result.intensity_arc,
+                            1.0,
+                            spatial_w,
+                            &pr.result.excluded_colors_indices,
+                            &pr.result.color_name_indices,
+                        );
+                        let d = compute_diagnostics(c3_eval, &oklab, &bd);
+                        methods.push(ReviewMethodPalette {
+                            mode_id: spec.id().to_string(),
+                            mode_label: spec.label().to_string(),
+                            restart_id: base_restart,
+                            hex_colors: hex_colors_from_oklab(&oklab),
+                            dominant_names: d.dominant_c3_names,
+                            families: d.coarse_name_families,
+                            total_loss: d.total_loss,
+                            min_c3_name_distance: d.min_c3_name_distance,
+                            min_display_rgb_distance: d.min_display_rgb_distance,
+                            duplicate_family_pair_count: d.duplicate_family_pair_count,
+                            earth_term_mass: d.earth_term_mass,
+                        });
+                    }
+                }
+            }
+            if methods.is_empty() {
+                continue;
+            }
+            cases.push(ReviewCase {
+                case_id: pr.case_id.clone(),
+                channels: batch.channels,
+                parent_seed: pr.parent_seed,
+                methods,
+            });
+        }
+    }
+    let run_id = format!(
+        "{}_{}_{}",
+        init_mode.id(),
+        cases.len(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
+    );
+    ReviewPayload {
+        run_id,
+        init_mode: init_mode.id().to_string(),
+        modes: review_methods
+            .iter()
+            .map(|m| ReviewModeMeta {
+                id: m.id().to_string(),
+                label: m.label().to_string(),
+            })
+            .collect(),
+        cases,
+    }
+}
+
+fn write_review_html(path: &PathBuf, payload: &ReviewPayload) {
+    const TEMPLATE: &str = include_str!("palette_study_review.html");
+    let json = serde_json::to_string(payload).expect("review json");
+    // Escape </script> so embedded JSON cannot break out of the script tag.
+    let safe = json.replace('<', "\\u003c");
+    let html = TEMPLATE.replace("__REVIEW_DATA_JSON__", &safe);
+    fs::write(path, html).expect("write review.html");
+}
+
+fn write_candidates_json(path: &PathBuf, batches: &[StudyBatch], init_mode: PaletteInitMode) {
+    let mut rows = Vec::new();
+    for batch in batches {
+        for pr in &batch.parents {
+            let pool = &pr.result.restart_pool;
+            let by_total = top_k_indices_by_total(pool, pool.len());
+            let by_lex = top_k_indices_by_lex(pool, pool.len());
+            let mut rank_total = vec![0usize; pool.len()];
+            let mut rank_lex = vec![0usize; pool.len()];
+            for (rank, &i) in by_total.iter().enumerate() {
+                rank_total[i] = rank + 1;
+            }
+            for (rank, &i) in by_lex.iter().enumerate() {
+                rank_lex[i] = rank + 1;
+            }
+            for (i, rec) in pool.iter().enumerate() {
+                let d = &rec.diagnostics;
+                rows.push(CandidateJsonRow {
+                    case_id: pr.case_id.clone(),
+                    channels: batch.channels,
+                    parent_seed: pr.parent_seed,
+                    init_mode: init_mode.id().to_string(),
+                    restart_id: rec.restart_id,
+                    rank_by_total: rank_total[i],
+                    rank_by_lex_v1: rank_lex[i],
+                    hex_colors: hex_colors_from_oklab(&rec.oklab),
+                    dominant_names: d.dominant_c3_names.clone(),
+                    families: d.coarse_name_families.clone(),
+                    total_loss: d.total_loss,
+                    min_c3_name_distance: d.min_c3_name_distance,
+                    p10_c3_name_distance: d.p10_c3_name_distance,
+                    mean_c3_name_distance: d.mean_c3_name_distance,
+                    min_display_rgb_distance: d.min_display_rgb_distance,
+                    min_oklab_distance: d.min_oklab_distance,
+                    duplicate_family_pair_count: d.duplicate_family_pair_count,
+                    earth_term_mass: d.earth_term_mass,
+                    min_srgb_saturation: d.min_srgb_saturation,
+                    min_oklab_chroma: d.min_oklab_chroma,
+                });
+            }
+        }
+    }
+    let json = serde_json::to_string_pretty(&rows).expect("json");
+    fs::write(path, json).expect("write candidates.json");
 }
 
 const HTML_HEAD: &str = r#"<!DOCTYPE html>
@@ -627,6 +1243,23 @@ const HTML_HEAD: &str = r#"<!DOCTYPE html>
   .better { color: #7dcea0; font-weight: normal; }
   .sort-note { color: #9cf; font-size: 0.85rem; margin-bottom: 8px; }
   .time { color: #f5b041; font-weight: 600; }
+  .case { margin: 1.5rem 0 2rem; padding: 12px; border: 1px solid #2a2a2a; border-radius: 10px; background: #161616; }
+  .case h3 { font-size: 0.95rem; color: #cde; margin: 0 0 10px; }
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .mode-card { background: #1c1c1c; border: 1px solid #333; border-radius: 8px; padding: 10px; }
+  .mode-title { font-size: 0.8rem; color: #9cf; font-weight: 600; margin-bottom: 4px; }
+  .mode-title code { color: #7dcea0; }
+  .badge { display: inline-block; font-size: 0.6rem; padding: 1px 5px; border-radius: 4px; margin: 1px 2px; background: #333; color: #bbb; }
+  .badge.bad { background: #5c1a1a; color: #f88; }
+  .badge.warn { background: #5c4a1a; color: #fd8; }
+  .badge.ok { background: #1a3c2a; color: #8d8; }
+  .topk { margin-top: 10px; }
+  .topk-title { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
+  .topk-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .topk-item { background: #1a1a1a; border: 1px solid #2c2c2c; border-radius: 6px; padding: 6px; min-width: 140px; }
+  table.summary { border-collapse: collapse; font-size: 0.75rem; margin: 8px 0 16px; }
+  table.summary th, table.summary td { border: 1px solid #333; padding: 4px 8px; text-align: right; }
+  table.summary th { color: #9cf; text-align: left; }
 </style>
 </head>
 <body>
@@ -634,7 +1267,7 @@ const HTML_HEAD: &str = r#"<!DOCTYPE html>
 
 fn main() {
     let channel_counts = parse_channel_counts();
-    let n_parents = parse_env_usize("PALETTE_STUDY_PARENTS", 20);
+    let n_parents = parse_env_usize("PALETTE_STUDY_PARENTS", 10);
     let n_rows = parse_env_usize("PALETTE_STUDY_ROWS", 384);
     let max_iters = parse_env_u32("PALETTE_STUDY_MAX_ITERS", DEFAULT_MAX_ITERS);
     let confusion_samples =
@@ -650,6 +1283,18 @@ fn main() {
     let spread_init = env::var("PALETTE_STUDY_SPREAD_INIT")
         .map(|s| !matches!(s.as_str(), "0" | "false" | "FALSE" | "no" | "NO"))
         .unwrap_or(true);
+    let selection_modes = parse_selection_modes();
+    let init_mode = parse_init_mode();
+    let refine_mode = parse_refine_mode();
+    let report_objective = parse_objective_mode();
+    let review_methods = parse_review_methods();
+    let review_objectives: Vec<PaletteObjectiveMode> = review_methods
+        .iter()
+        .filter_map(|m| match m {
+            ReviewMethodSpec::Objective(o) => Some(*o),
+            _ => None,
+        })
+        .collect();
 
     let out_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/palette_study");
     fs::create_dir_all(&out_dir).expect("mkdir");
@@ -659,16 +1304,31 @@ fn main() {
         .map(|c| c.to_string())
         .collect::<Vec<_>>()
         .join(", ");
+    let modes_label: String = selection_modes
+        .iter()
+        .map(|m| m.id())
+        .collect::<Vec<_>>()
+        .join(",");
+    let review_label: String = review_methods
+        .iter()
+        .map(|m| m.id())
+        .collect::<Vec<_>>()
+        .join(",");
 
     eprintln!(
-        "[palette_study] Nelder–Mead · max_iters={} restarts={} confusion={} · channels=[{}] · {} palettes/ch · spatial={} post={:?}",
+        "[palette_study] Nelder–Mead · max_iters={} restarts={} confusion={} · channels=[{}] · {} palettes/ch · spatial={} post={:?} · init={} refine={} objective={} · report_selection=[{}] · review=[{}]",
         max_iters,
         num_restarts,
         confusion_samples,
         channels_label,
         n_parents,
         include_spatial,
-        postprocess
+        postprocess,
+        init_mode.id(),
+        refine_mode.id(),
+        report_objective.id(),
+        modes_label,
+        review_label
     );
 
     let c3_eval = C3::new();
@@ -687,6 +1347,10 @@ fn main() {
             include_spatial,
             postprocess,
             spread_init,
+            init_mode,
+            refine_mode,
+            report_objective,
+            &review_objectives,
             &c3_eval,
             spatial_w,
         ));
@@ -698,28 +1362,47 @@ fn main() {
     let total_palettes = n_parents * channel_counts.len();
     let mut html = String::from(HTML_HEAD);
     html.push_str(&format!(
-        r#"<h1>Palette study</h1>
+        r#"<h1>Palette study (experiment foundation)</h1>
 <p class="note">
-  <strong>{total_palettes}</strong> optimized palettes ({n_parents} per channel count: <strong>{channels_label}</strong>).
-  Defaults: <code>max_iters={max_iters}</code>, <code>restarts={num_restarts}</code>,
-  <code>confusion_samples={confusion_samples}</code>; Nelder–Mead multistart; spatial <strong>{spatial}</strong>.
+  <strong>{total_palettes}</strong> optimized cases ({n_parents} per channel count: <strong>{channels_label}</strong>).
+  <code>max_iters={max_iters}</code>, <code>restarts={num_restarts}</code>,
+  spatial <strong>{spatial}</strong>, init <strong>{init}</strong>, refine <strong>{refine}</strong>,
+  report objective <strong>{obj}</strong>, review methods <strong>{review}</strong>.
   <br/><br/>
-  Total study wall time: <strong>{study_time}</strong> (see per-section timing below).
+  Production default remains mean-only C3 + Cartesian refine. review.html compares methods
+  (identical hex palettes are auto-tied / skipped).
   <br/><br/>
-  Lower <code>L_tot</code> is better. Sorted by loss within each section.
+  Total study wall time: <strong>{study_time}</strong>. Also wrote <code>candidates.json</code>
+  and interactive <a href="review.html" style="color:#9cf">review.html</a> (vote which method looks best).
 </p>
 "#,
         spatial = if include_spatial { "on" } else { "off" },
+        init = init_mode.id(),
+        refine = refine_mode.id(),
+        obj = report_objective.id(),
+        review = review_label,
         study_time = format_duration(study_elapsed),
     ));
 
     for batch in &batches {
-        append_section_html(&mut html, batch, &c3_eval, sw, sh);
+        append_section_html(&mut html, batch, &c3_eval, &selection_modes, sw, sh);
     }
     html.push_str("</body></html>");
 
     let path = out_dir.join("report.html");
     fs::write(&path, &html).expect("write report");
+    let cand_path = out_dir.join("candidates.json");
+    write_candidates_json(&cand_path, &batches, init_mode);
+    let review_payload =
+        build_review_payload(&batches, &review_methods, init_mode, &c3_eval, spatial_w);
+    let review_json_path = out_dir.join("review_data.json");
+    fs::write(
+        &review_json_path,
+        serde_json::to_string_pretty(&review_payload).expect("review_data json"),
+    )
+    .expect("write review_data.json");
+    let review_path = out_dir.join("review.html");
+    write_review_html(&review_path, &review_payload);
     eprintln!(
         "[palette_study] total study wall time {}",
         format_duration(study_elapsed)
@@ -729,8 +1412,14 @@ fn main() {
         path.display(),
         html.len()
     );
+    eprintln!("[palette_study] wrote {}", cand_path.display());
     eprintln!(
-        "[palette_study] open in browser: file://{}",
-        path.canonicalize().unwrap_or(path).display()
+        "[palette_study] wrote {} ({} cases for interactive review)",
+        review_path.display(),
+        review_payload.cases.len()
+    );
+    eprintln!(
+        "[palette_study] open interactive review: file://{}",
+        review_path.canonicalize().unwrap_or(review_path).display()
     );
 }

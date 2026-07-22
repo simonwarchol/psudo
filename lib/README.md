@@ -94,8 +94,8 @@ for (let i = 0; i < nChannels; i++) {
   contrastLimits[i * 2 + 1] = 65535;
 }
 
-// OKLab L bounds × 100 (e.g. 0.45–0.92)
-const luminance = new Uint16Array([45, 92]);
+// OKLab L bounds × 100 (e.g. 0.50–0.92)
+const luminance = new Uint16Array([50, 92]);
 
 const excluded = ["grey", "white", "lightgrey", "darkgrey", "offwhite"];
 const colorNames = ["red", "", "blue", ""]; // optional C3 hint per channel; "" = none
@@ -167,7 +167,7 @@ export function usePaletteOptimizer() {
 |----------|-------------|
 | `optimize` | Simulated-annealing palette optimization → `Float32Array` linear RGB |
 | `calculate_palette_loss` | Loss breakdown object for a palette + intensities |
-| `channel_gmm` | Per-channel GMM contrast limits from raw `Uint16Array` data |
+| `channel_gmm` | Per-channel GMM contrast limits from raw `Uint16Array` data; optional `subsample` (default 40000), `tol` (1e-6), `max_iter` (1000) |
 | `ln` | Log transform of intensity data |
 | `optimize_in_lens` | Lens-local confusion metric (scalar) |
 

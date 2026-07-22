@@ -109,7 +109,7 @@ fn run_solver(
     intensities: &[u16],
 ) -> RunStats {
     let contrast: Vec<u16> = (0..channels).flat_map(|_| [0u16, 65535]).collect();
-    let lum = vec![45u16, 92];
+    let lum = vec![50u16, 92];
     let locked = vec![0u16; channels];
     let names: Vec<String> = (0..channels).map(|_| String::new()).collect();
     let c3 = psudo::c3::C3::new();
@@ -229,11 +229,7 @@ fn main() {
 
     for &solver in &solvers {
         let label = if solver == PaletteArgminSolver::SimulatedAnnealing {
-            format!(
-                "{} ({}× restart, Study post)",
-                solver.label(),
-                restarts
-            )
+            format!("{} ({}× restart, Study post)", solver.label(), restarts)
         } else {
             solver.label().to_string()
         };
@@ -275,8 +271,7 @@ fn main() {
         agg_best /= nch;
         agg_ms /= nch as f64;
         let st6 = st_6ch.expect("6ch row");
-        let score =
-            st6.mean_l as f64 + 2.0 * st6.std_l as f64 + 0.001 * st6.ms_per_run;
+        let score = st6.mean_l as f64 + 2.0 * st6.std_l as f64 + 0.001 * st6.ms_per_run;
         summary.push((solver, agg_std, agg_best, agg_ms, score));
 
         rows_html.push_str(&format!(
@@ -297,12 +292,7 @@ fn main() {
 
     let header_cells: String = channel_counts
         .iter()
-        .map(|ch| {
-            format!(
-                "<th colspan=\"3\">{} ch</th>",
-                ch
-            )
-        })
+        .map(|ch| format!("<th colspan=\"3\">{} ch</th>", ch))
         .collect();
     let subheader: String = channel_counts
         .iter()
@@ -359,7 +349,11 @@ Gradient runs use backtracking Armijo line search, not More–Thuente.
         n_rows = n_rows,
         restarts = restarts,
         rec = if best_solver == PaletteArgminSolver::SimulatedAnnealing {
-            format!("{} ({}× restart, Study post)", best_solver.label(), restarts)
+            format!(
+                "{} ({}× restart, Study post)",
+                best_solver.label(),
+                restarts
+            )
         } else {
             best_solver.label().to_string()
         },
@@ -367,22 +361,32 @@ Gradient runs use backtracking Armijo line search, not More–Thuente.
         header_cells = header_cells,
         subheader = subheader,
         rows = rows_html.replace(
-            &format!("<tr><th>{}</th>", esc(
-                if best_solver == PaletteArgminSolver::SimulatedAnnealing {
-                    format!("{} ({}× restart, Study post)", best_solver.label(), restarts)
+            &format!(
+                "<tr><th>{}</th>",
+                esc(if best_solver == PaletteArgminSolver::SimulatedAnnealing {
+                    format!(
+                        "{} ({}× restart, Study post)",
+                        best_solver.label(),
+                        restarts
+                    )
                 } else {
                     best_solver.label().to_string()
                 }
-                .as_str()
-            )),
-            &format!("<tr class=\"best\"><th>{}</th>", esc(
-                if best_solver == PaletteArgminSolver::SimulatedAnnealing {
-                    format!("{} ({}× restart, Study post)", best_solver.label(), restarts)
+                .as_str())
+            ),
+            &format!(
+                "<tr class=\"best\"><th>{}</th>",
+                esc(if best_solver == PaletteArgminSolver::SimulatedAnnealing {
+                    format!(
+                        "{} ({}× restart, Study post)",
+                        best_solver.label(),
+                        restarts
+                    )
                 } else {
                     best_solver.label().to_string()
                 }
-                .as_str()
-            )),
+                .as_str())
+            ),
         ),
     );
 

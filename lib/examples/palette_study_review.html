@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Palette method review</title>
+<style>
+  :root {
+    --bg: #111;
+    --panel: #1a1a1a;
+    --border: #333;
+    --text: #e8e8e8;
+    --muted: #888;
+    --accent: #9cf;
+    --ok: #7dcea0;
+    --warn: #f5b041;
+    --bad: #e74c3c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+  header .meta { color: var(--muted); font-size: 0.8rem; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .progress {
+    height: 6px;
+    background: #222;
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 8px 0 16px;
+  }
+  .progress > div {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.15s ease;
+  }
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .filters label { color: var(--muted); font-size: 0.85rem; margin-right: 4px; }
+  button, select {
+    font: inherit;
+    border: 1px solid var(--border);
+    background: #222;
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  button:hover { border-color: #555; }
+  button.primary { background: #243044; border-color: #3a5577; color: var(--accent); }
+  button.primary:hover { background: #2c3a52; }
+  button.ghost { background: transparent; color: var(--muted); }
+  button.selected {
+    border-color: var(--ok);
+    box-shadow: inset 0 0 0 1px var(--ok);
+  }
+  .case-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .case-head h2 { margin: 0; font-size: 1rem; color: var(--accent); }
+  .case-head .sub { color: var(--muted); font-size: 0.8rem; }
+  .methods {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .method-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  .method-card:hover { border-color: #555; }
+  .method-card.picked {
+    border-color: var(--ok);
+    background: #162018;
+  }
+  .method-card .title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .method-card .title code { color: var(--ok); font-weight: 500; }
+  .swatches {
+    display: flex;
+    height: 56px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .swatches span { flex: 1; }
+  .names { font-size: 0.7rem; color: #9ab; line-height: 1.35; word-break: break-word; }
+  .badges { margin: 6px 0; }
+  .badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin: 1px 2px;
+    background: #333;
+    color: #bbb;
+  }
+  .badge.bad { background: #5c1a1a; color: #f88; }
+  .badge.warn { background: #5c4a1a; color: #fd8; }
+  .badge.ok { background: #1a3c2a; color: #8d8; }
+  .metrics { font-size: 0.65rem; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .actions .hint { color: var(--muted); font-size: 0.8rem; flex: 1 1 180px; }
+  .kbd {
+    display: inline-block;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 0 5px;
+    font-size: 0.7rem;
+    color: #aaa;
+  }
+  table.score {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 12px 0 20px;
+  }
+  table.score th, table.score td {
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    text-align: right;
+  }
+  table.score th:first-child, table.score td:first-child { text-align: left; }
+  table.score th { color: var(--accent); }
+  table.score tr.winner td { color: var(--ok); font-weight: 600; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .bar-row .lab { width: 100px; font-size: 0.8rem; }
+  .bar-row .track { flex: 1; height: 10px; background: #222; border-radius: 5px; overflow: hidden; }
+  .bar-row .fill { height: 100%; background: var(--accent); }
+  .bar-row .n { width: 64px; text-align: right; font-size: 0.75rem; color: var(--muted); }
+  .intro-list { color: var(--muted); line-height: 1.5; max-width: 60ch; }
+  .intro-list li { margin: 6px 0; }
+  #toast {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: #243044;
+    border: 1px solid #3a5577;
+    color: var(--accent);
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Palette method review</h1>
+    <div class="meta" id="runMeta"></div>
+  </div>
+  <div class="filters" id="headerFilters"></div>
+</header>
+<main>
+  <section id="screenIntro" class="screen active">
+    <h2>Objective method comparison</h2>
+    <p class="intro-list">Each case compares independently optimized palettes under different objectives (same seed / intensities). <code>total</code> is production (mean C3 + display-sRGB separation). <code>oklab_sep</code> keeps mean C3 but scores channel separation in OKLab Euclidean space. Production optimize stays on <code>total</code>.</p>
+    <ul class="intro-list">
+      <li>Cases where every method has the <strong>same hex palette</strong> are auto-counted as ties and skipped — you only vote when methods differ.</li>
+      <li>Click a method card (or press <span class="kbd">1</span>–<span class="kbd">9</span>) to pick a winner.</li>
+      <li><span class="kbd">T</span> = tie / all similar · <span class="kbd">N</span> = none acceptable · <span class="kbd">←</span>/<span class="kbd">→</span> = prev/next.</li>
+      <li>Votes are saved in this browser (localStorage) so you can pause and resume.</li>
+    </ul>
+    <div class="filters" style="margin-top:16px">
+      <label for="channelFilter">Channel filter</label>
+      <select id="channelFilter"></select>
+      <label><input type="checkbox" id="shuffleOrder" checked /> Shuffle case order</label>
+    </div>
+    <div class="actions">
+      <button class="primary" id="btnStart">Start review</button>
+      <button class="ghost" id="btnResume" style="display:none">Resume saved session</button>
+      <button class="ghost" id="btnClear">Clear saved votes</button>
+    </div>
+  </section>
+
+  <section id="screenReview" class="screen">
+    <div class="progress"><div id="progressBar"></div></div>
+    <div class="case-head">
+      <div>
+        <h2 id="caseTitle"></h2>
+        <div class="sub" id="caseSub"></div>
+      </div>
+      <div class="sub" id="caseProgress"></div>
+    </div>
+    <div class="methods" id="methodGrid"></div>
+    <div class="actions">
+      <span class="hint">Pick the best-looking method for this case.</span>
+      <button class="ghost" id="btnTie">Tie / similar</button>
+      <button class="ghost" id="btnNone">None good</button>
+      <button class="ghost" id="btnPrev">← Prev</button>
+      <button class="primary" id="btnNext">Next →</button>
+      <button class="ghost" id="btnFinish">Finish early</button>
+    </div>
+  </section>
+
+  <section id="screenResults" class="screen">
+    <h2>Results</h2>
+    <p class="intro-list" id="resultsSummary"></p>
+    <h3>Overall wins</h3>
+    <div id="overallBars"></div>
+    <table class="score" id="overallTable"></table>
+    <h3>By channel count</h3>
+    <div id="byChannel"></div>
+    <h3>Head-to-head (when you picked one method over another)</h3>
+    <table class="score" id="h2hTable"></table>
+    <div class="actions">
+      <button class="primary" id="btnDownload">Download votes JSON</button>
+      <button class="ghost" id="btnRestart">Review again</button>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+<script id="review-data" type="application/json">__REVIEW_DATA_JSON__</script>
+<script>
+(function () {
+  const DATA = JSON.parse(document.getElementById("review-data").textContent);
+  const STORAGE_KEY = "psudo_palette_review_" + (DATA.run_id || "default");
+
+  const els = {
+    intro: document.getElementById("screenIntro"),
+    review: document.getElementById("screenReview"),
+    results: document.getElementById("screenResults"),
+    runMeta: document.getElementById("runMeta"),
+    channelFilter: document.getElementById("channelFilter"),
+    shuffleOrder: document.getElementById("shuffleOrder"),
+    btnStart: document.getElementById("btnStart"),
+    btnResume: document.getElementById("btnResume"),
+    btnClear: document.getElementById("btnClear"),
+    progressBar: document.getElementById("progressBar"),
+    caseTitle: document.getElementById("caseTitle"),
+    caseSub: document.getElementById("caseSub"),
+    caseProgress: document.getElementById("caseProgress"),
+    methodGrid: document.getElementById("methodGrid"),
+    btnTie: document.getElementById("btnTie"),
+    btnNone: document.getElementById("btnNone"),
+    btnPrev: document.getElementById("btnPrev"),
+    btnNext: document.getElementById("btnNext"),
+    btnFinish: document.getElementById("btnFinish"),
+    resultsSummary: document.getElementById("resultsSummary"),
+    overallBars: document.getElementById("overallBars"),
+    overallTable: document.getElementById("overallTable"),
+    byChannel: document.getElementById("byChannel"),
+    h2hTable: document.getElementById("h2hTable"),
+    btnDownload: document.getElementById("btnDownload"),
+    btnRestart: document.getElementById("btnRestart"),
+    toast: document.getElementById("toast"),
+  };
+
+  let queue = [];
+  let index = 0;
+  /** @type {Record<string, {choice: string, at: string, channels?: number, auto?: boolean, reason?: string}>} */
+  let votes = {};
+
+  function show(screen) {
+    [els.intro, els.review, els.results].forEach((s) => s.classList.remove("active"));
+    screen.classList.add("active");
+  }
+
+  function toast(msg) {
+    els.toast.textContent = msg;
+    els.toast.style.display = "block";
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { els.toast.style.display = "none"; }, 1800);
+  }
+
+  function loadVotes() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      return JSON.parse(raw).votes || {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveVotes() {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        run_id: DATA.run_id,
+        init_mode: DATA.init_mode,
+        modes: DATA.modes,
+        votes,
+        updated_at: new Date().toISOString(),
+      })
+    );
+  }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function filteredCases() {
+    const ch = els.channelFilter.value;
+    return DATA.cases.filter((c) => ch === "all" || String(c.channels) === ch);
+  }
+
+  /** True when all methods share the same hex palette (nothing to vote on visually). */
+  function methodsIdentical(c) {
+    const methods = c.methods || [];
+    if (methods.length < 2) return true;
+    const key = JSON.stringify(methods[0].hex_colors || []);
+    return methods.every((m) => JSON.stringify(m.hex_colors || []) === key);
+  }
+
+  function applyAutoIdenticalTies(cases) {
+    let n = 0;
+    const at = new Date().toISOString();
+    cases.forEach((c) => {
+      if (!methodsIdentical(c)) return;
+      const prev = votes[c.case_id];
+      // Don't overwrite a human vote; refresh auto-ties.
+      if (prev && !prev.auto) return;
+      votes[c.case_id] = {
+        choice: "tie",
+        auto: true,
+        reason: "identical",
+        at,
+        channels: c.channels,
+      };
+      n += 1;
+    });
+    return n;
+  }
+
+  function badgesHtml(m) {
+    const parts = [];
+    if (m.duplicate_family_pair_count > 0) {
+      parts.push(`<span class="badge bad">dup×${m.duplicate_family_pair_count}</span>`);
+    }
+    if (m.earth_term_mass >= 0.15) {
+      parts.push(`<span class="badge warn">earth=${m.earth_term_mass.toFixed(2)}</span>`);
+    }
+    if (!parts.length) parts.push(`<span class="badge ok">clean</span>`);
+    return parts.join(" ");
+  }
+
+  function swatchesHtml(hexes) {
+    return `<div class="swatches">${hexes
+      .map((h) => `<span style="background:${h}"></span>`)
+      .join("")}</div>`;
+  }
+
+  function currentCase() {
+    return queue[index];
+  }
+
+  function renderCase() {
+    const c = currentCase();
+    if (!c) {
+      finish();
+      return;
+    }
+    const vote = votes[c.case_id];
+    const done = queue.filter((q) => votes[q.case_id] && !votes[q.case_id].auto).length;
+    els.progressBar.style.width = `${(100 * done) / Math.max(queue.length, 1)}%`;
+    els.caseTitle.textContent = `${c.case_id} · ${c.channels} channels`;
+    els.caseSub.textContent = `seed ${c.parent_seed} · init ${DATA.init_mode}`;
+    els.caseProgress.textContent = `Case ${index + 1} / ${queue.length}` + (vote ? ` · voted: ${vote.choice}` : "");
+
+    els.methodGrid.innerHTML = "";
+    c.methods.forEach((m, i) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "method-card" + (vote && vote.choice === m.mode_id ? " picked" : "");
+      btn.innerHTML = `
+        <div class="title"><span>${m.mode_label}</span><code>${m.mode_id}</code></div>
+        ${swatchesHtml(m.hex_colors)}
+        <div class="badges">${badgesHtml(m)}</div>
+        <div class="names">${m.dominant_names.join(" · ")}<br/>${m.families.join(" · ")}</div>
+        <div class="metrics">L=${m.total_loss.toFixed(3)} · minC3=${m.min_c3_name_distance.toFixed(3)} · RGBΔ=${m.min_display_rgb_distance.toFixed(0)} · r${m.restart_id}</div>
+        <div class="metrics" style="margin-top:4px">Press <span class="kbd">${i + 1}</span> to select</div>`;
+      btn.addEventListener("click", () => castVote(m.mode_id));
+      els.methodGrid.appendChild(btn);
+    });
+  }
+
+  function castVote(choice) {
+    const c = currentCase();
+    if (!c) return;
+    votes[c.case_id] = { choice, at: new Date().toISOString(), channels: c.channels };
+    saveVotes();
+    toast(`Voted: ${choice}`);
+    if (index < queue.length - 1) {
+      index += 1;
+      renderCase();
+    } else {
+      finish();
+    }
+  }
+
+  function start(fromSaved) {
+    votes = fromSaved ? loadVotes() : {};
+    const cases = filteredCases();
+    const autoN = applyAutoIdenticalTies(cases);
+    saveVotes();
+    const voteable = cases.filter((c) => !methodsIdentical(c));
+    queue = els.shuffleOrder.checked ? shuffle(voteable) : voteable.slice();
+    if (!queue.length) {
+      toast(
+        autoN
+          ? `All ${autoN} cases identical — auto-tied, nothing to vote`
+          : "No cases for this filter"
+      );
+      finish();
+      return;
+    }
+    if (autoN) toast(`Skipped ${autoN} identical case${autoN === 1 ? "" : "s"} (counted as ties)`);
+    index = 0;
+    if (fromSaved) {
+      const firstHumanOpen = queue.findIndex((c) => !votes[c.case_id]);
+      index = firstHumanOpen >= 0 ? firstHumanOpen : 0;
+    }
+    show(els.review);
+    renderCase();
+  }
+
+  function tally() {
+    const modeIds = DATA.modes.map((m) => m.id);
+    const wins = Object.fromEntries(modeIds.map((id) => [id, 0]));
+    let ties = 0;
+    let identical = 0;
+    let none = 0;
+    let abstain = 0;
+    const byCh = {};
+    const h2h = {};
+    modeIds.forEach((a) => {
+      h2h[a] = Object.fromEntries(modeIds.map((b) => [b, 0]));
+    });
+
+    // Include auto-identical ties even though they are not in the vote queue.
+    const pool = filteredCases();
+    const reviewed = pool.filter((c) => votes[c.case_id]);
+    reviewed.forEach((c) => {
+      const v = votes[c.case_id];
+      const ch = String(c.channels);
+      if (!byCh[ch]) {
+        byCh[ch] = {
+          wins: Object.fromEntries(modeIds.map((id) => [id, 0])),
+          ties: 0,
+          identical: 0,
+          none: 0,
+          n: 0,
+        };
+      }
+      byCh[ch].n += 1;
+      if (v.choice === "tie") {
+        ties += 1;
+        byCh[ch].ties += 1;
+        if (v.auto && v.reason === "identical") {
+          identical += 1;
+          byCh[ch].identical += 1;
+        }
+      } else if (v.choice === "none") {
+        none += 1;
+        byCh[ch].none += 1;
+      } else if (wins[v.choice] !== undefined) {
+        wins[v.choice] += 1;
+        byCh[ch].wins[v.choice] += 1;
+        modeIds.forEach((other) => {
+          if (other !== v.choice) h2h[v.choice][other] += 1;
+        });
+      } else {
+        abstain += 1;
+      }
+    });
+
+    return {
+      wins,
+      ties,
+      identical,
+      none,
+      abstain,
+      byCh,
+      h2h,
+      reviewed: reviewed.length,
+      total: pool.length,
+      voteable: pool.filter((c) => !methodsIdentical(c)).length,
+    };
+  }
+
+  function finish() {
+    show(els.results);
+    const t = tally();
+    const modeIds = DATA.modes.map((m) => m.id);
+    const decisive = t.reviewed - t.ties - t.none - t.abstain;
+    const manualTies = t.ties - t.identical;
+    const ranked = modeIds
+      .map((id) => ({ id, wins: t.wins[id], rate: decisive ? t.wins[id] / decisive : 0 }))
+      .sort((a, b) => b.wins - a.wins || a.id.localeCompare(b.id));
+
+    els.resultsSummary.innerHTML = `Pool: <strong>${t.total}</strong> cases
+      (${t.voteable} differed · ${t.identical} identical / auto-tied).
+      You voted on <strong>${t.reviewed - t.identical}</strong> differing cases
+      (filter: ${els.channelFilter.value === "all" ? "all channels" : els.channelFilter.value + "ch"}).
+      Decisive picks: <strong>${decisive}</strong> · manual ties: ${manualTies} · identical (auto): ${t.identical} · none good: ${t.none}.
+      Init mode for this study: <code>${DATA.init_mode}</code>.`;
+
+    const maxW = Math.max(1, ...ranked.map((r) => r.wins));
+    els.overallBars.innerHTML = ranked
+      .map(
+        (r) => `<div class="bar-row">
+          <div class="lab">${r.id}</div>
+          <div class="track"><div class="fill" style="width:${(100 * r.wins) / maxW}%"></div></div>
+          <div class="n">${r.wins} (${(100 * r.rate).toFixed(0)}%)</div>
+        </div>`
+      )
+      .join("");
+
+    els.overallTable.innerHTML =
+      `<tr><th>method</th><th>wins</th><th>win rate*</th></tr>` +
+      ranked
+        .map(
+          (r, i) =>
+            `<tr class="${i === 0 && r.wins > 0 ? "winner" : ""}"><td>${r.id}</td><td>${r.wins}</td><td>${(
+              100 * r.rate
+            ).toFixed(1)}%</td></tr>`
+        )
+        .join("") +
+      `<tr><td>tie (manual)</td><td colspan="2">${manualTies}</td></tr>` +
+      `<tr><td>identical (auto-tied)</td><td colspan="2">${t.identical}</td></tr>` +
+      `<tr><td>none good</td><td colspan="2">${t.none}</td></tr>`;
+
+    els.byChannel.innerHTML = Object.keys(t.byCh)
+      .sort()
+      .map((ch) => {
+        const b = t.byCh[ch];
+        const dec = b.n - b.ties - b.none;
+        const rows = modeIds
+          .map((id) => {
+            const w = b.wins[id];
+            const rate = dec ? w / dec : 0;
+            return `<tr><td>${id}</td><td>${w}</td><td>${(100 * rate).toFixed(1)}%</td></tr>`;
+          })
+          .join("");
+        return `<h4>${ch}-channel (n=${b.n}, identical=${b.identical}, manual ties=${b.ties - b.identical}, none=${b.none})</h4>
+          <table class="score"><tr><th>method</th><th>wins</th><th>win rate*</th></tr>${rows}</table>`;
+      })
+      .join("");
+
+    let h2h =
+      `<tr><th>winner \\ vs</th>${modeIds.map((id) => `<th>${id}</th>`).join("")}</tr>`;
+    modeIds.forEach((a) => {
+      h2h += `<tr><td>${a}</td>`;
+      modeIds.forEach((b) => {
+        h2h += `<td>${a === b ? "—" : t.h2h[a][b]}</td>`;
+      });
+      h2h += `</tr>`;
+    });
+    els.h2hTable.innerHTML = h2h;
+  }
+
+  function downloadVotes() {
+    const payload = {
+      run_id: DATA.run_id,
+      init_mode: DATA.init_mode,
+      modes: DATA.modes,
+      filter: els.channelFilter.value,
+      tally: tally(),
+      votes,
+      exported_at: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `palette_review_votes_${DATA.run_id || "run"}.json`;
+    a.click();
+  }
+
+  // Init meta + channel options
+  const identicalCount = DATA.cases.filter(methodsIdentical).length;
+  els.runMeta.textContent = `${DATA.cases.length} cases (${identicalCount} identical / will auto-tie) · modes: ${DATA.modes
+    .map((m) => m.id)
+    .join(", ")} · init: ${DATA.init_mode}`;
+  const channels = [...new Set(DATA.cases.map((c) => c.channels))].sort((a, b) => a - b);
+  els.channelFilter.innerHTML =
+    `<option value="all">All channels</option>` +
+    channels.map((c) => `<option value="${c}">${c} only</option>`).join("");
+
+  const saved = loadVotes();
+  if (Object.keys(saved).length) {
+    els.btnResume.style.display = "inline-block";
+    votes = saved;
+  }
+
+  els.btnStart.addEventListener("click", () => start(false));
+  els.btnResume.addEventListener("click", () => start(true));
+  els.btnClear.addEventListener("click", () => {
+    localStorage.removeItem(STORAGE_KEY);
+    votes = {};
+    els.btnResume.style.display = "none";
+    toast("Cleared saved votes");
+  });
+  els.btnTie.addEventListener("click", () => castVote("tie"));
+  els.btnNone.addEventListener("click", () => castVote("none"));
+  els.btnPrev.addEventListener("click", () => {
+    if (index > 0) {
+      index -= 1;
+      renderCase();
+    }
+  });
+  els.btnNext.addEventListener("click", () => {
+    if (index < queue.length - 1) {
+      index += 1;
+      renderCase();
+    } else finish();
+  });
+  els.btnFinish.addEventListener("click", finish);
+  els.btnDownload.addEventListener("click", downloadVotes);
+  els.btnRestart.addEventListener("click", () => show(els.intro));
+
+  document.addEventListener("keydown", (e) => {
+    if (!els.review.classList.contains("active")) return;
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) return;
+    const c = currentCase();
+    if (!c) return;
+    if (e.key >= "1" && e.key <= "9") {
+      const i = parseInt(e.key, 10) - 1;
+      if (c.methods[i]) castVote(c.methods[i].mode_id);
+    } else if (e.key === "t" || e.key === "T") castVote("tie");
+    else if (e.key === "n" || e.key === "N") castVote("none");
+    else if (e.key === "ArrowLeft") els.btnPrev.click();
+    else if (e.key === "ArrowRight") els.btnNext.click();
+  });
+})();
+</script>
+</body>
+</html>

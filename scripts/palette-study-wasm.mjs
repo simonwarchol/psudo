@@ -3,7 +3,7 @@
  * Browser-identical palette_study using the published WASM package (psudo/sync).
  *
  *   pnpm run palette-study-wasm
- *   PALETTE_STUDY_CHANNELS=4,6 PALETTE_STUDY_PARENTS=5 pnpm run palette-study-wasm
+ *   PALETTE_STUDY_CHANNELS=4,6,8 PALETTE_STUDY_PARENTS=10 pnpm run palette-study-wasm
  *   pnpm run palette-study-wasm -- --document path/to/story.json
  *
  * Env (same names as native `palette_study` example):

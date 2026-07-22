@@ -30,7 +30,8 @@ mod tests {
         }
         let intensity = Arc::new(Array2::<f32>::zeros((384, 6)));
         let names = [-1.0; 6];
-        let direct = evaluate_palette_objective_breakdown(&c3, &oklab, &intensity, 1.0, 0.0, &[], &names);
+        let direct =
+            evaluate_palette_objective_breakdown(&c3, &oklab, &intensity, 1.0, 0.0, &[], &names);
         let fast = with_eval_scratch(|s| {
             evaluate_objective_fast(
                 &c3,
@@ -43,7 +44,12 @@ mod tests {
                 s,
             )
         });
-        assert!((direct.total - fast.total).abs() < 1e-4, "{} vs {}", direct.total, fast.total);
+        assert!(
+            (direct.total - fast.total).abs() < 1e-4,
+            "{} vs {}",
+            direct.total,
+            fast.total
+        );
     }
 
     /// Six-channel spread palette: objective should be finite and in a stable band.

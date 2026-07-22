@@ -2,12 +2,12 @@
  * Shared helpers for WASM palette_study (mirrors lib/examples/palette_study.rs defaults).
  */
 
-export const DEFAULT_LUMINANCE = new Uint16Array([45, 92]);
+export const DEFAULT_LUMINANCE = new Uint16Array([50, 92]);
 export const DEFAULT_MAX_ITERS = 3000;
 export const DEFAULT_CONFUSION_SAMPLES = 32;
-export const DEFAULT_RESTARTS = 12;
-export const DEFAULT_CHANNEL_COUNTS = [4, 6];
-export const DEFAULT_PARENTS = 20;
+export const DEFAULT_RESTARTS = 18;
+export const DEFAULT_CHANNEL_COUNTS = [4, 6, 8];
+export const DEFAULT_PARENTS = 10;
 export const DEFAULT_ROWS = 384;
 
 export function parseEnvInt(name, fallback) {

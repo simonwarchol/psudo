@@ -12,11 +12,7 @@
 //! - `SWEEP_SPATIAL_PROBE=1` — one extra timed run at 6ch with spatial ON (reference cost)
 
 use palette::{FromColor, Oklab, Srgb};
-use psudo::{
-    evaluate_palette_objective_breakdown,
-    optimize_palette_pipeline,
-    OptimizePostprocess,
-};
+use psudo::{evaluate_palette_objective_breakdown, optimize_palette_pipeline, OptimizePostprocess};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::env;
@@ -88,7 +84,7 @@ fn run_profile(
     intensities: &[u16],
 ) -> RunStats {
     let contrast: Vec<u16> = (0..channels).flat_map(|_| [0u16, 65535]).collect();
-    let lum = vec![45u16, 92];
+    let lum = vec![50u16, 92];
     let locked = vec![0u16; channels];
     let names: Vec<String> = (0..channels).map(|_| String::new()).collect();
     let c3 = psudo::c3::C3::new();
@@ -293,11 +289,7 @@ fn main() {
             let stats = run_profile(p, ch, n_seeds, n_rows, &intensities);
             eprintln!(
                 "L mean={:.3} std={:.3} best={:.3} uniq={} {:.0}ms",
-                stats.mean_l,
-                stats.std_l,
-                stats.best_l,
-                stats.unique_l,
-                stats.ms_per_run
+                stats.mean_l, stats.std_l, stats.best_l, stats.unique_l, stats.ms_per_run
             );
             results.push((ch, p, stats));
         }
@@ -316,7 +308,9 @@ fn main() {
     for &ch in &channel_counts {
         let mut best: Option<(&'static str, RunStats, f32)> = None;
         for p in &profiles {
-            if let Some((_, _, stats)) = results.iter().find(|(c, prof, _)| *c == ch && prof.id == p.id)
+            if let Some((_, _, stats)) = results
+                .iter()
+                .find(|(c, prof, _)| *c == ch && prof.id == p.id)
             {
                 let sc = score(stats, time_ref, std_ref);
                 if best.as_ref().map_or(true, |(_, _, s)| sc < *s) {
@@ -343,7 +337,7 @@ fn main() {
             &vec![0u16; ch],
             &intensities,
             &(0..ch).flat_map(|_| [0u16, 65535]).collect::<Vec<_>>(),
-            &vec![45u16, 92],
+            &vec![50u16, 92],
             vec![],
             (0..ch).map(|_| String::new()).collect(),
             Some(p.max_iters),
@@ -377,7 +371,8 @@ fn main() {
         );
     }
 
-    let mut html = String::from(r#"<!DOCTYPE html>
+    let mut html = String::from(
+        r#"<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>psudo param sweep — npm defaults</title>
@@ -402,9 +397,12 @@ fn main() {
   Postprocess: <code>Study</code> (matches WASM path: no quench, polish on best only).
   Scaled SA iters = base × (n<sub>ch</sub>/3); scaled restarts clamped to [2,6] on WASM-sized bases.
 </p>
-"#);
+"#,
+    );
 
-    html.push_str("<p class=\"ok\">✓ Spatial overlap disabled for sweep runs (confusion_weighted = 0).</p>");
+    html.push_str(
+        "<p class=\"ok\">✓ Spatial overlap disabled for sweep runs (confusion_weighted = 0).</p>",
+    );
 
     if let (Some(ms_on), Some(conf)) = (spatial_probe_ms, spatial_probe_conf) {
         let ms_off = results
@@ -447,11 +445,17 @@ fn main() {
     }
     html.push_str("</tbody></table>");
 
-    html.push_str("<h2>Recommended profile per channel count</h2><table><thead><tr>
+    html.push_str(
+        "<h2>Recommended profile per channel count</h2><table><thead><tr>
       <th>ch</th><th>profile</th><th>ms/run</th><th>std L</th><th>best L</th><th>uniq</th>
-      </tr></thead><tbody>");
+      </tr></thead><tbody>",
+    );
     for (ch, id, stats) in &recommendations {
-        let label = profiles.iter().find(|p| p.id == *id).map(|p| p.label).unwrap_or("");
+        let label = profiles
+            .iter()
+            .find(|p| p.id == *id)
+            .map(|p| p.label)
+            .unwrap_or("");
         html.push_str(&format!(
             "<tr class=\"rec\"><td>{}</td><td>{}</td><td>{:.0}</td><td>{:.3}</td><td>{:.3}</td><td>{}</td></tr>",
             ch, label, stats.ms_per_run, stats.std_l, stats.best_l, stats.unique_l
