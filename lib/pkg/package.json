@@ -1,6 +1,6 @@
 {
   "name": "psudo",
-  "version": "0.4.1",
+  "version": "0.15.0",
   "type": "module",
   "description": "WASM palette optimization for multi-channel microscopy (Web Worker by default)",
   "main": "./index.js",

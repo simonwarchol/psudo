@@ -515,7 +515,7 @@ fn main() {
 <p class="note">Nelder–Mead multistart + full polish/refine. Pass <code>include_spatial_channel_overlap: false</code> explicitly in JS.</p>
 <table><thead><tr><th>Parameter</th><th>Base</th><th>At 6ch (× channels/3)</th></tr></thead><tbody>
 <tr><td>max_iters</td><td><strong>3000</strong></td><td>6000</td></tr>
-<tr><td>num_restarts</td><td><strong>6</strong></td><td>12 (capped 12 WASM)</td></tr>
+<tr><td>num_restarts</td><td><strong>18</strong></td><td>36 (max 40 WASM)</td></tr>
 <tr><td>confusion_baseline_samples</td><td><strong>32</strong></td><td>32</td></tr>
 <tr><td>spatial overlap</td><td>false</td><td>false</td></tr>
 </tbody></table>

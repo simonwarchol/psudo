@@ -29,7 +29,7 @@ export const ContextWrapper = (props) => {
   const [paletteLoss, setPaletteLoss] = useState({});
   const [coordinate, setCoordinate] = useState([]);
   const [lensRadius, setLensRadius] = useState(100);
-  const [luminanceValue, setLuminanceValue] = React.useState([45, 92]);
+  const [luminanceValue, setLuminanceValue] = React.useState([50, 92]);
 
   useEffect(() => {
     psudo.warmup().catch(() => {});

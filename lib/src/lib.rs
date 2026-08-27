@@ -120,7 +120,8 @@ fn default_confusion_baseline_samples() -> u32 {
 fn restart_count_bounds() -> (u32, u32) {
     #[cfg(target_arch = "wasm32")]
     {
-        (1, 32)
+        // Same max as native so default 18 × n/3 matches palette_study (6ch→36, 8ch→40).
+        (1, 40)
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -2510,7 +2511,8 @@ impl OptimizeMetricsResult {
     }
 }
 
-/// Defaults: `max_iters` 3000, `confusion_baseline_samples` 32, full polish + refine after search.
+/// Defaults match `palette_study`: `max_iters` 3000, `confusion_baseline_samples` 32,
+/// `num_restarts` 18 (scaled × n/3, max 40), spatial overlap off, full polish + refine.
 #[wasm_bindgen]
 pub fn optimize(
     colors: &[u16],
