@@ -33,7 +33,7 @@ export default {
 
 ## Import (Web Worker by default)
 
-All exports are **async**. `optimize()` uses a **pool of module workers** (up to 4) so NM multistarts—and the 6ch rescue pass—run in parallel off the main thread. Other calls use one worker from the pool.
+All exports are **async**. `optimize()` uses an adaptive **pool of module workers** (up to 6) so NM multistarts—and the 6ch rescue pass—run in parallel off the main thread. Other calls use one worker from the pool. Call `setWorkerPoolSize(n)` before `warmup()` to override the adaptive size.
 
 ```javascript
 import * as psudo from "psudo";
@@ -59,7 +59,7 @@ import { optimize, calculate_palette_loss, channel_gmm, ln, warmup } from "psudo
 
 ## `optimize` — palette colors (main API)
 
-Returns a `Float32Array` of **linear sRGB** in **0–1**, length `3 × nChannels` (channel-major: `[r,g,b, r,g,b, …]`).
+Returns a `Float32Array` of display-encoded **sRGB** in **0–1**, length `3 × nChannels` (channel-major: `[r,g,b, r,g,b, …]`). The historical result field name `srgb_linear` is retained for compatibility but contains the same display-encoded values.
 
 ```javascript
 import * as psudo from "psudo";
@@ -108,7 +108,7 @@ const optimized = await psudo.optimize(
   luminance,
   excluded,
   colorNames,
-  undefined, // max_iters (default 3000, scaled by channel count)
+  undefined, // max_iters (WASM default 2700, scaled by channel count)
   undefined, // confusion_baseline_samples
   false,     // include_spatial_channel_overlap (false = fast color-only path)
   undefined  // num_restarts
@@ -137,7 +137,7 @@ import * as psudo from "psudo";
 export function usePaletteOptimizer() {
   const [busy, setBusy] = useState(false);
 
-  const runOptimize = useCallback((colors, locked, intensities, contrast, lum, excluded, names) => {
+  const runOptimize = useCallback(async (colors, locked, intensities, contrast, lum, excluded, names) => {
     setBusy(true);
     try {
       return await psudo.optimize(
@@ -165,7 +165,7 @@ export function usePaletteOptimizer() {
 
 | Function | Description |
 |----------|-------------|
-| `optimize` | Simulated-annealing palette optimization → `Float32Array` linear RGB |
+| `optimize` | Parallel Nelder–Mead palette optimization → display-encoded sRGB `Float32Array` |
 | `calculate_palette_loss` | Loss breakdown object for a palette + intensities |
 | `channel_gmm` | Per-channel GMM contrast limits from raw `Uint16Array` data; optional `subsample` (default 40000), `tol` (1e-6), `max_iter` (1000) |
 | `ln` | Log transform of intensity data |
@@ -193,7 +193,7 @@ console.log(loss.perceptual_distance, loss.name_distance, loss.min_display_rgb_d
 
 | Argument | Default (WASM) | Notes |
 |----------|----------------|-------|
-| `max_iters` | 3000 (× channels/3) | Higher = slower, often better |
+| `max_iters` | 2700 (× channels/3) | Higher = slower, often better |
 | `confusion_baseline_samples` | 32 | MC samples when spatial overlap is on |
 | `include_spatial_channel_overlap` | `false` | `true` uses image intensities in objective (slower) |
 | `num_restarts` | 18 (× channels/3, max 40) | Nelder–Mead multistarts; best total wins |

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>psudo Minerva palette benchmark</title>
+  </head>
+  <body>
+    <main>
+      <h1>psudo Minerva palette benchmark</h1>
+      <pre id="status">Starting…</pre>
+    </main>
+    <script type="module">
+      import * as psudo from "./lib/pkg/index.js";
+
+      const CHANNELS = 5;
+      const requestedPalettes = Number(
+        new URLSearchParams(window.location.search).get("palettes"),
+      );
+      const PALETTES =
+        Number.isInteger(requestedPalettes) && requestedPalettes > 0
+          ? requestedPalettes
+          : 20;
+      const requestedMaxIters = Number(
+        new URLSearchParams(window.location.search).get("maxIters"),
+      );
+      const MAX_ITERS =
+        Number.isInteger(requestedMaxIters) && requestedMaxIters > 0
+          ? requestedMaxIters
+          : 2700;
+      const CONFUSION_SAMPLES = 32;
+      const requestedRestarts = Number(
+        new URLSearchParams(window.location.search).get("restarts"),
+      );
+      const NUM_RESTARTS =
+        Number.isInteger(requestedRestarts) && requestedRestarts > 0
+          ? requestedRestarts
+          : 18;
+      const seedStartParam = new URLSearchParams(window.location.search).get(
+        "seedStart",
+      );
+      const requestedSeedStart =
+        seedStartParam === null ? Number.NaN : Number(seedStartParam);
+      const SEED_START = Number.isInteger(requestedSeedStart)
+        ? requestedSeedStart
+        : 50_005;
+      const LUMINANCE = new Uint16Array([50, 92]);
+      const status = document.querySelector("#status");
+      const requestedWorkers = Number(
+        new URLSearchParams(window.location.search).get("workers"),
+      );
+      const profiled =
+        new URLSearchParams(window.location.search).get("profiled") !== "0";
+      const polishEachRestart =
+        new URLSearchParams(window.location.search).get("restartPolish") !== "0";
+
+      function defaultWorkerPoolSize() {
+        const concurrency = Math.max(1, navigator.hardwareConcurrency || 2);
+        return Math.min(
+          6,
+          concurrency,
+          Math.max(4, Math.floor(concurrency * 0.6)),
+        );
+      }
+
+      function mulberry32(seed) {
+        let state = seed >>> 0;
+        return () => {
+          state = (state + 0x6d2b79f5) >>> 0;
+          let value = Math.imul(state ^ (state >>> 15), 1 | state);
+          value =
+            (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+          return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function initialColors(seed) {
+        const random = mulberry32(seed);
+        return Uint16Array.from(
+          { length: CHANNELS * 3 },
+          () => Math.floor(random() * 256),
+        );
+      }
+
+      function contrastLimits() {
+        return Uint16Array.from(
+          { length: CHANNELS * 2 },
+          (_, index) => (index % 2 === 0 ? 0 : 65535),
+        );
+      }
+
+      function displayRgb(linear) {
+        const colors = [];
+        for (let channel = 0; channel < CHANNELS; channel++) {
+          const index = channel * 3;
+          colors.push(
+            [linear[index], linear[index + 1], linear[index + 2]].map((value) =>
+              Math.max(0, Math.min(255, Math.round(value * 255))),
+            ),
+          );
+        }
+        return colors;
+      }
+
+      function minimumRgbDistance(colors) {
+        let minimum = Infinity;
+        for (let left = 0; left < colors.length; left++) {
+          for (let right = left + 1; right < colors.length; right++) {
+            const squared = colors[left].reduce(
+              (sum, value, component) =>
+                sum + (value - colors[right][component]) ** 2,
+              0,
+            );
+            minimum = Math.min(minimum, Math.sqrt(squared));
+          }
+        }
+        return minimum;
+      }
+
+      async function run() {
+        if (Number.isInteger(requestedWorkers) && requestedWorkers > 0) {
+          psudo.setWorkerPoolSize(requestedWorkers);
+        }
+        await psudo.warmup();
+        const runs = [];
+        const batchStarted = performance.now();
+
+        for (let index = 0; index < PALETTES; index++) {
+          const colors = initialColors(SEED_START + index);
+          const started = performance.now();
+          // Profiled wrapper around the same worker orchestration and exact
+          // color-only argument shape used by minerva-core-ui.
+          const optimize = profiled ? psudo.optimize_profiled : psudo.optimize;
+          const optimized = await optimize(
+            colors,
+            new Uint16Array(CHANNELS),
+            new Uint16Array(0),
+            contrastLimits(),
+            LUMINANCE,
+            [],
+            Array(CHANNELS).fill(""),
+            MAX_ITERS,
+            CONFUSION_SAMPLES,
+            false,
+            NUM_RESTARTS,
+            polishEachRestart,
+          );
+          const elapsedMs = performance.now() - started;
+          const linear = profiled ? optimized.srgb_linear : optimized;
+          const rgb = displayRgb(linear);
+          runs.push({
+            index: index + 1,
+            elapsedMs,
+            initialRgb: Array.from(
+              { length: CHANNELS },
+              (_, channel) =>
+                Array.from(colors.slice(channel * 3, channel * 3 + 3)),
+            ),
+            rgb,
+            minDisplayRgbDistance: minimumRgbDistance(rgb),
+            objective: profiled ? optimized.objective : null,
+            phases: profiled ? optimized.phases : null,
+            restartMetrics: profiled
+              ? optimized.restart_metrics.map(
+                  ({ oklab: _oklab, ...metrics }) => metrics,
+                )
+              : [],
+          });
+          status.textContent = `Completed ${index + 1}/${PALETTES} palettes`;
+        }
+
+        const result = {
+          config: {
+            palettes: PALETTES,
+            channels: CHANNELS,
+            maxIters: MAX_ITERS,
+            confusionSamples: CONFUSION_SAMPLES,
+            numRestarts: NUM_RESTARTS,
+            effectiveRestarts: Math.floor((NUM_RESTARTS * CHANNELS) / 3),
+            seedStart: SEED_START,
+            workerPoolSize:
+              Number.isInteger(requestedWorkers) && requestedWorkers > 0
+                ? requestedWorkers
+                : defaultWorkerPoolSize(),
+            hardwareConcurrency: navigator.hardwareConcurrency || null,
+            profiled,
+            polishEachRestart,
+            spatial: false,
+            execution: "default worker-backed npm API in Chromium",
+          },
+          warmupExcluded: true,
+          totalMs: performance.now() - batchStarted,
+          runs,
+        };
+        window.__PALETTE_BENCHMARK__ = result;
+        status.textContent = JSON.stringify(result, null, 2);
+        document.title = "DONE: psudo palette benchmark";
+      }
+
+      run().catch((error) => {
+        window.__PALETTE_BENCHMARK_ERROR__ =
+          error instanceof Error ? error.stack : String(error);
+        status.textContent = window.__PALETTE_BENCHMARK_ERROR__;
+        document.title = "FAILED: psudo palette benchmark";
+      });
+    </script>
+  </body>
+</html>

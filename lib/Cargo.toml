@@ -1,9 +1,12 @@
 [package]
 name = "psudo"
-version = "0.15.0"
+version = "0.15.2"
 authors = ["Simon Warchol <simonwarchol@g.harvard.edu>"]
 edition = "2018"
 license = "MIT"
+description = "Palette optimization for multi-channel microscopy imaging"
+repository = "https://github.com/simonwarchol/psudo"
+homepage = "https://github.com/simonwarchol/psudo"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -39,7 +42,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 typenum = "1.17.0"
 argmin = "0.8.1"
-rust_c3 = "0.3.0"
+rust_c3 = "0.3.1"
 instant = { version = "0.1", features = [ "wasm-bindgen"]}
 
 

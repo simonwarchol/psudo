@@ -42,7 +42,8 @@ impl C3 {
         self.inner.get_palette_terms(palette, color_term_limit)
     }
 
-    /// One KD lookup per channel: entropy sample + top terms (no `Array2` build).
+    /// One KD lookup per channel: color index + top terms (no `Array2` build).
+    /// The objective uses only `ColorSample.c`, so entropy is deliberately skipped.
     pub fn fill_palette_c3(
         &self,
         labs: &[[f64; 3]],
@@ -50,18 +51,8 @@ impl C3 {
         samples: &mut Vec<rust_c3::ColorSample>,
         terms: &mut Vec<Vec<rust_c3::RelatedTerm>>,
     ) {
-        samples.clear();
-        terms.clear();
-        samples.reserve(labs.len());
-        terms.reserve(labs.len());
-        for lab in labs {
-            let sample = self.inner.color(*lab);
-            let t = self
-                .inner
-                .color_related_terms(sample.c, Some(color_term_limit), None, None);
-            samples.push(sample);
-            terms.push(t);
-        }
+        self.inner
+            .fill_lab_rows(labs, color_term_limit, samples, terms);
     }
 
     /// Pairwise color-name distance (`1 - cosine_similarity`) for every unordered pair.
@@ -70,26 +61,17 @@ impl C3 {
         &self,
         data: &[rust_c3::ColorSample],
     ) -> Vec<(usize, usize, f64)> {
-        let n = data.len();
-        let mut out = Vec::with_capacity(n.saturating_mul(n.saturating_sub(1)) / 2);
-        for i in 0..n {
-            let ci = data[i].c;
-            for j in (i + 1)..n {
-                let cj = data[j].c;
-                out.push((i, j, 1.0 - self.inner.color_cosine(ci, cj)));
-            }
-        }
-        out
+        self.inner.pairwise_color_name_distances(data)
     }
 
     /// Average pairwise color-name distance (`1 - cosine_similarity`), lower triangle only.
     pub fn average_pairwise_color_name_distance(&self, data: &[rust_c3::ColorSample]) -> f64 {
-        let pairs = self.pairwise_color_name_distances(data);
-        if pairs.is_empty() {
-            return 0.0;
-        }
-        let total: f64 = pairs.iter().map(|(_, _, d)| d).sum();
-        total / (pairs.len() as f64)
+        self.inner.average_pairwise_color_name_distance(data)
+    }
+
+    /// Minimum pairwise color-name distance (`1 - cosine_similarity`).
+    pub fn min_pairwise_color_name_distance(&self, data: &[rust_c3::ColorSample]) -> Option<f64> {
+        self.inner.min_pairwise_color_name_distance(data)
     }
 
     /// Cosine similarity between two C3 color indices (for seed composite distances).
@@ -169,5 +151,31 @@ mod tests {
     #[test]
     fn rust_c3_embedded_npy_loads() {
         let _ = rust_c3::C3::try_new().expect("embedded c3_*.npy");
+    }
+
+    #[test]
+    fn direct_average_matches_pairwise_order() {
+        let c3 = C3::new();
+        let samples = vec![
+            rust_c3::ColorSample {
+                c: c3.color_index([60.3, 98.2, -60.8]),
+                h: 0.0,
+            },
+            rust_c3::ColorSample {
+                c: c3.color_index([80.0, -70.0, 60.0]),
+                h: 0.0,
+            },
+            rust_c3::ColorSample {
+                c: c3.color_index([35.0, 50.0, 40.0]),
+                h: 0.0,
+            },
+        ];
+        let pairs = c3.pairwise_color_name_distances(&samples);
+        let expected =
+            pairs.iter().map(|(_, _, distance)| distance).sum::<f64>() / pairs.len() as f64;
+        assert_eq!(
+            c3.average_pairwise_color_name_distance(&samples).to_bits(),
+            expected.to_bits()
+        );
     }
 }

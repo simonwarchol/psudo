@@ -1074,7 +1074,7 @@ dependencies = [
 
 [[package]]
 name = "psudo"
-version = "0.15.0"
+version = "0.15.2"
 dependencies = [
  "argmin 0.8.1",
  "console_error_panic_hook",
@@ -1232,9 +1232,9 @@ dependencies = [
 
 [[package]]
 name = "rust_c3"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15832de9d888d8e1c35d701aefa7bb934ac803a881a32ba57cd2017bc3c724a"
+checksum = "68eaaa9bfe13b63f2a1b2bd2bad66bed9d47625866826931536daf8900ec1b69"
 dependencies = [
  "kd-tree",
  "ndarray",

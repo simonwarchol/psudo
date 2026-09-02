@@ -1,7 +1,7 @@
 //! Polar OKLCh local refinement (Exp 4) — search geometry only; objective unchanged.
 
 use crate::c3;
-use crate::palette_eval::{fill_c3_labs_from_oklab, fill_display_srgb255, fill_labs_from_oklab};
+use crate::palette_eval::{fill_c3_labs_from_oklab, fill_display_srgb255};
 use crate::{
     enforce_channel_saturation, evaluate_palette_objective_breakdown_with_excluded_set,
     oklab_chroma, polish_oklab_palette, refine_oklab_palette, DEFAULT_MIN_OKLAB_CHROMA,

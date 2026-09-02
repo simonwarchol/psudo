@@ -2,13 +2,10 @@
 
 use crate::c3::{self, RelatedTerm};
 use crate::palette_objective::{MIN_OKLAB_DISTANCE, OKLAB_PERCEPTUAL_SCALE};
-use crate::{
-    saturation_objective_terms, term_loss, MIN_DISPLAY_RGB_DISTANCE, PERCEPTUAL_DEFICIT_WEIGHT,
-    PERCEPTUAL_SCALE,
-};
+use crate::{term_loss, MIN_DISPLAY_RGB_DISTANCE, PERCEPTUAL_DEFICIT_WEIGHT, PERCEPTUAL_SCALE};
 use ndarray::Array2;
 use palette::{FromColor, Lab, Oklab, Srgb};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -16,11 +13,13 @@ const C3_TERM_LIMIT: usize = 10;
 
 /// Reusable buffers for one objective evaluation (OKLab param → scalar loss).
 pub struct PaletteEvalScratch {
-    /// Colorimetric OKLab→Lab (unused for naming when c3_labs is filled).
-    pub labs: Vec<[f64; 3]>,
     /// Display-referred Lab (gamut-clipped sRGB→Lab) for C3 naming.
     pub c3_labs: Vec<[f64; 3]>,
     pub display_rgb: Vec<[f64; 3]>,
+    pub projected_oklab: Vec<f32>,
+    pub srgb_saturations: Vec<f32>,
+    pub projected_hues: Vec<f32>,
+    pub projected_chromas: Vec<f32>,
     pub c3_samples: Vec<c3::ColorSample>,
     pub palette_terms: Vec<Vec<RelatedTerm>>,
     /// Spatial confusion: mixed OKLab rows (n_rows × 3).
@@ -30,9 +29,12 @@ pub struct PaletteEvalScratch {
 impl PaletteEvalScratch {
     pub fn new() -> Self {
         Self {
-            labs: Vec::new(),
             c3_labs: Vec::new(),
             display_rgb: Vec::new(),
+            projected_oklab: Vec::new(),
+            srgb_saturations: Vec::new(),
+            projected_hues: Vec::new(),
+            projected_chromas: Vec::new(),
             c3_samples: Vec::new(),
             palette_terms: Vec::new(),
             mixed_oklab: Array2::zeros((0, 3)),
@@ -42,22 +44,43 @@ impl PaletteEvalScratch {
 
 thread_local! {
     static EVAL_SCRATCH: RefCell<PaletteEvalScratch> = RefCell::new(PaletteEvalScratch::new());
+    static CLAMPED_PARAM: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
+    static OBJECTIVE_EVAL_COUNT: Cell<u64> = const { Cell::new(0) };
+    static OBJECTIVE_EVAL_COUNTING: Cell<bool> = const { Cell::new(false) };
 }
 
 pub fn with_eval_scratch<R>(f: impl FnOnce(&mut PaletteEvalScratch) -> R) -> R {
     EVAL_SCRATCH.with(|cell| f(&mut cell.borrow_mut()))
 }
 
-#[inline]
-pub fn fill_labs_from_oklab(oklab_flat: &[f32], labs: &mut Vec<[f64; 3]>) {
-    let n = oklab_flat.len() / 3;
-    labs.clear();
-    labs.reserve(n);
-    for ch in oklab_flat.chunks(3) {
-        let okl = Oklab::new(ch[0], ch[1], ch[2]);
-        let lab: Lab = Lab::from_color(okl);
-        labs.push([lab.l as f64, lab.a as f64, lab.b as f64]);
-    }
+pub fn with_clamped_param<R>(param: &[f32], f: impl FnOnce(&mut Vec<f32>) -> R) -> R {
+    CLAMPED_PARAM.with(|cell| {
+        let mut clamped = cell.borrow_mut();
+        clamped.clear();
+        clamped.extend_from_slice(param);
+        f(&mut clamped)
+    })
+}
+
+pub fn objective_eval_count() -> u64 {
+    OBJECTIVE_EVAL_COUNT.with(Cell::get)
+}
+
+pub fn with_objective_eval_counting<R>(f: impl FnOnce() -> R) -> R {
+    OBJECTIVE_EVAL_COUNTING.with(|enabled| {
+        let previous = enabled.replace(true);
+        let result = f();
+        enabled.set(previous);
+        result
+    })
+}
+
+fn record_objective_eval() {
+    OBJECTIVE_EVAL_COUNTING.with(|enabled| {
+        if enabled.get() {
+            OBJECTIVE_EVAL_COUNT.with(|count| count.set(count.get().wrapping_add(1)));
+        }
+    });
 }
 
 /// CIELAB of the gamut-clipped display color — what C3 (and the eye) actually see.
@@ -97,6 +120,52 @@ pub fn fill_display_srgb255(oklab_flat: &[f32], out: &mut Vec<[f64; 3]>) {
             (rgb.green.clamp(0.0, 1.0) * 255.0) as f64,
             (rgb.blue.clamp(0.0, 1.0) * 255.0) as f64,
         ]);
+    }
+}
+
+#[inline]
+fn fill_display_features_from_oklab(
+    oklab_flat: &[f32],
+    c3_labs: &mut Vec<[f64; 3]>,
+    display_rgb: &mut Vec<[f64; 3]>,
+    projected_oklab: &mut Vec<f32>,
+    srgb_saturations: &mut Vec<f32>,
+) {
+    let n = oklab_flat.len() / 3;
+    c3_labs.clear();
+    display_rgb.clear();
+    projected_oklab.clear();
+    srgb_saturations.clear();
+    c3_labs.reserve(n);
+    display_rgb.reserve(n);
+    projected_oklab.reserve(oklab_flat.len());
+    srgb_saturations.reserve(n);
+    for ch in oklab_flat.chunks(3) {
+        let okl = Oklab::new(ch[0], ch[1], ch[2]);
+        let rgb: Srgb = Srgb::from_color(okl);
+        let clipped = Srgb::new(
+            rgb.red.clamp(0.0, 1.0),
+            rgb.green.clamp(0.0, 1.0),
+            rgb.blue.clamp(0.0, 1.0),
+        );
+        let lab: Lab = Lab::from_color(clipped);
+        let projected: Oklab = Oklab::from_color(clipped);
+        let maximum = rgb.red.max(rgb.green).max(rgb.blue);
+        let minimum = rgb.red.min(rgb.green).min(rgb.blue);
+        c3_labs.push([lab.l as f64, lab.a as f64, lab.b as f64]);
+        display_rgb.push([
+            (clipped.red * 255.0) as f64,
+            (clipped.green * 255.0) as f64,
+            (clipped.blue * 255.0) as f64,
+        ]);
+        projected_oklab.push(projected.l);
+        projected_oklab.push(projected.a);
+        projected_oklab.push(projected.b);
+        srgb_saturations.push(if maximum < 1e-5 {
+            0.0
+        } else {
+            (maximum - minimum) / maximum
+        });
     }
 }
 
@@ -219,9 +288,14 @@ pub fn evaluate_objective_fast(
     color_name_indices: &[f32],
     scratch: &mut PaletteEvalScratch,
 ) -> crate::PaletteObjectiveBreakdown {
-    fill_labs_from_oklab(oklab_flat, &mut scratch.labs);
-    fill_c3_labs_from_oklab(oklab_flat, &mut scratch.c3_labs);
-    fill_display_srgb255(oklab_flat, &mut scratch.display_rgb);
+    record_objective_eval();
+    fill_display_features_from_oklab(
+        oklab_flat,
+        &mut scratch.c3_labs,
+        &mut scratch.display_rgb,
+        &mut scratch.projected_oklab,
+        &mut scratch.srgb_saturations,
+    );
 
     c3.fill_palette_c3(
         &scratch.c3_labs,
@@ -233,15 +307,9 @@ pub fn evaluate_objective_fast(
     let average_cosine_distance = c3.average_pairwise_color_name_distance(&scratch.c3_samples);
     let min_name_w = crate::current_min_name_weight();
     let minus_min_name = if min_name_w > 0.0 {
-        let min_pair = c3
-            .pairwise_color_name_distances(&scratch.c3_samples)
-            .into_iter()
-            .map(|(_, _, d)| d)
-            .fold(f64::INFINITY, f64::min);
-        if min_pair.is_finite() {
-            -min_name_w * min_pair as f32
-        } else {
-            0.0
+        match c3.min_pairwise_color_name_distance(&scratch.c3_samples) {
+            Some(min_pair) => -min_name_w * min_pair as f32,
+            None => 0.0,
         }
     } else {
         0.0
@@ -259,9 +327,14 @@ pub fn evaluate_objective_fast(
             perceptual_objective_terms_from_display(&scratch.display_rgb)
         };
     let (hue_separation_reward, hue_separation_deficit, min_hue_gap_deg) =
-        crate::hue_separation_terms(oklab_flat, crate::HUE_SEPARATION_WEIGHT);
+        crate::hue_separation_terms_from_projected_with_scratch(
+            &scratch.projected_oklab,
+            crate::HUE_SEPARATION_WEIGHT,
+            &mut scratch.projected_hues,
+            &mut scratch.projected_chromas,
+        );
     let (minus_min_saturation, saturation_deficit_penalty, min_srgb_saturation, min_oklab_chroma) =
-        saturation_objective_terms(oklab_flat);
+        crate::saturation_objective_terms_from_features(oklab_flat, &scratch.srgb_saturations);
 
     let mut confusion_weighted = 0.0f32;
     if spatial_confusion_weight > 0.0 {
@@ -301,5 +374,64 @@ pub fn evaluate_objective_fast(
         saturation_deficit_penalty,
         min_srgb_saturation,
         min_oklab_chroma,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fused_display_features_match_separate_conversions() {
+        let colors = vec![0.58, 0.22, 0.11, 0.72, -0.18, 0.14, 0.43, 0.08, -0.25];
+        let mut expected_labs = Vec::new();
+        let mut expected_rgb = Vec::new();
+        fill_c3_labs_from_oklab(&colors, &mut expected_labs);
+        fill_display_srgb255(&colors, &mut expected_rgb);
+        let mut expected_projected = Vec::new();
+        project_oklab_through_display(&colors, &mut expected_projected);
+        let expected_saturations: Vec<f32> = colors
+            .chunks(3)
+            .map(|color| crate::channel_srgb_saturation(color[0], color[1], color[2]))
+            .collect();
+
+        let mut actual_labs = Vec::new();
+        let mut actual_rgb = Vec::new();
+        let mut actual_projected = Vec::new();
+        let mut actual_saturations = Vec::new();
+        fill_display_features_from_oklab(
+            &colors,
+            &mut actual_labs,
+            &mut actual_rgb,
+            &mut actual_projected,
+            &mut actual_saturations,
+        );
+
+        assert_eq!(actual_labs, expected_labs);
+        assert_eq!(actual_rgb, expected_rgb);
+        assert_eq!(actual_projected, expected_projected);
+        assert_eq!(actual_saturations, expected_saturations);
+        assert_eq!(
+            crate::saturation_objective_terms_from_features(&colors, &actual_saturations),
+            crate::saturation_objective_terms(&colors),
+        );
+        assert_eq!(
+            crate::hue_separation_terms_from_projected(
+                &actual_projected,
+                crate::HUE_SEPARATION_WEIGHT,
+            ),
+            crate::hue_separation_terms(&colors, crate::HUE_SEPARATION_WEIGHT),
+        );
+        let mut hues = Vec::new();
+        let mut chromas = Vec::new();
+        assert_eq!(
+            crate::hue_separation_terms_from_projected_with_scratch(
+                &actual_projected,
+                crate::HUE_SEPARATION_WEIGHT,
+                &mut hues,
+                &mut chromas,
+            ),
+            crate::hue_separation_terms(&colors, crate::HUE_SEPARATION_WEIGHT),
+        );
     }
 }

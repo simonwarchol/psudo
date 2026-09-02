@@ -1,5 +1,5 @@
 {
-	"version": "0.15.0",
+	"version": "0.15.2",
 	"name": "psudo",
 	"private": true,
 	"type": "module",
@@ -13,6 +13,7 @@
 		"palette-study-wasm": "node scripts/palette-study-wasm.mjs",
 		"prepalette-study-compare": "node scripts/ensure-wasm.mjs",
 		"palette-study-compare": "node scripts/palette-study-compare.mjs",
+		"palette-test": "node scripts/run-palette-test.mjs",
 		"param-sweep": "cd lib && cargo run --example param_sweep --release",
 		"solver-benchmark": "cd lib && cargo run --example solver_benchmark --release",
 		"solver-hyperparam": "cd lib && cargo run --example solver_hyperparam_sweep --release",

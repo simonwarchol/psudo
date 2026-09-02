@@ -17,7 +17,7 @@
 //! - `PALETTE_STUDY_PARENTS` (default 10) — palettes per channel count
 //! - `PALETTE_STUDY_CHANNELS` (default `4,6,8`) — comma-separated channel counts
 //! - `PALETTE_STUDY_ROWS` (default 384) — synthetic intensity rows per run
-//! - `PALETTE_STUDY_MAX_ITERS` (default 3000 — matches production / npm)
+//! - `PALETTE_STUDY_MAX_ITERS` (default 3000 — native study budget; WASM defaults to 2700)
 //! - `PALETTE_STUDY_CONFUSION_SAMPLES` (default 32)
 //! - `PALETTE_STUDY_RESTARTS` (default 18) — Nelder–Mead multistarts
 //! - `PALETTE_STUDY_STUDY=1` — lighter Study postprocess (benchmark-style; default is Full)
