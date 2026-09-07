@@ -165,7 +165,7 @@ const RESCUE_SEED_SALT_2: u64 = 0xA11C_E5C0;
 /// Weight on the multi-channel spatial confusion term (`compute_confusion_loss`).
 pub(crate) const SPATIAL_CONFUSION_WEIGHT: f32 = 0.1;
 
-/// NM simplex perturbation scale: grows gently with channel count.
+/// NM simplex perturbation scale: grows gently with the number of channels it may move.
 #[inline]
 fn nm_perturb_scale_for_channels(n_channels: usize) -> f32 {
     1.0 + 0.06 * ((n_channels as f32) - 3.0).clamp(0.0, 8.0)
@@ -533,7 +533,8 @@ fn build_simulated_annealing_solver(
         .with_reannealing_best(reanneal))
 }
 
-/// Scale iteration / restart budgets with channel count (6 ch ≈ 2× cost of 3 ch).
+/// Scale iteration / restart budgets with the searched channel count (6 ch ≈ 2× cost of 3 ch).
+/// Production callers pass `n_free`: locked channels are pinned, not searched.
 fn scale_budget_for_channels(base: u32, n_channels: usize) -> u32 {
     let n = n_channels.max(1) as u64;
     ((base as u64 * n) / 3).max(1) as u32
@@ -541,9 +542,12 @@ fn scale_budget_for_channels(base: u32, n_channels: usize) -> u32 {
 
 const QUENCH_TEMP: f32 = 2.5;
 
-fn enforce_all_channel_saturation(oklab: &mut [f32], rng: &mut impl Rng) {
+fn enforce_all_channel_saturation(oklab: &mut [f32], locked_colors: &[bool], rng: &mut impl Rng) {
     let n = oklab.len() / 3;
     for color_idx in 0..n {
+        if locked_colors.get(color_idx).copied().unwrap_or(false) {
+            continue;
+        }
         enforce_channel_saturation(oklab, color_idx, rng);
     }
 }
@@ -577,7 +581,11 @@ pub(crate) fn polish_oklab_palette(
     if n_colors == 0 {
         return;
     }
-    crate::palette_solvers::clamp_oklab_to_luminance_bounds(oklab, luminance_values);
+    crate::palette_solvers::clamp_free_oklab_to_luminance_bounds(
+        oklab,
+        luminance_values,
+        locked_colors,
+    );
     let schedules: &[([f32; 3], [f32; 3])] = if fast {
         &[([0.022, 0.009, 0.004], [0.032, 0.014, 0.006])]
     } else {
@@ -638,7 +646,7 @@ pub(crate) fn polish_oklab_palette(
         }
     }
     let mut polish_rng = StdRng::seed_from_u64(0x50C1_4E1A_DEAD);
-    enforce_all_channel_saturation(oklab, &mut polish_rng);
+    enforce_all_channel_saturation(oklab, locked_colors, &mut polish_rng);
 }
 
 /// Random single-channel jitters + polish; escapes shallow SA local minima.
@@ -658,7 +666,10 @@ pub(crate) fn refine_oklab_palette(
     if n_colors == 0 {
         return;
     }
-    let n_trials = scale_budget_for_channels(24, n_colors);
+    let n_free = (0..n_colors)
+        .filter(|&ch| !locked_colors.get(ch).copied().unwrap_or(false))
+        .count();
+    let n_trials = scale_budget_for_channels(24, n_free);
     let mut rng = StdRng::seed_from_u64(rng_seed);
     let mut best_cost = evaluate_palette_objective_breakdown_with_excluded_set(
         c3,
@@ -764,41 +775,71 @@ fn srgb_primary_oklab(which: usize) -> (f32, f32, f32) {
     (okl.l, okl.a.clamp(-0.4, 0.4), okl.b.clamp(-0.4, 0.4))
 }
 
-/// RGB primaries first (R, G, B), then evenly spaced hues for any remaining channels.
+/// Midpoint of the widest circular gap in `occupied_deg`. Ties go to the gap with the lowest
+/// normalized start angle, so seeds stay deterministic.
+fn largest_hue_gap_midpoint_deg(occupied_deg: &[f32]) -> f32 {
+    let mut sorted: Vec<f32> = occupied_deg.iter().map(|h| h.rem_euclid(360.0)).collect();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    match sorted.len() {
+        0 => 0.0,
+        1 => (sorted[0] + 180.0).rem_euclid(360.0),
+        n => {
+            let mut best = (sorted[0] + 180.0).rem_euclid(360.0);
+            let mut best_gap = -1.0f32;
+            for i in 0..n {
+                let gap = (sorted[(i + 1) % n] - sorted[i]).rem_euclid(360.0);
+                if gap > best_gap {
+                    best_gap = gap;
+                    best = (sorted[i] + gap / 2.0).rem_euclid(360.0);
+                }
+            }
+            best
+        }
+    }
+}
+
+/// RGB primaries first (R, G, B), then evenly spaced hues for any remaining free channels.
 /// Leading with saturated primaries gives Nelder–Mead a strong, distinct basin to refine.
+/// When locked channels already occupy hues, free channels bisect the widest remaining gap
+/// instead — greedily, so two free channels split one wide gap into thirds.
 fn spread_initial_oklab(
     fallback: &[f32],
-    locked_colors: &[bool],
+    pins: &LockedPins,
     luminance_values: &[f32],
     n_colors: usize,
     rng: &mut impl Rng,
 ) -> Vec<f32> {
     let mut out = fallback.to_vec();
-    let n_primaries = n_colors.min(3);
-    for color_idx in 0..n_primaries {
-        if locked_colors[color_idx] {
-            continue;
-        }
+    let mut occupied = pins.locked_hues_deg();
+    let free = pins.free_channels();
+    let n_primaries = if occupied.is_empty() {
+        free.len().min(3)
+    } else {
+        0
+    };
+    for (primary, &color_idx) in free.iter().take(n_primaries).enumerate() {
         let base = color_idx * 3;
-        let (l, a, b) = srgb_primary_oklab(color_idx);
+        let (l, a, b) = srgb_primary_oklab(primary);
         out[base] = l.clamp(luminance_values[0], luminance_values[1]);
         out[base + 1] = a;
         out[base + 2] = b;
         enforce_channel_saturation(&mut out, color_idx, rng);
     }
-    if n_colors <= 3 {
+    let spread = &free[n_primaries..];
+    if spread.is_empty() || n_colors == 0 {
         return out;
     }
     let l = 0.58f32;
-    let extra = n_colors - 3;
-    for i in 0..extra {
-        let color_idx = 3 + i;
-        if locked_colors[color_idx] {
-            continue;
-        }
+    for (i, &color_idx) in spread.iter().enumerate() {
         let base = color_idx * 3;
-        let angle = std::f32::consts::TAU * ((i as f32) + 0.5) / (extra as f32)
-            + rng.gen_range(-0.08f32..0.08f32);
+        let target = if occupied.is_empty() {
+            std::f32::consts::TAU * ((i as f32) + 0.5) / (spread.len() as f32)
+        } else {
+            let hue = largest_hue_gap_midpoint_deg(&occupied);
+            occupied.push(hue);
+            hue.to_radians()
+        };
+        let angle = target + rng.gen_range(-0.08f32..0.08f32);
         let chroma = rng.gen_range(0.18f32..0.34f32);
         out[base] = l.clamp(luminance_values[0], luminance_values[1]);
         out[base + 1] = chroma * angle.cos();
@@ -812,14 +853,14 @@ fn spread_initial_oklab(
 #[inline]
 pub(crate) fn sa_initial_oklab(
     oklab_flat: &[f32],
-    locked_colors: &[bool],
+    pins: &LockedPins,
     luminance_values: &[f32],
     init_seed: u64,
     rng: &mut impl Rng,
 ) -> Vec<f32> {
     sa_initial_oklab_for_restart(
         oklab_flat,
-        locked_colors,
+        pins,
         luminance_values,
         init_seed,
         0,
@@ -832,7 +873,7 @@ pub(crate) fn sa_initial_oklab(
 #[inline]
 pub(crate) fn sa_initial_oklab_for_restart(
     oklab_flat: &[f32],
-    locked_colors: &[bool],
+    pins: &LockedPins,
     luminance_values: &[f32],
     init_seed: u64,
     restart: u32,
@@ -842,12 +883,12 @@ pub(crate) fn sa_initial_oklab_for_restart(
     let _ = init_seed;
     // After restart 0: ~2/3 random, ~1/3 jittered spread (keeps primary-basin coverage).
     if restart > 0 && n_colors >= 2 && restart % 3 != 0 {
-        return random_initial_oklab(oklab_flat, locked_colors, luminance_values, rng);
+        return random_initial_oklab(oklab_flat, pins.mask(), luminance_values, rng);
     }
     if n_colors >= 1 {
-        spread_initial_oklab(oklab_flat, locked_colors, luminance_values, n_colors, rng)
+        spread_initial_oklab(oklab_flat, pins, luminance_values, n_colors, rng)
     } else {
-        random_initial_oklab(oklab_flat, locked_colors, luminance_values, rng)
+        random_initial_oklab(oklab_flat, pins.mask(), luminance_values, rng)
     }
 }
 
@@ -1162,9 +1203,170 @@ fn perceptual_objective_terms(oklab_flat: &[f32]) -> (f32, f32, f32) {
 }
 
 // ///////////////////////////////////////// Optimization /////////////////////////////////////
+
+/// The caller's start palette plus which channels are frozen.
+///
+/// Owns one invariant for a whole optimize call: a locked channel's OKLab coordinates and its
+/// display sRGB are exactly what the caller passed in, at every point in the pipeline.
+#[derive(Clone, Debug)]
+pub(crate) struct LockedPins {
+    locked: Vec<bool>,
+    /// Flat L,a,b × n — the caller's start palette; locked entries are the pins.
+    start_oklab: Vec<f32>,
+    /// Flat r,g,b × n in 0..=1 (`colors / 255`) — the 8-bit identity target.
+    display_srgb: Vec<f32>,
+    free_channels: Vec<usize>,
+}
+
+impl LockedPins {
+    /// From the WASM-facing inputs: display RGB 0..=255 plus the 0/1 lock mask.
+    pub(crate) fn from_display(colors: &[u16], locked_colors: &[u16]) -> Self {
+        let display_srgb: Vec<f32> = colors.iter().map(|&x| (x as f32) / 255.0).collect();
+        let start_oklab = display_srgb
+            .chunks(3)
+            .flat_map(|c| {
+                let oklab: Oklab = Oklab::from_color(Srgb::new(c[0], c[1], c[2]));
+                [oklab.l, oklab.a, oklab.b]
+            })
+            .collect();
+        Self::new(
+            locked_colors.iter().map(|&x| x == 1).collect(),
+            start_oklab,
+            display_srgb,
+        )
+    }
+
+    /// For solver entry points that only hold OKLab; display pins come from the clipped round-trip.
+    pub(crate) fn from_oklab(locked_colors: &[bool], start_oklab: &[f32]) -> Self {
+        let display_srgb = start_oklab
+            .chunks(3)
+            .flat_map(|c| {
+                let rgb: Srgb = Srgb::from_color(Oklab::new(c[0], c[1], c[2]));
+                [
+                    rgb.red.clamp(0.0, 1.0),
+                    rgb.green.clamp(0.0, 1.0),
+                    rgb.blue.clamp(0.0, 1.0),
+                ]
+            })
+            .collect();
+        Self::new(
+            locked_colors.to_vec(),
+            start_oklab.to_vec(),
+            display_srgb,
+        )
+    }
+
+    fn new(locked: Vec<bool>, start_oklab: Vec<f32>, display_srgb: Vec<f32>) -> Self {
+        let free_channels = (0..start_oklab.len() / 3)
+            .filter(|&ch| !locked.get(ch).copied().unwrap_or(false))
+            .collect();
+        Self {
+            locked,
+            start_oklab,
+            display_srgb,
+            free_channels,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn n_free(&self) -> usize {
+        self.free_channels.len()
+    }
+
+    #[inline]
+    pub(crate) fn is_locked(&self, channel: usize) -> bool {
+        self.locked.get(channel).copied().unwrap_or(false)
+    }
+
+    #[inline]
+    pub(crate) fn free_channels(&self) -> &[usize] {
+        &self.free_channels
+    }
+
+    #[inline]
+    pub(crate) fn mask(&self) -> &[bool] {
+        &self.locked
+    }
+
+    #[inline]
+    pub(crate) fn start_oklab(&self) -> &[f32] {
+        &self.start_oklab
+    }
+
+    /// Parameter-vector indices Nelder–Mead may perturb: `3*ch + {0,1,2}` per free channel.
+    pub(crate) fn free_param_axes(&self) -> impl Iterator<Item = usize> + '_ {
+        self.free_channels
+            .iter()
+            .flat_map(|&ch| (0..3).map(move |comp| ch * 3 + comp))
+    }
+
+    /// Overwrite locked OKLab coordinates with the pins. Idempotent, no RNG.
+    pub(crate) fn apply_oklab(&self, param: &mut [f32]) {
+        self.pin_into(param, &self.start_oklab);
+    }
+
+    /// Overwrite locked display sRGB with `colors / 255`. This, not the OKLab pin, is what
+    /// makes the 8-bit round-trip exact.
+    pub(crate) fn apply_display_srgb(&self, srgb: &mut [f32]) {
+        self.pin_into(srgb, &self.display_srgb);
+    }
+
+    fn pin_into(&self, out: &mut [f32], pins: &[f32]) {
+        for ch in 0..pins.len() / 3 {
+            let base = ch * 3;
+            if !self.is_locked(ch) || base + 3 > out.len() {
+                continue;
+            }
+            out[base..base + 3].copy_from_slice(&pins[base..base + 3]);
+        }
+    }
+
+    /// Saturation floor that is a no-op on locked channels: that reroll is what drifted hues.
+    pub(crate) fn enforce_saturation(
+        &self,
+        oklab: &mut [f32],
+        channel: usize,
+        rng: &mut impl Rng,
+    ) {
+        if self.is_locked(channel) {
+            return;
+        }
+        enforce_channel_saturation(oklab, channel, rng);
+    }
+
+    /// Display-projected hue angles (degrees, 0..360) of locked channels that have a usable hue.
+    pub(crate) fn locked_hues_deg(&self) -> Vec<f32> {
+        let mut projected = Vec::with_capacity(self.start_oklab.len());
+        palette_eval::project_oklab_through_display(&self.start_oklab, &mut projected);
+        projected
+            .chunks(3)
+            .enumerate()
+            .filter(|(ch, c)| self.is_locked(*ch) && oklab_chroma(c[1], c[2]) >= HUE_MIN_CHROMA)
+            .map(|(_, c)| c[2].atan2(c[1]).to_degrees().rem_euclid(360.0))
+            .collect()
+    }
+}
+
+/// OKLab → display-encoded sRGB with locked channels pinned to the caller's input bytes.
+fn oklab_to_display_srgb(oklab: &[f32], pins: &LockedPins) -> Vec<f32> {
+    let mut srgb: Vec<f32> = oklab
+        .chunks(3)
+        .flat_map(|color| {
+            let rgb: Srgb = Srgb::from_color(Oklab::new(color[0], color[1], color[2]));
+            [
+                rgb.red.clamp(0.0, 1.0),
+                rgb.green.clamp(0.0, 1.0),
+                rgb.blue.clamp(0.0, 1.0),
+            ]
+        })
+        .collect();
+    pins.apply_display_srgb(&mut srgb);
+    srgb
+}
+
 struct Loss {
     rng: Arc<Mutex<Xoshiro256PlusPlus>>,
-    pub(crate) locked_colors: Vec<bool>,
+    pub(crate) pins: LockedPins,
     intensity_array: Arc<Array2<f32>>,
     pub(crate) luminance_values: Vec<f32>,
     avg_confusion: f32,
@@ -1177,7 +1379,7 @@ struct Loss {
 
 impl Loss {
     pub fn new(
-        locked_colors: Vec<bool>,
+        pins: LockedPins,
         intensity_array: Arc<Array2<f32>>,
         luminance_values: Vec<f32>,
         avg_confusion: f32,
@@ -1197,7 +1399,7 @@ impl Loss {
         };
         Self {
             rng: Arc::new(Mutex::new(rng_inner)),
-            locked_colors: locked_colors,
+            pins,
             c3_instance: c3_instance,
             intensity_array: intensity_array,
             luminance_values: luminance_values,
@@ -1338,6 +1540,9 @@ impl CostFunction for Loss {
                 clamped,
                 &self.luminance_values,
             );
+            // Clamp first, pin second: a luminance window the caller passed must not move a
+            // color the caller locked. The pin is the last word on locked coordinates.
+            self.pins.apply_oklab(clamped);
             evaluate_palette_objective_breakdown_with_excluded_set(
                 &self.c3_instance,
                 clamped,
@@ -1375,7 +1580,7 @@ impl Anneal for Loss {
         };
         for _ in 0..n_moves {
             for color_idx in 0..param.len() / 3 {
-                if self.locked_colors[color_idx] {
+                if self.pins.is_locked(color_idx) {
                     continue;
                 }
                 for i in 0..3 {
@@ -1434,23 +1639,25 @@ pub(crate) fn annealing(
         ),
         None => 1.0,
     };
-    let start_param = if let Some(start) = start_oklab {
+    let pins = LockedPins::from_oklab(locked_colors, colors);
+    let mut start_param = if let Some(start) = start_oklab {
         start.to_vec()
     } else {
         match init_rng_seed {
             Some(seed) => {
                 let mut rng = StdRng::seed_from_u64(seed);
-                sa_initial_oklab(colors, locked_colors, luminance_values, seed, &mut rng)
+                sa_initial_oklab(colors, &pins, luminance_values, seed, &mut rng)
             }
             None => {
                 let mut rng = thread_rng();
-                sa_initial_oklab(colors, locked_colors, luminance_values, 0, &mut rng)
+                sa_initial_oklab(colors, &pins, luminance_values, 0, &mut rng)
             }
         }
     };
+    pins.apply_oklab(&mut start_param);
 
     let cost_function = Loss::new(
-        locked_colors.to_vec(),
+        pins.clone(),
         Arc::clone(&intensity_array),
         luminance_values.to_vec(),
         average_confusion,
@@ -1472,7 +1679,12 @@ pub(crate) fn annealing(
         console::log_1(&format!("best_param: {:?}", best_param_dbg).into());
     }
     let mut best_param = res.state().get_best_param().unwrap().clone();
-    crate::palette_solvers::clamp_oklab_to_luminance_bounds(&mut best_param, luminance_values);
+    crate::palette_solvers::clamp_free_oklab_to_luminance_bounds(
+        &mut best_param,
+        luminance_values,
+        pins.mask(),
+    );
+    pins.apply_oklab(&mut best_param);
     let excluded_set: HashSet<usize> = excluded_colors_indices
         .iter()
         .map(|&x| x as usize)
@@ -1520,9 +1732,9 @@ struct NmRestartOutcome {
 /// Shared inputs for NM multistart / finalize (native + WASM worker orchestration).
 struct PaletteOptContext {
     n_channels: usize,
-    locked_colors_vec: Vec<bool>,
+    /// Start palette + lock invariant (replaces a bare mask plus a separate OKLab start).
+    pins: LockedPins,
     float_luminance_values: Vec<f32>,
-    oklab_color_map: Vec<f32>,
     intensity_arc: Arc<Array2<f32>>,
     excluded_colors_indices: Vec<f32>,
     color_name_indices: Vec<f32>,
@@ -1552,10 +1764,11 @@ fn build_palette_opt_context(
     include_spatial_channel_overlap: Option<bool>,
 ) -> PaletteOptContext {
     let n_channels = colors.len() / 3;
-    let max_iters = scale_budget_for_channels(
-        max_iters.unwrap_or_else(default_max_iters).max(1),
-        n_channels,
-    );
+    let pins = LockedPins::from_display(colors, locked_colors);
+    // Budgets follow the search dimension, not the channel count. All-free is unchanged.
+    let n_free = pins.n_free();
+    let max_iters =
+        scale_budget_for_channels(max_iters.unwrap_or_else(default_max_iters).max(1), n_free);
     let confusion_baseline_samples = confusion_baseline_samples
         .unwrap_or_else(default_confusion_baseline_samples)
         .max(1);
@@ -1565,17 +1778,6 @@ fn build_palette_opt_context(
     let float_luminance_values: Vec<f32> = luminance_values
         .iter()
         .map(|&x| (x as f32) / 100.0)
-        .collect();
-    let float_color_map: Vec<f32> = colors.iter().map(|&x| (x as f32) / 255.0).collect();
-    let locked_colors_vec: Vec<bool> = locked_colors.iter().map(|&x| x == 1).collect();
-    let oklab_color_map: Vec<f32> = float_color_map
-        .chunks(3)
-        .map(|color| {
-            let rgb = Srgb::new(color[0], color[1], color[2]);
-            let oklab: Oklab = Oklab::from_color(rgb);
-            vec![oklab.l, oklab.a, oklab.b]
-        })
-        .flatten()
         .collect();
     let intensity_array = preprocess_data(colors, intensities, contrast_limits);
     let excluded_colors = merge_excluded_color_names(excluded_colors);
@@ -1606,7 +1808,7 @@ fn build_palette_opt_context(
     let avg_confusion = if spatial_w > 0.0 {
         calculate_average_confusion(
             &float_luminance_values,
-            &oklab_color_map,
+            pins.start_oklab(),
             &intensity_arc,
             confusion_baseline_samples,
             Some(base_seed.wrapping_add(0xA5A5_5A5A_5A5A_5A5A)),
@@ -1618,7 +1820,7 @@ fn build_palette_opt_context(
         .iter()
         .map(|&x| x as usize)
         .collect();
-    let nm_perturb_scale = nm_perturb_scale_for_channels(n_channels);
+    let nm_perturb_scale = nm_perturb_scale_for_channels(n_free);
     let nm_params = PaletteSolverParams {
         argmin_max_iters: Some(scaled_solver_iters(
             PaletteArgminSolver::NelderMead,
@@ -1629,9 +1831,8 @@ fn build_palette_opt_context(
     };
     PaletteOptContext {
         n_channels,
-        locked_colors_vec,
+        pins,
         float_luminance_values,
-        oklab_color_map,
         intensity_arc,
         excluded_colors_indices,
         color_name_indices,
@@ -1750,8 +1951,8 @@ pub fn run_nm_restart(
             restart_index,
             ctx.base_seed,
             seed_salt as u64,
-            &ctx.oklab_color_map,
-            &ctx.locked_colors_vec,
+            ctx.pins.start_oklab(),
+            ctx.pins.mask(),
             &ctx.intensity_arc,
             &ctx.float_luminance_values,
             &ctx.excluded_colors_indices,
@@ -1802,7 +2003,7 @@ fn finalize_palette_with_context(
     let polish_started = instant::Instant::now();
     polish_oklab_palette(
         &mut best_oklab,
-        &ctx.locked_colors_vec,
+        ctx.pins.mask(),
         &ctx.float_luminance_values,
         &ctx.c3_eval,
         &ctx.intensity_arc,
@@ -1821,7 +2022,7 @@ fn finalize_palette_with_context(
     let refine_started = instant::Instant::now();
     refine_oklab_palette(
         &mut best_oklab,
-        &ctx.locked_colors_vec,
+        ctx.pins.mask(),
         &ctx.float_luminance_values,
         &ctx.c3_eval,
         &ctx.intensity_arc,
@@ -1831,6 +2032,7 @@ fn finalize_palette_with_context(
         &ctx.color_name_indices,
         ctx.base_seed.wrapping_add(0xA11CE),
     );
+    ctx.pins.apply_oklab(&mut best_oklab);
     let breakdown = evaluate_palette_objective_breakdown_with_excluded_set(
         &ctx.c3_eval,
         &best_oklab,
@@ -1844,19 +2046,7 @@ fn finalize_palette_with_context(
     let refine_objective_evaluations = palette_eval::objective_eval_count()
         .wrapping_sub(refine_eval_start)
         .min(u32::MAX as u64) as u32;
-    let srgb_linear = best_oklab
-        .chunks(3)
-        .map(|color| {
-            let okl = Oklab::new(color[0], color[1], color[2]);
-            let rgb: Srgb = Srgb::from_color(okl);
-            vec![
-                rgb.red.clamp(0.0, 1.0),
-                rgb.green.clamp(0.0, 1.0),
-                rgb.blue.clamp(0.0, 1.0),
-            ]
-        })
-        .flatten()
-        .collect();
+    let srgb_linear = oklab_to_display_srgb(&best_oklab, &ctx.pins);
     FinalizedPaletteProfile {
         srgb_linear,
         oklab: best_oklab,
@@ -2156,7 +2346,7 @@ fn run_nm_multistart_attempt(
             } else {
                 sa_initial_oklab_for_restart(
                     start_oklab,
-                    locked_colors,
+                    &LockedPins::from_oklab(locked_colors, start_oklab),
                     luminance_values,
                     init_seed,
                     restart,
@@ -2430,9 +2620,14 @@ fn optimize_palette_pipeline_with_init_inner(
         confusion_baseline_samples,
         include_spatial_channel_overlap,
     );
+    if ctx.pins.n_free() == 0 {
+        // Nothing to search: every channel is pinned, so the input palette is the answer.
+        let pinned = ctx.pins.start_oklab().to_vec();
+        return finished_pipeline_result(ctx, pinned, f32::NAN, Vec::new());
+    }
     let num_restarts = scale_budget_for_channels(
         num_restarts.unwrap_or_else(default_num_restarts).max(1),
-        ctx.n_channels,
+        ctx.pins.n_free(),
     )
     .clamp(restart_min, restart_max);
     let full_post = pipeline_use_full_postprocess();
@@ -2451,8 +2646,8 @@ fn optimize_palette_pipeline_with_init_inner(
         num_restarts,
         ctx.base_seed,
         0,
-        &ctx.oklab_color_map,
-        &ctx.locked_colors_vec,
+        ctx.pins.start_oklab(),
+        ctx.pins.mask(),
         Arc::clone(&ctx.intensity_arc),
         &ctx.float_luminance_values,
         &ctx.excluded_colors_indices,
@@ -2481,9 +2676,10 @@ fn optimize_palette_pipeline_with_init_inner(
     let (mut best_oklab, mut best_total, mut best_solver_cost) = fold_best_nm_restart(&outcomes);
 
     let mut rescue_waves: Vec<Vec<NmRestartOutcome>> = Vec::new();
-    if ctx.n_channels >= 6 {
+    // Rescue fights multistart failure in high dimension; a few free channels do not have it.
+    if ctx.pins.n_free() >= 6 {
         let rescue_restarts =
-            scale_budget_for_channels(HIGH_CH_RESCUE_RESTARTS_BASE, ctx.n_channels).max(4);
+            scale_budget_for_channels(HIGH_CH_RESCUE_RESTARTS_BASE, ctx.pins.n_free()).max(4);
         let mut prefer_random = wave_best_min_rgb < soft_rgb;
         for wave in 0..2u32 {
             let check = evaluate_palette_objective_breakdown_with_excluded_set(
@@ -2511,7 +2707,7 @@ fn optimize_palette_pipeline_with_init_inner(
             prefer_random = !prefer_random;
             rescue_params.nm_perturb_scale = rescue_params
                 .nm_perturb_scale
-                .max(nm_perturb_scale_for_channels(ctx.n_channels) + 0.15);
+                .max(nm_perturb_scale_for_channels(ctx.pins.n_free()) + 0.15);
             let salt = if wave == 0 {
                 RESCUE_SEED_SALT_1
             } else {
@@ -2521,8 +2717,8 @@ fn optimize_palette_pipeline_with_init_inner(
                 rescue_restarts,
                 ctx.base_seed,
                 salt,
-                &ctx.oklab_color_map,
-                &ctx.locked_colors_vec,
+                ctx.pins.start_oklab(),
+                ctx.pins.mask(),
                 Arc::clone(&ctx.intensity_arc),
                 &ctx.float_luminance_values,
                 &ctx.excluded_colors_indices,
@@ -2565,7 +2761,7 @@ fn optimize_palette_pipeline_with_init_inner(
         // Study path: polish + selected refine mode (cartesian default).
         apply_palette_refine(
             &mut best_oklab,
-            &ctx.locked_colors_vec,
+            ctx.pins.mask(),
             &ctx.float_luminance_values,
             &ctx.c3_eval,
             &ctx.intensity_arc,
@@ -2583,7 +2779,7 @@ fn optimize_palette_pipeline_with_init_inner(
         if do_full_refine {
             apply_palette_refine(
                 &mut best_oklab,
-                &ctx.locked_colors_vec,
+                ctx.pins.mask(),
                 &ctx.float_luminance_values,
                 &ctx.c3_eval,
                 &ctx.intensity_arc,
@@ -2599,7 +2795,7 @@ fn optimize_palette_pipeline_with_init_inner(
         } else {
             polish_oklab_palette(
                 &mut best_oklab,
-                &ctx.locked_colors_vec,
+                ctx.pins.mask(),
                 &ctx.float_luminance_values,
                 &ctx.c3_eval,
                 &ctx.intensity_arc,
@@ -2623,33 +2819,30 @@ fn optimize_palette_pipeline_with_init_inner(
     .total;
     let _ = best_total;
 
+    finished_pipeline_result(ctx, best_oklab, best_solver_cost, restart_pool)
+}
+
+/// Final projection, lock pin and sRGB emit — shared by the normal pipeline exit and the
+/// all-locked early return.
+fn finished_pipeline_result(
+    ctx: PaletteOptContext,
+    mut best_oklab: Vec<f32>,
+    sa_best_cost: f32,
+    restart_pool: Vec<RestartRecord>,
+) -> OptimizePipelineResult {
     // Final hard projection: NM reflections can leave L below the API luminance floor.
-    crate::palette_solvers::clamp_oklab_to_luminance_bounds(
+    crate::palette_solvers::clamp_free_oklab_to_luminance_bounds(
         &mut best_oklab,
         &ctx.float_luminance_values,
+        ctx.pins.mask(),
     );
-
-    let optimized_oklab = best_oklab;
-    let sa_best_cost = best_solver_cost;
-
-    let srgb_linear = optimized_oklab
-        .chunks(3)
-        .map(|color| {
-            let okl = Oklab::new(color[0] as f32, color[1] as f32, color[2] as f32);
-            let rgb: Srgb = Srgb::from_color(okl);
-            vec![
-                rgb.red.clamp(0.0, 1.0),
-                rgb.green.clamp(0.0, 1.0),
-                rgb.blue.clamp(0.0, 1.0),
-            ]
-        })
-        .flatten()
-        .collect::<Vec<f32>>();
+    ctx.pins.apply_oklab(&mut best_oklab);
+    let srgb_linear = oklab_to_display_srgb(&best_oklab, &ctx.pins);
 
     OptimizePipelineResult {
         srgb_linear,
         sa_best_cost,
-        oklab_best: optimized_oklab,
+        oklab_best: best_oklab,
         intensity_arc: ctx.intensity_arc,
         excluded_colors_indices: ctx.excluded_colors_indices,
         color_name_indices: ctx.color_name_indices,
@@ -2700,9 +2893,17 @@ pub fn optimize_palette_with_solver(
 
     let params = solver_params.unwrap_or_default();
     let n_channels = colors.len() / 3;
+    let pins = LockedPins::from_display(colors, locked_colors);
+    // Nelder–Mead searches free axes only, so its budget follows `n_free`. The study-only
+    // solvers still search the full box, so they keep channel-count budgets.
+    let budget_channels = if solver == PaletteArgminSolver::NelderMead {
+        pins.n_free()
+    } else {
+        n_channels
+    };
     let max_iters = scale_budget_for_channels(
         max_iters.unwrap_or_else(default_max_iters).max(1),
-        n_channels,
+        budget_channels,
     );
     let confusion_baseline_samples = confusion_baseline_samples
         .unwrap_or_else(default_confusion_baseline_samples)
@@ -2711,7 +2912,7 @@ pub fn optimize_palette_with_solver(
         include_spatial_channel_overlap.unwrap_or_else(default_include_spatial_overlap);
     let num_restarts = scale_budget_for_channels(
         num_restarts.unwrap_or_else(default_num_restarts).max(1),
-        n_channels,
+        budget_channels,
     )
     .clamp(
         1,
@@ -2725,17 +2926,6 @@ pub fn optimize_palette_with_solver(
     let float_luminance_values: Vec<f32> = luminance_values
         .iter()
         .map(|&x| (x as f32) / 100.0)
-        .collect();
-    let float_color_map: Vec<f32> = colors.iter().map(|&x| (x as f32) / 255.0).collect();
-    let locked_colors_vec: Vec<bool> = locked_colors.iter().map(|&x| x == 1).collect();
-    let oklab_color_map: Vec<f32> = float_color_map
-        .chunks(3)
-        .map(|color| {
-            let rgb = Srgb::new(color[0], color[1], color[2]);
-            let oklab: Oklab = Oklab::from_color(rgb);
-            vec![oklab.l, oklab.a, oklab.b]
-        })
-        .flatten()
         .collect();
     let intensity_array = preprocess_data(colors, intensities, contrast_limits);
     let excluded_colors = merge_excluded_color_names(excluded_colors);
@@ -2766,7 +2956,7 @@ pub fn optimize_palette_with_solver(
     let avg_confusion = if spatial_w > 0.0 {
         calculate_average_confusion(
             &float_luminance_values,
-            &oklab_color_map,
+            pins.start_oklab(),
             &intensity_arc,
             confusion_baseline_samples,
             Some(base_seed.wrapping_add(0xA5A5_5A5A_5A5A_5A5A)),
@@ -2779,21 +2969,19 @@ pub fn optimize_palette_with_solver(
         .map(|&x| x as usize)
         .collect();
 
-    let mut best_oklab = oklab_color_map.clone();
+    let mut best_oklab = pins.start_oklab().to_vec();
     let mut best_total = f32::INFINITY;
     let mut solver_cost = f32::INFINITY;
 
-    if solver == PaletteArgminSolver::PolishOnly {
-        best_oklab = oklab_color_map.clone();
-    } else {
+    if solver != PaletteArgminSolver::PolishOnly {
         for restart in 0..num_restarts {
             let init_seed =
                 base_seed.wrapping_add((restart as u64).wrapping_mul(RESTART_SEED_STRIDE));
             let anneal_seed = init_seed.wrapping_add(0x517C_C1B0_2722_0A95);
             let (candidate, cost) = run_palette_argmin_solver(
                 solver,
-                &oklab_color_map,
-                &locked_colors_vec,
+                pins.start_oklab(),
+                pins.mask(),
                 Arc::clone(&intensity_arc),
                 &float_luminance_values,
                 &excluded_colors_indices,
@@ -2829,7 +3017,7 @@ pub fn optimize_palette_with_solver(
 
     study_postprocess_oklab(
         &mut best_oklab,
-        &locked_colors_vec,
+        pins.mask(),
         &float_luminance_values,
         &c3_eval,
         &intensity_arc,
@@ -2839,19 +3027,8 @@ pub fn optimize_palette_with_solver(
         &color_name_indices,
         base_seed,
     );
-    let srgb_linear = best_oklab
-        .chunks(3)
-        .map(|color| {
-            let okl = Oklab::new(color[0], color[1], color[2]);
-            let rgb: Srgb = Srgb::from_color(okl);
-            vec![
-                rgb.red.clamp(0.0, 1.0),
-                rgb.green.clamp(0.0, 1.0),
-                rgb.blue.clamp(0.0, 1.0),
-            ]
-        })
-        .flatten()
-        .collect();
+    pins.apply_oklab(&mut best_oklab);
+    let srgb_linear = oklab_to_display_srgb(&best_oklab, &pins);
 
     OptimizePipelineResult {
         srgb_linear,

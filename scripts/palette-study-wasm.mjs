@@ -31,6 +31,7 @@ import {
   parseChannelCounts,
   parseEnvBool,
   parseEnvInt,
+  parseLuminanceRanges,
   scaledBudget,
   spreadInitialColorsU16,
   svgSwatches,
@@ -96,16 +97,18 @@ async function runOneOptimize(psudo, inputs) {
   return { linear, total, minRgb, elapsedMs, rgb8 };
 }
 
-async function runSyntheticBatch(psudo, channels, nParents, nRows, config) {
+async function runSyntheticBatch(psudo, channels, nParents, nRows, config, luminance = [50, 92]) {
+  const lumLabel = `${luminance[0]}-${luminance[1]}`;
   const scaledRestarts = scaledBudget(config.numRestarts, channels);
   const nmIters = Math.floor(scaledBudget(config.maxIters, channels) / 2);
   console.error(
-    `[palette-study-wasm] ${channels}ch: NM ~${nmIters} iters/restart, ${scaledRestarts} restarts, ${nParents} palettes`,
+    `[palette-study-wasm] ${channels}ch L=${lumLabel}: NM ~${nmIters} iters/restart, ${scaledRestarts} restarts, ${nParents} palettes`,
   );
 
   const shared = buildStudyInputs(channels, new Uint16Array(channels * 3), {
     nRows,
     intensitySeed: 9000 + channels,
+    luminance,
   });
   const seedBase = 50_000 + channels * 10_000;
   const runs = [];
@@ -119,13 +122,13 @@ async function runSyntheticBatch(psudo, channels, nParents, nRows, config) {
     };
     const run = await runOneOptimize(psudo, inputs);
     console.error(
-      `[palette-study-wasm] ${channels}ch #${i + 1}/${nParents} L_tot=${run.total.toFixed(4)} min_rgb=${run.minRgb.toFixed(0)} time=${formatDuration(run.elapsedMs)}`,
+      `[palette-study-wasm] ${channels}ch L=${lumLabel} #${i + 1}/${nParents} L_tot=${run.total.toFixed(4)} min_rgb=${run.minRgb.toFixed(0)} time=${formatDuration(run.elapsedMs)}`,
     );
     runs.push({ index: i, ...run });
   }
 
   runs.sort((a, b) => a.total - b.total);
-  return { channels, runs, scaledRestarts, nmIters };
+  return { channels, luminance, lumLabel, runs, scaledRestarts, nmIters };
 }
 
 async function runDocumentGroups(psudo, groups, nRows, config) {
@@ -155,7 +158,7 @@ function appendSectionHtml(html, batch, label) {
   const title =
     batch.groupName != null
       ? `${batch.groupName} (${batch.channels} ch)`
-      : `${batch.channels}-channel palettes`;
+      : `${batch.channels}-channel palettes${batch.lumLabel ? ` · L ${batch.lumLabel}` : ""}`;
   html.push(`<section class="section"><h2>${title}</h2>`);
   html.push(
     `<p class="note">Sorted by L_tot (lower is better). NM budget: ~${batch.nmIters ?? "—"} iters/restart, ${batch.scaledRestarts ?? "—"} restarts.</p>`,
@@ -224,11 +227,21 @@ Document JSON: channelGroups[].channels[].color { r,g,b } (Minerva / validateDoc
     batches = await runDocumentGroups(psudo, groups, nRows, config);
   } else {
     const channelCounts = parseChannelCounts();
+    const luminanceRanges = parseLuminanceRanges();
     const nParents = parseEnvInt("PALETTE_STUDY_PARENTS", DEFAULT_PARENTS);
     for (const channels of channelCounts) {
-      batches.push(
-        await runSyntheticBatch(psudo, channels, nParents, nRows, config),
-      );
+      for (const luminance of luminanceRanges) {
+        batches.push(
+          await runSyntheticBatch(
+            psudo,
+            channels,
+            nParents,
+            nRows,
+            config,
+            luminance,
+          ),
+        );
+      }
     }
   }
 

@@ -1,9 +1,9 @@
 //! Argmin solver dispatch for palette OKLab optimization (native benchmarks / tooling).
 
 use crate::{
-    annealing, enforce_channel_saturation, evaluate_palette_objective_breakdown_with_excluded_set,
-    polish_oklab_palette, random_initial_oklab, refine_oklab_palette, sa_initial_oklab_for_restart,
-    Loss, PaletteObjectiveBreakdown,
+    annealing, evaluate_palette_objective_breakdown_with_excluded_set, polish_oklab_palette,
+    random_initial_oklab, refine_oklab_palette, sa_initial_oklab_for_restart, LockedPins, Loss,
+    PaletteObjectiveBreakdown,
 };
 use argmin::core::{CostFunction, Error, Executor, Gradient, State};
 use argmin::solver::gradientdescent::SteepestDescent;
@@ -139,6 +139,24 @@ pub(crate) fn clamp_oklab_to_luminance_bounds(param: &mut [f32], luminance_value
     }
 }
 
+/// Like [`clamp_oklab_to_luminance_bounds`], but locked channels keep their pinned value: a
+/// luminance window the caller passed must not move a color the caller locked.
+pub(crate) fn clamp_free_oklab_to_luminance_bounds(
+    param: &mut [f32],
+    luminance_values: &[f32],
+    locked_colors: &[bool],
+) {
+    if luminance_values.len() < 2 {
+        return;
+    }
+    for i in 0..param.len() {
+        if locked_colors.get(i / 3).copied().unwrap_or(false) {
+            continue;
+        }
+        clamp_param_component(param, i, luminance_values);
+    }
+}
+
 fn build_oklab_bounds(n_channels: usize, luminance_values: &[f32]) -> (Vec<f32>, Vec<f32>) {
     let mut lb = Vec::with_capacity(n_channels * 3);
     let mut ub = Vec::with_capacity(n_channels * 3);
@@ -149,36 +167,28 @@ fn build_oklab_bounds(n_channels: usize, luminance_values: &[f32]) -> (Vec<f32>,
     (lb, ub)
 }
 
+/// `1 + 3*n_free` vertices, each a full `3n` palette. Every vertex shares identical locked
+/// coordinates, so no reflection, expansion, contraction or shrink — all affine combinations of
+/// the vertices — can move a locked channel. Perturbing locked axes was also the only site that
+/// rerolled a locked hue through the saturation floor.
 fn build_nelder_mead_simplex(
     start: &[f32],
-    locked_colors: &[bool],
+    pins: &LockedPins,
     luminance_values: &[f32],
     seed: u64,
     perturb_scale: f32,
 ) -> Vec<Vec<f32>> {
     let s = perturb_scale.max(0.25);
-    let n = start.len();
     let mut simplex = vec![start.to_vec()];
     let mut rng = StdRng::seed_from_u64(seed);
-    for i in 0..n {
-        let ch = i / 3;
-        let comp = i % 3;
+    for i in pins.free_param_axes() {
         let mut v = start.to_vec();
-        if locked_colors[ch] {
-            let delta = match comp {
-                0 => 0.02 * s,
-                _ => 0.03 * s,
-            };
-            v[i] += delta;
-        } else {
-            let delta = match comp {
-                0 => 0.05 * s,
-                _ => 0.08 * s,
-            };
-            v[i] += delta;
-        }
+        v[i] += match i % 3 {
+            0 => 0.05 * s,
+            _ => 0.08 * s,
+        };
         clamp_param_component(&mut v, i, luminance_values);
-        enforce_channel_saturation(&mut v, ch, &mut rng);
+        pins.enforce_saturation(&mut v, i / 3, &mut rng);
         simplex.push(v);
     }
     simplex
@@ -192,60 +202,58 @@ fn palette_linesearch() -> PaletteLineSearch {
 
 fn resolve_nm_start_param(
     start_oklab: &[f32],
-    locked_colors: &[bool],
+    pins: &LockedPins,
     luminance_values: &[f32],
     init_seed: u64,
     restart: u32,
     params: &PaletteSolverParams,
     rng: &mut StdRng,
 ) -> Vec<f32> {
-    if params.force_random_nm_init {
-        return random_initial_oklab(start_oklab, locked_colors, luminance_values, rng);
-    }
-    if let Some(ref seed) = params.seed_oklab_override {
-        if seed.len() == start_oklab.len() {
-            match params.seed_override_mode {
-                SeedOverrideMode::ExactRestart(r) if r == restart => {
-                    return seed.clone();
-                }
-                SeedOverrideMode::Restart0AndJitter if restart == 0 => {
-                    return seed.clone();
-                }
-                SeedOverrideMode::Restart0AndJitter if restart > 0 && restart % 3 == 0 => {
-                    // Jittered Glasbey seed (keeps basin near farthest-first).
-                    let mut out = seed.clone();
-                    for ch in 0..(out.len() / 3) {
-                        if locked_colors[ch] {
-                            continue;
-                        }
-                        let base = ch * 3;
-                        out[base] = (out[base] + rng.gen_range(-0.04f32..0.04))
-                            .clamp(luminance_values[0], luminance_values[1]);
-                        out[base + 1] =
-                            (out[base + 1] + rng.gen_range(-0.06f32..0.06)).clamp(-0.4, 0.4);
-                        out[base + 2] =
-                            (out[base + 2] + rng.gen_range(-0.06f32..0.06)).clamp(-0.4, 0.4);
-                        enforce_channel_saturation(&mut out, ch, rng);
+    let mut out = if params.force_random_nm_init {
+        random_initial_oklab(start_oklab, pins.mask(), luminance_values, rng)
+    } else if let Some(seed) = params
+        .seed_oklab_override
+        .as_ref()
+        .filter(|s| s.len() == start_oklab.len())
+    {
+        match params.seed_override_mode {
+            SeedOverrideMode::ExactRestart(r) if r == restart => seed.clone(),
+            SeedOverrideMode::Restart0AndJitter if restart == 0 => seed.clone(),
+            SeedOverrideMode::Restart0AndJitter if restart > 0 && restart % 3 == 0 => {
+                let mut jittered = seed.clone();
+                for ch in 0..(jittered.len() / 3) {
+                    if pins.is_locked(ch) {
+                        continue;
                     }
-                    return out;
+                    let base = ch * 3;
+                    jittered[base] = (jittered[base] + rng.gen_range(-0.04f32..0.04))
+                        .clamp(luminance_values[0], luminance_values[1]);
+                    jittered[base + 1] =
+                        (jittered[base + 1] + rng.gen_range(-0.06f32..0.06)).clamp(-0.4, 0.4);
+                    jittered[base + 2] =
+                        (jittered[base + 2] + rng.gen_range(-0.06f32..0.06)).clamp(-0.4, 0.4);
+                    pins.enforce_saturation(&mut jittered, ch, rng);
                 }
-                _ => {}
+                jittered
             }
+            _ => sa_initial_oklab_for_restart(
+                start_oklab,
+                pins,
+                luminance_values,
+                init_seed,
+                restart,
+                rng,
+            ),
         }
-    }
-    let _ = init_seed;
-    sa_initial_oklab_for_restart(
-        start_oklab,
-        locked_colors,
-        luminance_values,
-        init_seed,
-        restart,
-        rng,
-    )
+    } else {
+        sa_initial_oklab_for_restart(start_oklab, pins, luminance_values, init_seed, restart, rng)
+    };
+    pins.apply_oklab(&mut out);
+    out
 }
 
 fn make_loss(
-    locked_colors: &[bool],
+    pins: &LockedPins,
     intensity_arc: Arc<Array2<f32>>,
     luminance_values: &[f32],
     avg_confusion: f32,
@@ -256,7 +264,7 @@ fn make_loss(
     rng_seed: Option<u64>,
 ) -> Loss {
     Loss::new(
-        locked_colors.to_vec(),
+        pins.clone(),
         intensity_arc,
         luminance_values.to_vec(),
         avg_confusion,
@@ -277,8 +285,7 @@ impl Gradient for Loss {
         let f0 = self.cost(param)?;
         let mut g = vec![0.0f32; param.len()];
         for i in 0..param.len() {
-            let ch = i / 3;
-            if self.locked_colors[ch] {
+            if self.pins.is_locked(i / 3) {
                 continue;
             }
             let mut p_plus = param.clone();
@@ -354,10 +361,11 @@ pub fn run_palette_argmin_solver(
     };
     let avg_confusion = precomputed_avg_confusion.unwrap_or(1.0);
 
+    let pins = LockedPins::from_oklab(locked_colors, start_oklab);
     let mut rng = StdRng::seed_from_u64(init_seed);
     let start_param = resolve_nm_start_param(
         start_oklab,
-        locked_colors,
+        &pins,
         luminance_values,
         init_seed,
         restart,
@@ -366,7 +374,7 @@ pub fn run_palette_argmin_solver(
     );
 
     let cost_function = make_loss(
-        locked_colors,
+        &pins,
         Arc::clone(&intensity_arc),
         luminance_values,
         avg_confusion,
@@ -381,6 +389,8 @@ pub fn run_palette_argmin_solver(
 
     let finish = |mut best_param: Vec<f32>| -> Result<(Vec<f32>, f32), Error> {
         clamp_oklab_to_luminance_bounds(&mut best_param, luminance_values);
+        // The pin is the last word: the returned cost is the cost of the palette we return.
+        pins.apply_oklab(&mut best_param);
         let excluded_set: HashSet<usize> = excluded_colors_indices
             .iter()
             .map(|&x| x as usize)
@@ -400,9 +410,13 @@ pub fn run_palette_argmin_solver(
 
     match solver {
         PaletteArgminSolver::NelderMead => {
+            if pins.n_free() == 0 {
+                // Nothing to search, and argmin indexes `params[len - 2]` on a 1-vertex simplex.
+                return finish(start_param);
+            }
             let simplex = build_nelder_mead_simplex(
                 &start_param,
-                locked_colors,
+                &pins,
                 luminance_values,
                 init_seed.wrapping_add(0xBEEF),
                 params.nm_perturb_scale,

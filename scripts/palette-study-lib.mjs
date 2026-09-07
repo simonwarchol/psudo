@@ -22,6 +22,25 @@ export function parseEnvBool(name) {
   return v != null && /^(1|true|yes)$/i.test(v);
 }
 
+/** OKLab L × 100 ranges. `50-92` or `50-92,66-96`. Default production `[50, 92]`. */
+export function parseLuminanceRanges() {
+  const raw = process.env.PALETTE_STUDY_LUMINANCE;
+  if (!raw) return [[50, 92]];
+  const out = raw
+    .split(",")
+    .map((part) => {
+      const m = part.trim().match(/^(\d+)\s*-\s*(\d+)$/);
+      if (!m) return null;
+      const lo = Number.parseInt(m[1], 10);
+      const hi = Number.parseInt(m[2], 10);
+      return Number.isFinite(lo) && Number.isFinite(hi) && lo < hi && hi <= 100
+        ? [lo, hi]
+        : null;
+    })
+    .filter(Boolean);
+  return out.length > 0 ? out : [[50, 92]];
+}
+
 export function parseChannelCounts() {
   const raw = process.env.PALETTE_STUDY_CHANNELS;
   if (!raw) return [...DEFAULT_CHANNEL_COUNTS];
@@ -140,6 +159,7 @@ export function buildStudyInputs(nChannels, colors, options = {}) {
     nRows = DEFAULT_ROWS,
     intensitySeed = 9000 + nChannels,
     locked = null,
+    luminance = DEFAULT_LUMINANCE,
   } = options;
   const lockedArr =
     locked ?? new Uint16Array(nChannels);
@@ -148,7 +168,10 @@ export function buildStudyInputs(nChannels, colors, options = {}) {
     locked: lockedArr,
     intensities: studyIntensities(nRows, nChannels, intensitySeed),
     contrastLimits: contrastAll(nChannels),
-    luminance: DEFAULT_LUMINANCE,
+    luminance:
+      luminance instanceof Uint16Array
+        ? luminance
+        : new Uint16Array(luminance),
     excluded: [],
     colorNames: Array(nChannels).fill(""),
     maxIters: DEFAULT_MAX_ITERS,

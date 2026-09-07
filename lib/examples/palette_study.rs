@@ -23,6 +23,8 @@
 //! - `PALETTE_STUDY_STUDY=1` — lighter Study postprocess (benchmark-style; default is Full)
 //! - `PALETTE_STUDY_SPATIAL=1` — spatial channel-overlap in the objective (default off)
 //! - `PALETTE_STUDY_SPREAD_INIT=0` — random saturated sRGB starts instead of hue-spread OKLab inits
+//! - `PALETTE_STUDY_LUMINANCE` (default `50-92`) — OKLab L × 100 ranges, comma-separated
+//!   (`50-92,58-94,66-96,74-97,82-98`). Each range is its own batch.
 //! - `PSUDO_PALETTE_SELECTION` — selection modes for static report side-by-side (default `total`)
 //! - `PSUDO_INIT` (default `current`) — `current` | `glasbey_v1` | `mixed` initializer
 //! - `PSUDO_REFINE` (default `cartesian`) — refine used for `oklab_best` / report winner
@@ -90,6 +92,28 @@ fn parse_env_bool(key: &str) -> bool {
     env::var(key)
         .map(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
+}
+
+/// OKLab L × 100 pairs. `50-92` or `50-92,66-96`. Falls back to the production default.
+fn parse_luminance_ranges() -> Vec<[u16; 2]> {
+    let raw = env::var("PALETTE_STUDY_LUMINANCE").unwrap_or_else(|_| "50-92".to_string());
+    let mut out: Vec<[u16; 2]> = raw
+        .split(',')
+        .filter_map(|part| {
+            let (lo, hi) = part.trim().split_once('-')?;
+            let lo = lo.trim().parse::<u16>().ok()?;
+            let hi = hi.trim().parse::<u16>().ok()?;
+            (lo < hi && hi <= 100).then_some([lo, hi])
+        })
+        .collect();
+    if out.is_empty() {
+        out.push([50, 92]);
+    }
+    out
+}
+
+fn luminance_label(lum: [u16; 2]) -> String {
+    format!("{}-{}", lum[0], lum[1])
 }
 
 fn parse_channel_counts() -> Vec<usize> {
@@ -337,8 +361,8 @@ fn log_loss_stats(phase: &str, totals: &[f32]) {
     );
 }
 
-fn luminance_u16() -> Vec<u16> {
-    vec![50, 92]
+fn luminance_u16(lum: [u16; 2]) -> Vec<u16> {
+    vec![lum[0], lum[1]]
 }
 
 fn empty_names(n: usize) -> Vec<String> {
@@ -558,6 +582,7 @@ struct PaletteRun {
 
 struct StudyBatch {
     channels: usize,
+    luminance: [u16; 2],
     parents: Vec<PaletteRun>,
     batch_elapsed: Duration,
 }
@@ -578,8 +603,10 @@ fn run_channel_batch(
     review_objectives: &[PaletteObjectiveMode],
     c3_eval: &C3,
     spatial_w: f32,
+    luminance: [u16; 2],
 ) -> StudyBatch {
     let batch_start = Instant::now();
+    let lum_label = luminance_label(luminance);
     let scaled_restarts = scaled_budget(num_restarts, channels);
     let nm_iters = scaled_budget(max_iters, channels) / 2;
     let extra_obj: Vec<PaletteObjectiveMode> = review_objectives
@@ -590,7 +617,7 @@ fn run_channel_batch(
         .into_iter()
         .collect();
     eprintln!(
-        "[palette_study] {channels}ch: NM ~{nm_iters} iters/restart, {scaled_restarts} restarts (base {num_restarts}), {n_parents} palettes, init={} refine={} objective={} (+{} review objs)",
+        "[palette_study] {channels}ch L={lum_label}: NM ~{nm_iters} iters/restart, {scaled_restarts} restarts (base {num_restarts}), {n_parents} palettes, init={} refine={} objective={} (+{} review objs)",
         init_mode.id(),
         refine_mode.id(),
         report_objective.id(),
@@ -612,7 +639,7 @@ fn run_channel_batch(
         };
         let locked = vec![0u16; channels];
         let contrast = contrast_all(channels);
-        let lum = luminance_u16();
+        let lum = luminance_u16(luminance);
         let t0 = Instant::now();
         let run = optimize_palette_pipeline_with_init(
             &colors,
@@ -664,7 +691,7 @@ fn run_channel_batch(
         );
         let dbg = format_channel_debug(&run.oklab_best, c3_eval);
         eprintln!(
-            "[palette_study] {channels}ch #{}/{} L_tot={:.4} min_rgb={:.0} pool={} time={} | {}",
+            "[palette_study] {channels}ch L={lum_label} #{}/{} L_tot={:.4} min_rgb={:.0} pool={} time={} | {}",
             i + 1,
             n_parents,
             bd.total,
@@ -674,7 +701,7 @@ fn run_channel_batch(
             dbg
         );
         parents.push(PaletteRun {
-            case_id: format!("{channels}ch_run{}", i + 1),
+            case_id: format!("{channels}ch_L{lum_label}_run{}", i + 1),
             parent_seed,
             report_objective,
             result: run,
@@ -684,7 +711,7 @@ fn run_channel_batch(
         });
         if (i + 1) % 5 == 0 || i == 0 {
             eprintln!(
-                "[palette_study] {channels}ch finished {}/{}",
+                "[palette_study] {channels}ch L={lum_label} finished {}/{}",
                 i + 1,
                 n_parents
             );
@@ -693,26 +720,27 @@ fn run_channel_batch(
 
     let batch_elapsed = batch_start.elapsed();
     log_loss_stats(
-        &format!("{channels}-color palettes"),
+        &format!("{channels}-color palettes L={lum_label}"),
         &parents
             .iter()
             .map(|p| p.breakdown.total)
             .collect::<Vec<_>>(),
     );
     log_timing_stats(
-        &format!("{channels}-color optimize"),
+        &format!("{channels}-color L={lum_label} optimize"),
         &parents
             .iter()
             .map(|p| p.optimize_elapsed)
             .collect::<Vec<_>>(),
     );
     eprintln!(
-        "[palette_study] {channels}ch batch wall time {} ({} palettes)",
+        "[palette_study] {channels}ch L={lum_label} batch wall time {} ({} palettes)",
         format_duration(batch_elapsed),
         n_parents
     );
     StudyBatch {
         channels,
+        luminance,
         parents,
         batch_elapsed,
     }
@@ -810,11 +838,14 @@ fn append_section_html(
     });
 
     html.push_str(&format!(
-        r#"<h2>{channels}-color palettes (n={}, sorted by production L_tot)</h2>
-<p class="sort-note">Each case shows selection modes side-by-side from the same restart pool. Batch wall {}.</p>
+        r#"<h2>{channels}-color palettes · L {lum} (n={n}, sorted by production L_tot)</h2>
+<p class="sort-note">OKLab L bounds × 100: <code>[{lo}, {hi}]</code>. Each case shows selection modes side-by-side from the same restart pool. Batch wall {wall}.</p>
 "#,
-        parents.len(),
-        format_duration(batch.batch_elapsed),
+        lum = luminance_label(batch.luminance),
+        lo = batch.luminance[0],
+        hi = batch.luminance[1],
+        n = parents.len(),
+        wall = format_duration(batch.batch_elapsed),
     ));
 
     // Per-mode summary table
@@ -965,9 +996,9 @@ fn build_review_payload(
     c3_eval: &C3,
     spatial_w: f32,
 ) -> ReviewPayload {
-    let lum = vec![0.50f32, 0.92];
     let mut cases = Vec::new();
     for batch in batches {
+        let lum = vec![batch.luminance[0] as f32 / 100.0, batch.luminance[1] as f32 / 100.0];
         for pr in &batch.parents {
             let pool = &pr.result.restart_pool;
             let n = batch.channels;
@@ -1267,6 +1298,7 @@ const HTML_HEAD: &str = r#"<!DOCTYPE html>
 
 fn main() {
     let channel_counts = parse_channel_counts();
+    let luminance_ranges = parse_luminance_ranges();
     let n_parents = parse_env_usize("PALETTE_STUDY_PARENTS", 10);
     let n_rows = parse_env_usize("PALETTE_STUDY_ROWS", 384);
     let max_iters = parse_env_u32("PALETTE_STUDY_MAX_ITERS", DEFAULT_MAX_ITERS);
@@ -1304,6 +1336,12 @@ fn main() {
         .map(|c| c.to_string())
         .collect::<Vec<_>>()
         .join(", ");
+    let luminance_label_all: String = luminance_ranges
+        .iter()
+        .copied()
+        .map(luminance_label)
+        .collect::<Vec<_>>()
+        .join(", ");
     let modes_label: String = selection_modes
         .iter()
         .map(|m| m.id())
@@ -1316,11 +1354,12 @@ fn main() {
         .join(",");
 
     eprintln!(
-        "[palette_study] Nelder–Mead · max_iters={} restarts={} confusion={} · channels=[{}] · {} palettes/ch · spatial={} post={:?} · init={} refine={} objective={} · report_selection=[{}] · review=[{}]",
+        "[palette_study] Nelder–Mead · max_iters={} restarts={} confusion={} · channels=[{}] · L=[{}] · {} palettes/ch · spatial={} post={:?} · init={} refine={} objective={} · report_selection=[{}] · review=[{}]",
         max_iters,
         num_restarts,
         confusion_samples,
         channels_label,
+        luminance_label_all,
         n_parents,
         include_spatial,
         postprocess,
@@ -1337,34 +1376,37 @@ fn main() {
     let study_start = Instant::now();
     let mut batches = Vec::new();
     for &channels in &channel_counts {
-        batches.push(run_channel_batch(
-            channels,
-            n_parents,
-            n_rows,
-            max_iters,
-            confusion_samples,
-            num_restarts,
-            include_spatial,
-            postprocess,
-            spread_init,
-            init_mode,
-            refine_mode,
-            report_objective,
-            &review_objectives,
-            &c3_eval,
-            spatial_w,
-        ));
+        for &luminance in &luminance_ranges {
+            batches.push(run_channel_batch(
+                channels,
+                n_parents,
+                n_rows,
+                max_iters,
+                confusion_samples,
+                num_restarts,
+                include_spatial,
+                postprocess,
+                spread_init,
+                init_mode,
+                refine_mode,
+                report_objective,
+                &review_objectives,
+                &c3_eval,
+                spatial_w,
+                luminance,
+            ));
+        }
     }
 
     let study_elapsed = study_start.elapsed();
     let sw = 40i32;
     let sh = 100i32;
-    let total_palettes = n_parents * channel_counts.len();
+    let total_palettes = n_parents * channel_counts.len() * luminance_ranges.len();
     let mut html = String::from(HTML_HEAD);
     html.push_str(&format!(
         r#"<h1>Palette study (experiment foundation)</h1>
 <p class="note">
-  <strong>{total_palettes}</strong> optimized cases ({n_parents} per channel count: <strong>{channels_label}</strong>).
+  <strong>{total_palettes}</strong> optimized cases ({n_parents} per channel count × L range: channels <strong>{channels_label}</strong>, L <strong>{luminance_label_all}</strong>).
   <code>max_iters={max_iters}</code>, <code>restarts={num_restarts}</code>,
   spatial <strong>{spatial}</strong>, init <strong>{init}</strong>, refine <strong>{refine}</strong>,
   report objective <strong>{obj}</strong>, review methods <strong>{review}</strong>.

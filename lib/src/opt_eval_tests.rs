@@ -584,3 +584,66 @@ fn study_convergence_profiles() {
         );
     }
 }
+
+/// Screenshot-like 6 locked + 1 free. NM must not move locked display RGB.
+/// Minerva restores locks after optimize; if NM drifted them, the free color was
+/// scored against a phantom palette (duplicate purple / unused blue).
+#[test]
+fn optimize_does_not_move_locked_display_rgb() {
+    use super::{optimize_palette_pipeline, OptimizePostprocess};
+    use palette::{FromColor, Oklab, Srgb};
+
+    let locked_rgb: [[u16; 3]; 6] = [
+        [255, 0, 0],
+        [155, 0, 255],
+        [174, 255, 2],
+        [0, 218, 255],
+        [255, 0, 255],
+        [255, 196, 3],
+    ];
+    let mut colors = Vec::new();
+    for c in &locked_rgb {
+        colors.extend_from_slice(c);
+    }
+    colors.extend_from_slice(&[0x0d, 0xab, 0xff]);
+    let mut locked = vec![1u16; 7];
+    locked[6] = 0;
+    let contrast: Vec<u16> = (0..7).flat_map(|_| [0u16, 65535]).collect();
+    let lum = vec![50u16, 92];
+    let names = vec![String::new(); 7];
+    let run = optimize_palette_pipeline(
+        &colors,
+        &locked,
+        &[],
+        &contrast,
+        &lum,
+        vec![],
+        names,
+        Some(800),
+        Some(8),
+        Some(false),
+        Some(4),
+        Some(OptimizePostprocess::Full),
+    );
+    for i in 0..6 {
+        let c = &run.oklab_best[i * 3..i * 3 + 3];
+        let rgb: Srgb = Srgb::from_color(Oklab::new(c[0], c[1], c[2]));
+        let got = [
+            (rgb.red.clamp(0.0, 1.0) * 255.0).round() as u16,
+            (rgb.green.clamp(0.0, 1.0) * 255.0).round() as u16,
+            (rgb.blue.clamp(0.0, 1.0) * 255.0).round() as u16,
+        ];
+        assert_eq!(
+            got, locked_rgb[i],
+            "locked channel {i} drifted from {:?} to {:?}",
+            locked_rgb[i], got
+        );
+        for c in 0..3 {
+            assert_eq!(
+                run.srgb_linear[i * 3 + c],
+                (locked_rgb[i][c] as f32) / 255.0,
+                "locked channel {i} component {c} is not the caller's input byte",
+            );
+        }
+    }
+}
