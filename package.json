@@ -8,21 +8,11 @@
 		"start": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
-		"palette-study": "cd lib && cargo run --example palette_study --release",
-		"prepalette-study-wasm": "node scripts/ensure-wasm.mjs",
-		"palette-study-wasm": "node scripts/palette-study-wasm.mjs",
-		"prepalette-study-compare": "node scripts/ensure-wasm.mjs",
-		"palette-study-compare": "node scripts/palette-study-compare.mjs",
-		"palette-test": "node scripts/run-palette-test.mjs",
-		"param-sweep": "cd lib && cargo run --example param_sweep --release",
-		"solver-benchmark": "cd lib && cargo run --example solver_benchmark --release",
-		"solver-hyperparam": "cd lib && cargo run --example solver_hyperparam_sweep --release",
+		"palette": "cd lib && cargo run --example palette_study --release",
 		"wasm-build": "bash scripts/wasm-build.sh",
 		"preinstall": "node scripts/ensure-pkg-stub.mjs",
 		"predev": "node scripts/ensure-wasm.mjs",
-		"prebuild": "node scripts/ensure-wasm.mjs",
-		"bundle_shaders": "node src/scripts/bundle_shaders.js",
-		"watch_shaders": "node src/scrdeck.gl/extensionsipts/bundle_shaders.js --watch"
+		"prebuild": "node scripts/ensure-wasm.mjs"
 	},
 	"dependencies": {
 		"@deck.gl/core": "~8.8.6",

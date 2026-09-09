@@ -54,7 +54,6 @@ fn seeded_annealing_is_repeatable() {
             false,
             None,
             None,
-            None,
         )
         .expect("annealing")
     };
@@ -96,7 +95,6 @@ fn multi_start_exhibits_bounded_cost_spread() {
             false,
             None,
             None,
-            None,
         )
         .expect("annealing");
         costs.push(cost);
@@ -117,7 +115,6 @@ fn perceptual_display_rgb_penalizes_red_purple_closer_than_rgb_spread() {
         &c3,
         &purple_red_green,
         &intensity,
-        1.0,
         0.0,
         &[],
         &names,
@@ -126,7 +123,6 @@ fn perceptual_display_rgb_penalizes_red_purple_closer_than_rgb_spread() {
         &c3,
         &red_green_blue,
         &intensity,
-        1.0,
         0.0,
         &[],
         &names,
@@ -156,7 +152,6 @@ fn perceptual_display_rgb_flags_red_pink_closer_than_rgb_spread() {
         &c3,
         &red_pink_green,
         &intensity,
-        1.0,
         0.0,
         &[],
         &names,
@@ -165,7 +160,6 @@ fn perceptual_display_rgb_flags_red_pink_closer_than_rgb_spread() {
         &c3,
         &red_green_blue,
         &intensity,
-        1.0,
         0.0,
         &[],
         &names,
@@ -189,13 +183,12 @@ fn chroma_objective_penalizes_achromatic_channels() {
         &c3,
         &saturated,
         &intensity,
-        1.0,
         0.0,
         &[],
         &names,
     );
     let grey_bd =
-        super::evaluate_palette_objective_breakdown(&c3, &grey, &intensity, 1.0, 0.0, &[], &names);
+        super::evaluate_palette_objective_breakdown(&c3, &grey, &intensity, 0.0, &[], &names);
     assert!(sat_bd.min_srgb_saturation > grey_bd.min_srgb_saturation);
     assert!(grey_bd.saturation_deficit_penalty > sat_bd.saturation_deficit_penalty);
 }
@@ -210,7 +203,6 @@ fn high_l_pastel_oklab_can_still_fail_srgb_floor() {
         &c3,
         &pastel,
         &intensity,
-        1.0,
         0.0,
         &[],
         &names,
@@ -231,7 +223,6 @@ fn min_name_weight_lowers_total_on_close_name_pair() {
         &c3,
         &red_pink_green,
         &intensity,
-        1.0,
         0.0,
         &[],
         &names,
@@ -242,7 +233,6 @@ fn min_name_weight_lowers_total_on_close_name_pair() {
             &c3,
             &red_pink_green,
             &intensity,
-            1.0,
             0.0,
             &[],
             &names,
@@ -437,7 +427,6 @@ fn oklab_sep_flags_red_pink_closer_than_red_blue() {
         &c3,
         &red_pink_green,
         &intensity,
-        1.0,
         0.0,
         &[],
         &names,
@@ -447,7 +436,6 @@ fn oklab_sep_flags_red_pink_closer_than_red_blue() {
             &c3,
             &red_pink_green,
             &intensity,
-            1.0,
             0.0,
             &[],
             &names,
@@ -557,7 +545,6 @@ fn study_convergence_profiles() {
                 &c3_eval,
                 &run.oklab_best,
                 &run.intensity_arc,
-                1.0,
                 0.0,
                 &run.excluded_colors_indices,
                 &run.color_name_indices,

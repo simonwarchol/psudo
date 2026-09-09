@@ -31,13 +31,12 @@ mod tests {
         let intensity = Arc::new(Array2::<f32>::zeros((384, 6)));
         let names = [-1.0; 6];
         let direct =
-            evaluate_palette_objective_breakdown(&c3, &oklab, &intensity, 1.0, 0.0, &[], &names);
+            evaluate_palette_objective_breakdown(&c3, &oklab, &intensity, 0.0, &[], &names);
         let fast = with_eval_scratch(|s| {
             evaluate_objective_fast(
                 &c3,
                 &oklab,
                 &intensity,
-                1.0,
                 0.0,
                 &HashSet::new(),
                 &names,
@@ -69,7 +68,6 @@ mod tests {
             &c3,
             &oklab,
             &intensity,
-            1.0,
             0.0,
             &[],
             &[-1.0; 6],

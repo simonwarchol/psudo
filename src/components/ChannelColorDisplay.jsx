@@ -215,7 +215,7 @@ function ChannelColorDisplay(props) {
           colorNamesList,
           undefined,
           undefined,
-          false
+          true
         );
         console.log("Post Call Opt colors", optColors);
         let colorCounter = 0;

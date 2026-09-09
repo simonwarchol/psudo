@@ -256,7 +256,6 @@ fn make_loss(
     pins: &LockedPins,
     intensity_arc: Arc<Array2<f32>>,
     luminance_values: &[f32],
-    avg_confusion: f32,
     spatial_w: f32,
     excluded_colors_indices: &[f32],
     color_name_indices: &[f32],
@@ -267,7 +266,6 @@ fn make_loss(
         pins.clone(),
         intensity_arc,
         luminance_values.to_vec(),
-        avg_confusion,
         spatial_w,
         excluded_colors_indices.to_vec(),
         color_name_indices.to_vec(),
@@ -319,7 +317,6 @@ pub fn run_palette_argmin_solver(
     anneal_rng_seed: u64,
     confusion_baseline_samples: u32,
     include_spatial_channel_overlap: bool,
-    precomputed_avg_confusion: Option<f32>,
     params: &PaletteSolverParams,
     // Multistart index; restart 0 always uses the RGB-primary spread init.
     restart: u32,
@@ -348,18 +345,16 @@ pub fn run_palette_argmin_solver(
             Some(anneal_rng_seed),
             None,
             include_spatial_channel_overlap,
-            precomputed_avg_confusion,
             None,
             params.sa_initial_temp,
         );
     }
 
-    let spatial_w = if include_spatial_channel_overlap {
+    let spatial_w = if include_spatial_channel_overlap && intensity_arc.nrows() > 0 {
         crate::SPATIAL_CONFUSION_WEIGHT
     } else {
         0.0
     };
-    let avg_confusion = precomputed_avg_confusion.unwrap_or(1.0);
 
     let pins = LockedPins::from_oklab(locked_colors, start_oklab);
     let mut rng = StdRng::seed_from_u64(init_seed);
@@ -377,7 +372,6 @@ pub fn run_palette_argmin_solver(
         &pins,
         Arc::clone(&intensity_arc),
         luminance_values,
-        avg_confusion,
         spatial_w,
         excluded_colors_indices,
         color_name_indices,
@@ -399,7 +393,6 @@ pub fn run_palette_argmin_solver(
             c3_instance.as_ref(),
             &best_param,
             &intensity_arc,
-            avg_confusion,
             spatial_w,
             &excluded_set,
             color_name_indices,
@@ -465,7 +458,6 @@ pub fn study_postprocess_oklab(
     luminance_values: &[f32],
     c3: &c3::C3,
     intensity_arc: &Arc<Array2<f32>>,
-    avg_confusion: f32,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -477,7 +469,6 @@ pub fn study_postprocess_oklab(
         luminance_values,
         c3,
         intensity_arc,
-        avg_confusion,
         spatial_w,
         excluded_set,
         color_name_indices,
@@ -489,7 +480,6 @@ pub fn study_postprocess_oklab(
         luminance_values,
         c3,
         intensity_arc,
-        avg_confusion,
         spatial_w,
         excluded_set,
         color_name_indices,
@@ -503,7 +493,6 @@ pub fn objective_total_for_oklab(
     c3: &c3::C3,
     oklab: &[f32],
     intensity_arc: &Arc<Array2<f32>>,
-    avg_confusion: f32,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -512,7 +501,6 @@ pub fn objective_total_for_oklab(
         c3,
         oklab,
         intensity_arc,
-        avg_confusion,
         spatial_w,
         excluded_set,
         color_name_indices,

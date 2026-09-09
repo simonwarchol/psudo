@@ -1,23 +1,16 @@
 //! Palette consistency study: random optimized palettes per channel count.
-//! Writes `target/palette_study/report.html`.
+//! Writes `lib/target/palette_study/report.html`.
 //!
 //! ```bash
-//! cd lib && cargo run --example palette_study --release
-//! PALETTE_STUDY_PARENTS=10 PALETTE_STUDY_CHANNELS=4,6,8 cargo run --example palette_study --release
+//! pnpm palette
+//! PALETTE_STUDY_PARENTS=10 PALETTE_STUDY_CHANNELS=4,6,8 pnpm palette
 //! ```
-//!
-//! WASM / npm (same env vars, uses `psudo/sync` from repo root):
-//! ```bash
-//! pnpm run palette-study-wasm
-//! pnpm run palette-study-wasm -- --document path/to/story.json
-//! ```
-//! Report: `lib/target/palette_study_wasm/report.html`
 //!
 //! Environment (optional):
 //! - `PALETTE_STUDY_PARENTS` (default 10) — palettes per channel count
 //! - `PALETTE_STUDY_CHANNELS` (default `4,6,8`) — comma-separated channel counts
 //! - `PALETTE_STUDY_ROWS` (default 384) — synthetic intensity rows per run
-//! - `PALETTE_STUDY_MAX_ITERS` (default 3000 — native study budget; WASM defaults to 2700)
+//! - `PALETTE_STUDY_MAX_ITERS` (default 3000)
 //! - `PALETTE_STUDY_CONFUSION_SAMPLES` (default 32)
 //! - `PALETTE_STUDY_RESTARTS` (default 18) — Nelder–Mead multistarts
 //! - `PALETTE_STUDY_STUDY=1` — lighter Study postprocess (benchmark-style; default is Full)
@@ -34,9 +27,9 @@
 //! - `PSUDO_OBJECTIVE` (default `total`) — objective for the static report winner optimize
 //!
 //! Also writes:
-//! - `target/palette_study/candidates.json` — all restart-pool diagnostics
-//! - `target/palette_study/review.html` — interactive vote UI (pick best method per case → scoreboard)
-//! - `target/palette_study/review_data.json` — same payload embedded in review.html
+//! - `lib/target/palette_study/candidates.json` — all restart-pool diagnostics
+//! - `lib/target/palette_study/review.html` — interactive vote UI
+//! - `lib/target/palette_study/review_data.json`
 //!
 //! Timing is printed to stderr and embedded in `report.html` (per palette + batch totals).
 //!
@@ -684,7 +677,6 @@ fn run_channel_batch(
             c3_eval,
             &run.oklab_best,
             &run.intensity_arc,
-            1.0,
             spatial_w,
             &run.excluded_colors_indices,
             &run.color_name_indices,
@@ -1034,7 +1026,6 @@ fn build_review_payload(
                             c3_eval,
                             &run_ref.oklab_best,
                             &run_ref.intensity_arc,
-                            1.0,
                             spatial_w,
                             &run_ref.excluded_colors_indices,
                             &run_ref.color_name_indices,
@@ -1082,7 +1073,6 @@ fn build_review_payload(
                             &lum,
                             c3_eval,
                             &pr.result.intensity_arc,
-                            1.0,
                             spatial_w,
                             &excluded,
                             &pr.result.color_name_indices,
@@ -1098,7 +1088,6 @@ fn build_review_payload(
                             c3_eval,
                             &oklab,
                             &pr.result.intensity_arc,
-                            1.0,
                             spatial_w,
                             &pr.result.excluded_colors_indices,
                             &pr.result.color_name_indices,

@@ -108,11 +108,8 @@ Solver defaults (production NM multistart):
 
 ### Study / evaluation tooling
 
-- `cargo run --example palette_study --release` →
-  `lib/target/palette_study/report.html` (swatches, C3 name + `hue_deg` debug,
-  loss breakdown bars; env `PALETTE_STUDY_*`).
-- `pnpm run palette-study-wasm`, `palette-study-compare` (native vs WASM parity).
-- `param_sweep`, `solver_benchmark`, `solver_hyperparam_sweep` examples.
+- `pnpm palette` → `lib/target/palette_study/report.html`
+  (swatches, C3 name + `hue_deg` debug, loss breakdown; env `PALETTE_STUDY_*`).
 - `opt_eval_tests.rs` — red/pink and pastel failure-mode unit tests;
   `c3_migration_tests.rs` — C3 parity.
 
@@ -227,7 +224,6 @@ Uncommitted working-tree diff (vs HEAD `551f82f`), confirmed by `git diff --stat
 - `lib/src/lib.rs` — `DEFAULT_NUM_RESTARTS` (+ WASM) 12→18; `sa_initial_oklab_for_restart`
   diversity switched from `init_seed % k` to `restart % 3 != 0`
 - `lib/npm/index.js` — `DEFAULT_NUM_RESTARTS` 12→18 (worker-pool parity)
-- `scripts/palette-study-lib.mjs` — `DEFAULT_RESTARTS` →18
 - `lib/examples/palette_study.rs` — `DEFAULT_RESTARTS` 6→18 (match production)
 
 Nothing in the working tree changes the objective formula; it is purely a
@@ -293,10 +289,8 @@ without objective/init changes, **post-fold polar/hybrid refine as a quality fix
 
 | Command | Purpose |
 |---------|---------|
-| `cd lib && cargo run --example palette_study --release` | Native study HTML |
-| `PALETTE_STUDY_PARENTS=20 PALETTE_STUDY_CHANNELS=4,6 PSUDO_REVIEW_METHODS=total,oklab_sep cargo run --example palette_study --release` | Interactive total vs OKLab-separation review |
-| `pnpm run palette-study-wasm` | WASM study HTML |
-| `pnpm run palette-study-compare` | Native vs WASM parity |
+| `pnpm palette` | Study HTML |
+| `PALETTE_STUDY_PARENTS=20 PALETTE_STUDY_CHANNELS=4,6 PSUDO_REVIEW_METHODS=total,oklab_sep pnpm palette` | Interactive total vs OKLab-separation review |
 | `cargo test -p psudo opt_eval -- --nocapture` | Failure-mode unit tests |
 | `cargo test -p psudo c3_migration --release` | C3 parity tests |
 

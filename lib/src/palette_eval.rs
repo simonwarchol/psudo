@@ -22,8 +22,10 @@ pub struct PaletteEvalScratch {
     pub projected_chromas: Vec<f32>,
     pub c3_samples: Vec<c3::ColorSample>,
     pub palette_terms: Vec<Vec<RelatedTerm>>,
-    /// Spatial confusion: mixed OKLab rows (n_rows × 3).
+    /// Spatial mix-vs-P_k: mixed OKLab rows (n_rows × 3).
     pub mixed_oklab: Array2<f32>,
+    /// Display-sRGB of mixed rows (0–255), reused across evals.
+    pub mixed_display_rgb: Vec<[f64; 3]>,
 }
 
 impl PaletteEvalScratch {
@@ -38,6 +40,7 @@ impl PaletteEvalScratch {
             c3_samples: Vec::new(),
             palette_terms: Vec::new(),
             mixed_oklab: Array2::zeros((0, 3)),
+            mixed_display_rgb: Vec::new(),
         }
     }
 }
@@ -282,7 +285,6 @@ pub fn evaluate_objective_fast(
     c3: &c3::C3,
     oklab_flat: &[f32],
     intensity_arc: &Arc<Array2<f32>>,
-    avg_confusion: f32,
     spatial_confusion_weight: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -339,11 +341,12 @@ pub fn evaluate_objective_fast(
     let mut confusion_weighted = 0.0f32;
     if spatial_confusion_weight > 0.0 {
         confusion_weighted = spatial_confusion_weight
-            * crate::compute_confusion_loss_fast(
+            * crate::score_mix_vs_palette(
                 oklab_flat,
                 intensity_arc.as_ref(),
-                avg_confusion,
+                &scratch.display_rgb,
                 &mut scratch.mixed_oklab,
+                &mut scratch.mixed_display_rgb,
             );
     }
 

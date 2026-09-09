@@ -288,7 +288,7 @@ export async function getChannelPayload(
   sampleSize = null,
   lens = false
 ) {
-  const channelsPayload = [];
+  const slots = new Array(channelsVisible.length).fill(null);
   let indices = null;
 
   await Promise.all(
@@ -309,17 +309,16 @@ export async function getChannelPayload(
             rasterArray[ii] = raster.data[d];
           });
         }
-        const channelPayload = {
+        slots[i] = {
           color: colors[i],
           contrastLimits: contrastLimits[i],
           selection: selections[i],
           data: rasterArray,
         };
-        channelsPayload.push(channelPayload);
       }
     })
   );
-  return channelsPayload;
+  return slots.filter((p) => p != null);
 }
 
 export function createContiguousArrays(channelList) {
@@ -345,7 +344,7 @@ export async function calculateLensPaletteLoss(channelsPayload, luminanceValue, 
     contrastLimitsArray,
     luminanceValue,
     colorExcluded, Array(channelsPayload.length).fill(""),
-    false
+    true
   );
   return paletteCost;
 }
@@ -392,7 +391,7 @@ export async function calculatePaletteLoss(
     luminanceValue,
     colorExcluded,
     colorNamesList,
-    false
+    true
   );
   return paletteCost;
 }

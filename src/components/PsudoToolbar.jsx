@@ -288,7 +288,7 @@ function PsudoToolbar() {
       colorNamesList,
       undefined,
       undefined,
-      false
+      true
     );
     console.log("Post Call Opt colors", optColors);
     console.log("Colors Before", colors);

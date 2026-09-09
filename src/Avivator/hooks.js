@@ -255,8 +255,8 @@ export const useImage = (source, history) => {
         context?.colorExcluded,
         colorNamesList,
         undefined,
-        undefined,
-        false
+          undefined,
+          true
       );
       console.log("Post Call Opt colors", optColors);
       let colorCounter = 0;
