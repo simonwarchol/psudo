@@ -27,7 +27,7 @@ pnpm palette
 PALETTE_STUDY_PARENTS=10 PALETTE_STUDY_CHANNELS=4,6,8 pnpm palette
 ```
 
-Writes `lib/target/palette_study/report.html` (and `review.html` for method comparison). Env: `PALETTE_STUDY_*`, `PSUDO_REVIEW_METHODS`.
+Writes `lib/target/palette_study/report.html`. Env: `PALETTE_STUDY_*`.
 
 ## Use as an npm package in another app
 

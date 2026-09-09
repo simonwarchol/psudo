@@ -290,7 +290,7 @@ without objective/init changes, **post-fold polar/hybrid refine as a quality fix
 | Command | Purpose |
 |---------|---------|
 | `pnpm palette` | Study HTML |
-| `PALETTE_STUDY_PARENTS=20 PALETTE_STUDY_CHANNELS=4,6 PSUDO_REVIEW_METHODS=total,oklab_sep pnpm palette` | Interactive total vs OKLab-separation review |
+| `PALETTE_STUDY_PARENTS=20 PALETTE_STUDY_CHANNELS=4,6 pnpm palette` | Custom channel counts |
 | `cargo test -p psudo opt_eval -- --nocapture` | Failure-mode unit tests |
 | `cargo test -p psudo c3_migration --release` | C3 parity tests |
 

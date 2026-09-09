@@ -21,15 +21,9 @@
 //! - `PSUDO_PALETTE_SELECTION` — selection modes for static report side-by-side (default `total`)
 //! - `PSUDO_INIT` (default `current`) — `current` | `glasbey_v1` | `mixed` initializer
 //! - `PSUDO_REFINE` (default `cartesian`) — refine used for `oklab_best` / report winner
-//! - `PSUDO_REVIEW_METHODS` (default `total,oklab_sep`) — cards in interactive review.html
-//!   (`total` = production mean C3 + sRGB sep; `oklab_sep` = mean C3 + OKLab sep;
-//!   also `min_name`, `polar`/`hybrid`)
 //! - `PSUDO_OBJECTIVE` (default `total`) — objective for the static report winner optimize
 //!
-//! Also writes:
-//! - `lib/target/palette_study/candidates.json` — all restart-pool diagnostics
-//! - `lib/target/palette_study/review.html` — interactive vote UI
-//! - `lib/target/palette_study/review_data.json`
+//! Also writes `lib/target/palette_study/candidates.json` (restart-pool diagnostics).
 //!
 //! Timing is printed to stderr and embedded in `report.html` (per palette + batch totals).
 //!
@@ -45,10 +39,10 @@
 use palette::{FromColor, Oklab, Srgb};
 use psudo::c3::C3;
 use psudo::{
-    apply_palette_refine_ex, compute_diagnostics, debug_palette_channels,
-    evaluate_palette_objective_breakdown, optimize_palette_pipeline_with_init, select_best_restart,
-    OptimizePipelineResult, OptimizePostprocess, PaletteInitMode, PaletteObjectiveBreakdown,
-    PaletteObjectiveMode, PaletteRefineMode, PaletteSelectionMode, RestartRecord,
+    debug_palette_channels, evaluate_palette_objective_breakdown,
+    optimize_palette_pipeline_with_init, select_best_restart, OptimizePipelineResult,
+    OptimizePostprocess, PaletteInitMode, PaletteObjectiveBreakdown, PaletteObjectiveMode,
+    PaletteRefineMode, PaletteSelectionMode, RestartRecord,
 };
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -157,58 +151,6 @@ fn parse_objective_mode() -> PaletteObjectiveMode {
         .ok()
         .and_then(|s| PaletteObjectiveMode::parse(&s))
         .unwrap_or(PaletteObjectiveMode::MeanOnly)
-}
-
-/// Review cards: objective variants, refine variants, and/or selection modes.
-#[derive(Clone, Copy, Debug)]
-enum ReviewMethodSpec {
-    Objective(PaletteObjectiveMode),
-    Refine(PaletteRefineMode),
-    Select(PaletteSelectionMode),
-}
-
-impl ReviewMethodSpec {
-    fn id(self) -> &'static str {
-        match self {
-            Self::Objective(m) => m.id(),
-            Self::Refine(PaletteRefineMode::Cartesian) => "cartesian",
-            Self::Refine(m) => m.id(),
-            Self::Select(m) => m.id(),
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Objective(m) => m.label(),
-            Self::Refine(PaletteRefineMode::Cartesian) => "Cartesian refine (on total)",
-            Self::Refine(m) => m.label(),
-            Self::Select(m) => m.label(),
-        }
-    }
-}
-
-fn parse_review_methods() -> Vec<ReviewMethodSpec> {
-    let raw = env::var("PSUDO_REVIEW_METHODS").unwrap_or_else(|_| "total,oklab_sep".into());
-    let mut out = Vec::new();
-    for part in raw.split(',') {
-        let s = part.trim();
-        if s.is_empty() {
-            continue;
-        }
-        // Objective first so `total` / `oklab_sep` / `min_name` are not stolen by other aliases.
-        if let Some(o) = PaletteObjectiveMode::parse(s) {
-            out.push(ReviewMethodSpec::Objective(o));
-        } else if let Some(r) = PaletteRefineMode::parse(s) {
-            out.push(ReviewMethodSpec::Refine(r));
-        } else if let Some(sel) = PaletteSelectionMode::parse(s) {
-            out.push(ReviewMethodSpec::Select(sel));
-        }
-    }
-    if out.is_empty() {
-        out.push(ReviewMethodSpec::Objective(PaletteObjectiveMode::MeanOnly));
-        out.push(ReviewMethodSpec::Objective(PaletteObjectiveMode::OklabSep));
-    }
-    out
 }
 
 fn oklab_to_srgb_linear(oklab: &[f32]) -> Vec<f32> {
@@ -564,13 +506,9 @@ fn svg_swatches(rgb: &[[u8; 3]], sw: i32, sh: i32) -> String {
 struct PaletteRun {
     case_id: String,
     parent_seed: u64,
-    report_objective: PaletteObjectiveMode,
-    /// Optimize used for the static report (`report_objective`).
     result: OptimizePipelineResult,
     breakdown: PaletteObjectiveBreakdown,
     optimize_elapsed: Duration,
-    /// Extra objective-mode optimizes for review cards (same seed / intensities).
-    alt_objectives: Vec<(PaletteObjectiveMode, OptimizePipelineResult)>,
 }
 
 struct StudyBatch {
@@ -593,7 +531,6 @@ fn run_channel_batch(
     init_mode: PaletteInitMode,
     refine_mode: PaletteRefineMode,
     report_objective: PaletteObjectiveMode,
-    review_objectives: &[PaletteObjectiveMode],
     c3_eval: &C3,
     spatial_w: f32,
     luminance: [u16; 2],
@@ -602,19 +539,11 @@ fn run_channel_batch(
     let lum_label = luminance_label(luminance);
     let scaled_restarts = scaled_budget(num_restarts, channels);
     let nm_iters = scaled_budget(max_iters, channels) / 2;
-    let extra_obj: Vec<PaletteObjectiveMode> = review_objectives
-        .iter()
-        .copied()
-        .filter(|o| *o != report_objective)
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect();
     eprintln!(
-        "[palette_study] {channels}ch L={lum_label}: NM ~{nm_iters} iters/restart, {scaled_restarts} restarts (base {num_restarts}), {n_parents} palettes, init={} refine={} objective={} (+{} review objs)",
+        "[palette_study] {channels}ch L={lum_label}: NM ~{nm_iters} iters/restart, {scaled_restarts} restarts (base {num_restarts}), {n_parents} palettes, init={} refine={} objective={}",
         init_mode.id(),
         refine_mode.id(),
         report_objective.id(),
-        extra_obj.len()
     );
 
     let mut shared_intensity_rng = StdRng::seed_from_u64(9000 + channels as u64);
@@ -651,27 +580,6 @@ fn run_channel_batch(
             refine_mode,
             report_objective,
         );
-        let mut alt_objectives = Vec::new();
-        for &obj in &extra_obj {
-            let alt = optimize_palette_pipeline_with_init(
-                &colors,
-                &locked,
-                &shared_intensities,
-                &contrast,
-                &lum,
-                vec![],
-                empty_names(channels),
-                Some(max_iters),
-                Some(confusion_samples),
-                Some(include_spatial),
-                Some(num_restarts),
-                Some(postprocess),
-                init_mode,
-                refine_mode,
-                obj,
-            );
-            alt_objectives.push((obj, alt));
-        }
         let optimize_elapsed = t0.elapsed();
         let bd = evaluate_palette_objective_breakdown(
             c3_eval,
@@ -695,11 +603,9 @@ fn run_channel_batch(
         parents.push(PaletteRun {
             case_id: format!("{channels}ch_L{lum_label}_run{}", i + 1),
             parent_seed,
-            report_objective,
             result: run,
             breakdown: bd,
             optimize_elapsed,
-            alt_objectives,
         });
         if (i + 1) % 5 == 0 || i == 0 {
             eprintln!(
@@ -944,214 +850,6 @@ struct CandidateJsonRow {
     min_oklab_chroma: f32,
 }
 
-#[derive(Serialize)]
-struct ReviewModeMeta {
-    id: String,
-    label: String,
-}
-
-#[derive(Serialize)]
-struct ReviewMethodPalette {
-    mode_id: String,
-    mode_label: String,
-    restart_id: u32,
-    hex_colors: Vec<String>,
-    dominant_names: Vec<String>,
-    families: Vec<String>,
-    total_loss: f32,
-    min_c3_name_distance: f64,
-    min_display_rgb_distance: f32,
-    duplicate_family_pair_count: usize,
-    earth_term_mass: f64,
-}
-
-#[derive(Serialize)]
-struct ReviewCase {
-    case_id: String,
-    channels: usize,
-    parent_seed: u64,
-    methods: Vec<ReviewMethodPalette>,
-}
-
-#[derive(Serialize)]
-struct ReviewPayload {
-    run_id: String,
-    init_mode: String,
-    modes: Vec<ReviewModeMeta>,
-    cases: Vec<ReviewCase>,
-}
-
-fn build_review_payload(
-    batches: &[StudyBatch],
-    review_methods: &[ReviewMethodSpec],
-    init_mode: PaletteInitMode,
-    c3_eval: &C3,
-    spatial_w: f32,
-) -> ReviewPayload {
-    let mut cases = Vec::new();
-    for batch in batches {
-        let lum = vec![batch.luminance[0] as f32 / 100.0, batch.luminance[1] as f32 / 100.0];
-        for pr in &batch.parents {
-            let pool = &pr.result.restart_pool;
-            let n = batch.channels;
-            let locked = vec![false; n];
-            let excluded: std::collections::HashSet<usize> = pr
-                .result
-                .excluded_colors_indices
-                .iter()
-                .map(|&x| x as usize)
-                .collect();
-
-            // Shared base: total-loss winner from the polished restart pool.
-            let Some(base_idx) = select_best_restart(pool, PaletteSelectionMode::TotalLoss) else {
-                continue;
-            };
-            let base_oklab = pool[base_idx].oklab.clone();
-            let base_restart = pool[base_idx].restart_id;
-
-            let mut methods = Vec::new();
-            for &spec in review_methods {
-                match spec {
-                    ReviewMethodSpec::Objective(obj) => {
-                        let run_ref = if obj == pr.report_objective {
-                            &pr.result
-                        } else if let Some((_, alt)) =
-                            pr.alt_objectives.iter().find(|(o, _)| *o == obj)
-                        {
-                            alt
-                        } else {
-                            continue;
-                        };
-                        let bd = evaluate_palette_objective_breakdown(
-                            c3_eval,
-                            &run_ref.oklab_best,
-                            &run_ref.intensity_arc,
-                            spatial_w,
-                            &run_ref.excluded_colors_indices,
-                            &run_ref.color_name_indices,
-                        );
-                        let d = compute_diagnostics(c3_eval, &run_ref.oklab_best, &bd);
-                        methods.push(ReviewMethodPalette {
-                            mode_id: spec.id().to_string(),
-                            mode_label: spec.label().to_string(),
-                            restart_id: 0,
-                            hex_colors: hex_colors_from_oklab(&run_ref.oklab_best),
-                            dominant_names: d.dominant_c3_names,
-                            families: d.coarse_name_families,
-                            total_loss: d.total_loss,
-                            min_c3_name_distance: d.min_c3_name_distance,
-                            min_display_rgb_distance: d.min_display_rgb_distance,
-                            duplicate_family_pair_count: d.duplicate_family_pair_count,
-                            earth_term_mass: d.earth_term_mass,
-                        });
-                    }
-                    ReviewMethodSpec::Select(sel) => {
-                        let Some(idx) = select_best_restart(pool, sel) else {
-                            continue;
-                        };
-                        let rec = &pool[idx];
-                        let d = &rec.diagnostics;
-                        methods.push(ReviewMethodPalette {
-                            mode_id: spec.id().to_string(),
-                            mode_label: spec.label().to_string(),
-                            restart_id: rec.restart_id,
-                            hex_colors: hex_colors_from_oklab(&rec.oklab),
-                            dominant_names: d.dominant_c3_names.clone(),
-                            families: d.coarse_name_families.clone(),
-                            total_loss: d.total_loss,
-                            min_c3_name_distance: d.min_c3_name_distance,
-                            min_display_rgb_distance: d.min_display_rgb_distance,
-                            duplicate_family_pair_count: d.duplicate_family_pair_count,
-                            earth_term_mass: d.earth_term_mass,
-                        });
-                    }
-                    ReviewMethodSpec::Refine(refine) => {
-                        let mut oklab = base_oklab.clone();
-                        apply_palette_refine_ex(
-                            &mut oklab,
-                            &locked,
-                            &lum,
-                            c3_eval,
-                            &pr.result.intensity_arc,
-                            spatial_w,
-                            &excluded,
-                            &pr.result.color_name_indices,
-                            pr.parent_seed.wrapping_add(0xA11CE),
-                            refine,
-                            true,
-                            false,
-                            // Study review: allow polar to separate bad name pairs even if L_tot
-                            // ticks up slightly (production apply_palette_refine stays strict).
-                            matches!(refine, PaletteRefineMode::Polar | PaletteRefineMode::Hybrid),
-                        );
-                        let bd = evaluate_palette_objective_breakdown(
-                            c3_eval,
-                            &oklab,
-                            &pr.result.intensity_arc,
-                            spatial_w,
-                            &pr.result.excluded_colors_indices,
-                            &pr.result.color_name_indices,
-                        );
-                        let d = compute_diagnostics(c3_eval, &oklab, &bd);
-                        methods.push(ReviewMethodPalette {
-                            mode_id: spec.id().to_string(),
-                            mode_label: spec.label().to_string(),
-                            restart_id: base_restart,
-                            hex_colors: hex_colors_from_oklab(&oklab),
-                            dominant_names: d.dominant_c3_names,
-                            families: d.coarse_name_families,
-                            total_loss: d.total_loss,
-                            min_c3_name_distance: d.min_c3_name_distance,
-                            min_display_rgb_distance: d.min_display_rgb_distance,
-                            duplicate_family_pair_count: d.duplicate_family_pair_count,
-                            earth_term_mass: d.earth_term_mass,
-                        });
-                    }
-                }
-            }
-            if methods.is_empty() {
-                continue;
-            }
-            cases.push(ReviewCase {
-                case_id: pr.case_id.clone(),
-                channels: batch.channels,
-                parent_seed: pr.parent_seed,
-                methods,
-            });
-        }
-    }
-    let run_id = format!(
-        "{}_{}_{}",
-        init_mode.id(),
-        cases.len(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
-    );
-    ReviewPayload {
-        run_id,
-        init_mode: init_mode.id().to_string(),
-        modes: review_methods
-            .iter()
-            .map(|m| ReviewModeMeta {
-                id: m.id().to_string(),
-                label: m.label().to_string(),
-            })
-            .collect(),
-        cases,
-    }
-}
-
-fn write_review_html(path: &PathBuf, payload: &ReviewPayload) {
-    const TEMPLATE: &str = include_str!("palette_study_review.html");
-    let json = serde_json::to_string(payload).expect("review json");
-    // Escape </script> so embedded JSON cannot break out of the script tag.
-    let safe = json.replace('<', "\\u003c");
-    let html = TEMPLATE.replace("__REVIEW_DATA_JSON__", &safe);
-    fs::write(path, html).expect("write review.html");
-}
-
 fn write_candidates_json(path: &PathBuf, batches: &[StudyBatch], init_mode: PaletteInitMode) {
     let mut rows = Vec::new();
     for batch in batches {
@@ -1308,14 +1006,6 @@ fn main() {
     let init_mode = parse_init_mode();
     let refine_mode = parse_refine_mode();
     let report_objective = parse_objective_mode();
-    let review_methods = parse_review_methods();
-    let review_objectives: Vec<PaletteObjectiveMode> = review_methods
-        .iter()
-        .filter_map(|m| match m {
-            ReviewMethodSpec::Objective(o) => Some(*o),
-            _ => None,
-        })
-        .collect();
 
     let out_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/palette_study");
     fs::create_dir_all(&out_dir).expect("mkdir");
@@ -1336,14 +1026,9 @@ fn main() {
         .map(|m| m.id())
         .collect::<Vec<_>>()
         .join(",");
-    let review_label: String = review_methods
-        .iter()
-        .map(|m| m.id())
-        .collect::<Vec<_>>()
-        .join(",");
 
     eprintln!(
-        "[palette_study] Nelder–Mead · max_iters={} restarts={} confusion={} · channels=[{}] · L=[{}] · {} palettes/ch · spatial={} post={:?} · init={} refine={} objective={} · report_selection=[{}] · review=[{}]",
+        "[palette_study] Nelder–Mead · max_iters={} restarts={} confusion={} · channels=[{}] · L=[{}] · {} palettes/ch · spatial={} post={:?} · init={} refine={} objective={} · report_selection=[{}]",
         max_iters,
         num_restarts,
         confusion_samples,
@@ -1356,7 +1041,6 @@ fn main() {
         refine_mode.id(),
         report_objective.id(),
         modes_label,
-        review_label
     );
 
     let c3_eval = C3::new();
@@ -1379,7 +1063,6 @@ fn main() {
                 init_mode,
                 refine_mode,
                 report_objective,
-                &review_objectives,
                 &c3_eval,
                 spatial_w,
                 luminance,
@@ -1393,25 +1076,20 @@ fn main() {
     let total_palettes = n_parents * channel_counts.len() * luminance_ranges.len();
     let mut html = String::from(HTML_HEAD);
     html.push_str(&format!(
-        r#"<h1>Palette study (experiment foundation)</h1>
+        r#"<h1>Palette study</h1>
 <p class="note">
   <strong>{total_palettes}</strong> optimized cases ({n_parents} per channel count × L range: channels <strong>{channels_label}</strong>, L <strong>{luminance_label_all}</strong>).
   <code>max_iters={max_iters}</code>, <code>restarts={num_restarts}</code>,
   spatial <strong>{spatial}</strong>, init <strong>{init}</strong>, refine <strong>{refine}</strong>,
-  report objective <strong>{obj}</strong>, review methods <strong>{review}</strong>.
+  report objective <strong>{obj}</strong>.
   <br/><br/>
-  Production default remains mean-only C3 + Cartesian refine. review.html compares methods
-  (identical hex palettes are auto-tied / skipped).
-  <br/><br/>
-  Total study wall time: <strong>{study_time}</strong>. Also wrote <code>candidates.json</code>
-  and interactive <a href="review.html" style="color:#9cf">review.html</a> (vote which method looks best).
+  Total study wall time: <strong>{study_time}</strong>. Also wrote <code>candidates.json</code>.
 </p>
 "#,
         spatial = if include_spatial { "on" } else { "off" },
         init = init_mode.id(),
         refine = refine_mode.id(),
         obj = report_objective.id(),
-        review = review_label,
         study_time = format_duration(study_elapsed),
     ));
 
@@ -1424,16 +1102,6 @@ fn main() {
     fs::write(&path, &html).expect("write report");
     let cand_path = out_dir.join("candidates.json");
     write_candidates_json(&cand_path, &batches, init_mode);
-    let review_payload =
-        build_review_payload(&batches, &review_methods, init_mode, &c3_eval, spatial_w);
-    let review_json_path = out_dir.join("review_data.json");
-    fs::write(
-        &review_json_path,
-        serde_json::to_string_pretty(&review_payload).expect("review_data json"),
-    )
-    .expect("write review_data.json");
-    let review_path = out_dir.join("review.html");
-    write_review_html(&review_path, &review_payload);
     eprintln!(
         "[palette_study] total study wall time {}",
         format_duration(study_elapsed)
@@ -1445,12 +1113,7 @@ fn main() {
     );
     eprintln!("[palette_study] wrote {}", cand_path.display());
     eprintln!(
-        "[palette_study] wrote {} ({} cases for interactive review)",
-        review_path.display(),
-        review_payload.cases.len()
-    );
-    eprintln!(
-        "[palette_study] open interactive review: file://{}",
-        review_path.canonicalize().unwrap_or(review_path).display()
+        "[palette_study] open file://{}",
+        path.canonicalize().unwrap_or(path).display()
     );
 }
