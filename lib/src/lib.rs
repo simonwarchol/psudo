@@ -1,5 +1,5 @@
 //! Primary wall-time costs: Nelder–Mead `Loss::cost` (C3 name distance, display-sRGB,
-//! hue, saturation, and optional mix-vs-P_k on aligned intensity rows).
+//! hue, saturation, and optional mix-vs-P_k on an occupancy sketch).
 
 mod palette_diagnostics;
 mod palette_eval;
@@ -15,7 +15,7 @@ use ndarray::Axis;
 use ndarray::{Array1, Array2};
 use ndarray_stats::QuantileExt; // <-- Add this line
 use palette::{FromColor, Oklab, Srgb, Xyz};
-use rand::seq::SliceRandom; // Import
+use rand::seq::SliceRandom;
 use rand::thread_rng; // Import the RNG
 use rand::Rng;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -125,7 +125,7 @@ fn restart_count_bounds() -> (u32, u32) {
     }
 }
 
-/// WASM defaults to color-only objective (spatial term is row-heavy).
+/// WASM defaults to color-only objective (callers opt into spatial overlap).
 #[inline]
 fn default_include_spatial_overlap() -> bool {
     #[cfg(target_arch = "wasm32")]
@@ -499,7 +499,7 @@ pub fn merge_excluded_color_names(user: Vec<String>) -> Vec<String> {
     names.into_iter().collect()
 }
 
-/// Stable hash of problem inputs so the same image + settings get the same subsample and restart seeds.
+/// Stable hash of problem inputs so the same image + settings get the same restart seeds.
 pub fn problem_seed(
     colors: &[u16],
     intensities: &[u16],
@@ -552,7 +552,7 @@ pub(crate) fn polish_oklab_palette(
     locked_colors: &[bool],
     luminance_values: &[f32],
     c3: &c3::C3,
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -647,7 +647,7 @@ pub(crate) fn refine_oklab_palette(
     locked_colors: &[bool],
     luminance_values: &[f32],
     c3: &c3::C3,
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -827,14 +827,7 @@ pub(crate) fn sa_initial_oklab(
     init_seed: u64,
     rng: &mut impl Rng,
 ) -> Vec<f32> {
-    sa_initial_oklab_for_restart(
-        oklab_flat,
-        pins,
-        luminance_values,
-        init_seed,
-        0,
-        rng,
-    )
+    sa_initial_oklab_for_restart(oklab_flat, pins, luminance_values, init_seed, 0, rng)
 }
 
 /// Per-restart NM/SA start. Restart 0 leads with the RGB-primary spread; most later
@@ -861,72 +854,156 @@ pub(crate) fn sa_initial_oklab_for_restart(
     }
 }
 
+/// Contrast-normalized occupancy in [0, 1] is “on” at this fraction of the contrast window.
+const OCCUPANCY_ON: f32 = 0.1;
+/// Skip near-empty pixels (same cutoff the old 5000-row subsample used).
+const MIN_OCCUPANCY_ROW_SUM: f32 = 0.3;
+/// ponytail: 2^n on/off masks; keep the heaviest co-expression patterns. Rare bins are low mass.
+const MAX_OCCUPANCY_BINS: usize = 256;
+
+/// Co-expression sketch: one mix per occupied on/off mask, weighted by pixel count.
+#[derive(Clone, Debug)]
+pub struct OccupancySketch {
+    /// `n_bins × n_channels` mean occupancy in the contrast window.
+    pub occupancy: Array2<f32>,
+    /// Pixel count (mass) per bin.
+    pub weight: Array1<f32>,
+}
+
+impl OccupancySketch {
+    pub fn nrows(&self) -> usize {
+        self.occupancy.nrows()
+    }
+
+    pub fn ncols(&self) -> usize {
+        self.occupancy.ncols()
+    }
+
+    /// One bin per row, weight 1 — tests and spatial-off placeholders.
+    pub fn from_rows(occupancy: Array2<f32>) -> Self {
+        let n = occupancy.nrows();
+        Self {
+            occupancy,
+            weight: Array1::from_elem(n, 1.0),
+        }
+    }
+
+    /// Bin contrast-normalized rows by which channels are on. Drops rows with sum ≤ 0.3.
+    pub fn from_normalized_rows(rows: &Array2<f32>) -> Self {
+        let n_ch = rows.ncols();
+        let mut acc: HashMap<u64, (f32, Vec<f32>)> = HashMap::new();
+        for r in 0..rows.nrows() {
+            let mut mask = 0u64;
+            let mut row_sum = 0.0f32;
+            for k in 0..n_ch {
+                let v = rows[[r, k]];
+                row_sum += v;
+                if k < 64 && v >= OCCUPANCY_ON {
+                    mask |= 1u64 << k;
+                }
+            }
+            if row_sum <= MIN_OCCUPANCY_ROW_SUM {
+                continue;
+            }
+            let e = acc.entry(mask).or_insert_with(|| (0.0, vec![0.0; n_ch]));
+            e.0 += 1.0;
+            for k in 0..n_ch {
+                e.1[k] += rows[[r, k]];
+            }
+        }
+        Self::from_mask_acc(acc, n_ch)
+    }
+
+    fn from_mask_acc(acc: HashMap<u64, (f32, Vec<f32>)>, n_ch: usize) -> Self {
+        if acc.is_empty() {
+            return Self {
+                occupancy: Array2::zeros((0, n_ch)),
+                weight: Array1::zeros(0),
+            };
+        }
+        let mut keys: Vec<u64> = acc.keys().copied().collect();
+        if keys.len() > MAX_OCCUPANCY_BINS {
+            keys.sort_by(|a, b| {
+                acc[b]
+                    .0
+                    .partial_cmp(&acc[a].0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(a.cmp(b))
+            });
+            keys.truncate(MAX_OCCUPANCY_BINS);
+        }
+        keys.sort_unstable();
+        let n_bins = keys.len();
+        let mut occupancy = Array2::zeros((n_bins, n_ch));
+        let mut weight = Array1::zeros(n_bins);
+        for (i, mask) in keys.iter().enumerate() {
+            let (w, sum) = &acc[mask];
+            weight[i] = *w;
+            let inv = 1.0 / *w;
+            for k in 0..n_ch {
+                occupancy[[i, k]] = sum[k] * inv;
+            }
+        }
+        Self { occupancy, weight }
+    }
+}
+
 fn preprocess_data(
     colors: &[u16],
     intensities: &[u16],
     contrast_limits: &[u16],
-    shuffle_seed: u64,
-) -> Array2<f32> {
+) -> OccupancySketch {
     let num_channels = colors.len() / 3;
+    if num_channels == 0 {
+        return OccupancySketch {
+            occupancy: Array2::zeros((0, 0)),
+            weight: Array1::zeros(0),
+        };
+    }
     let num_rows = intensities.len() / num_channels;
-    let mut intensities_array = Array2::zeros((num_rows, num_channels));
-    for channel in 0..num_channels {
-        for row in 0..num_rows {
-            let index = channel * num_rows + row;
-            intensities_array[[row, channel]] = intensities[index];
-        }
-    }
-    let mut intensities_array_float: Array2<f32> = Array2::zeros((num_rows, num_channels));
-
-    for channel in 0..num_channels {
-        for row in 0..num_rows {
-            let index = channel * num_rows + row;
-            if intensities[index] < contrast_limits[channel * 2] {
-                intensities_array[[row, channel]] = contrast_limits[channel * 2];
-            } else if intensities[index] > contrast_limits[channel * 2 + 1] {
-                intensities_array[[row, channel]] = contrast_limits[channel * 2 + 1];
-            }
-            // Subtract the lower limit from the value
-            intensities_array[[row, channel]] -= contrast_limits[channel * 2];
-            intensities_array_float[[row, channel]] = (intensities_array[[row, channel]] as f32)
-                / ((contrast_limits[channel * 2 + 1] - contrast_limits[channel * 2]) as f32);
-        }
-    }
-    // Compute the sum of each row
-    // let mut row_sums = Array1::zeros(num_rows);
-    let mut indexes = Vec::new();
+    let mut acc: HashMap<u64, (f32, Vec<f32>)> = HashMap::new();
+    let mut tmp = vec![0.0f32; num_channels];
     for row in 0..num_rows {
-        let mut row_sum = 0.0;
+        let mut row_sum = 0.0f32;
+        let mut mask = 0u64;
         for channel in 0..num_channels {
-            row_sum += intensities_array_float[[row, channel]];
+            let lo = contrast_limits[channel * 2];
+            let hi = contrast_limits[channel * 2 + 1];
+            let index = channel * num_rows + row;
+            let raw = intensities[index];
+            let clipped = if raw < lo {
+                lo
+            } else if raw > hi {
+                hi
+            } else {
+                raw
+            };
+            let v = (clipped - lo) as f32 / ((hi - lo) as f32);
+            tmp[channel] = v;
+            row_sum += v;
+            if channel < 64 && v >= OCCUPANCY_ON {
+                mask |= 1u64 << channel;
+            }
         }
-        if row_sum > 0.3 {
-            // print row index
-            indexes.push(row);
+        if row_sum <= MIN_OCCUPANCY_ROW_SUM {
+            continue;
+        }
+        let e = acc
+            .entry(mask)
+            .or_insert_with(|| (0.0, vec![0.0; num_channels]));
+        e.0 += 1.0;
+        for k in 0..num_channels {
+            e.1[k] += tmp[k];
         }
     }
-    // println!("indexes: {:?}", indexes);
-    // Shuffle the indexes
-    let mut rng = StdRng::seed_from_u64(shuffle_seed);
-    indexes.shuffle(&mut rng);
+    let sketch = OccupancySketch::from_mask_acc(acc, num_channels);
     #[cfg(debug_assertions)]
-    println!("indexes length: {:?}", indexes.len());
-    indexes = indexes
-        .iter()
-        .take(5000)
-        .map(|&x| x)
-        .collect::<Vec<usize>>();
-
-    // subsample intensities_array_float to the first 5000 indices
-    let mut subsampled_array = Array2::zeros((indexes.len(), num_channels));
-    for (i, &index) in indexes.iter().enumerate() {
-        for channel in 0..num_channels {
-            subsampled_array[[i, channel]] = intensities_array_float[[index, channel]];
-        }
-    }
-    #[cfg(debug_assertions)]
-    println!("subsampled_array shape: {:?}", subsampled_array.shape());
-    subsampled_array
+    println!(
+        "occupancy sketch bins: {:?} channels: {:?}",
+        sketch.nrows(),
+        num_channels
+    );
+    sketch
 }
 
 #[wasm_bindgen]
@@ -1202,11 +1279,7 @@ impl LockedPins {
                 ]
             })
             .collect();
-        Self::new(
-            locked_colors.to_vec(),
-            start_oklab.to_vec(),
-            display_srgb,
-        )
+        Self::new(locked_colors.to_vec(), start_oklab.to_vec(), display_srgb)
     }
 
     fn new(locked: Vec<bool>, start_oklab: Vec<f32>, display_srgb: Vec<f32>) -> Self {
@@ -1275,12 +1348,7 @@ impl LockedPins {
     }
 
     /// Saturation floor that is a no-op on locked channels: that reroll is what drifted hues.
-    pub(crate) fn enforce_saturation(
-        &self,
-        oklab: &mut [f32],
-        channel: usize,
-        rng: &mut impl Rng,
-    ) {
+    pub(crate) fn enforce_saturation(&self, oklab: &mut [f32], channel: usize, rng: &mut impl Rng) {
         if self.is_locked(channel) {
             return;
         }
@@ -1320,7 +1388,7 @@ fn oklab_to_display_srgb(oklab: &[f32], pins: &LockedPins) -> Vec<f32> {
 struct Loss {
     rng: Arc<Mutex<Xoshiro256PlusPlus>>,
     pub(crate) pins: LockedPins,
-    intensity_array: Arc<Array2<f32>>,
+    intensity_array: Arc<OccupancySketch>,
     pub(crate) luminance_values: Vec<f32>,
     /// When `0.0`, skip mix-vs-P_k (color-only).
     spatial_confusion_weight: f32,
@@ -1332,7 +1400,7 @@ struct Loss {
 impl Loss {
     pub fn new(
         pins: LockedPins,
-        intensity_array: Arc<Array2<f32>>,
+        intensity_array: Arc<OccupancySketch>,
         luminance_values: Vec<f32>,
         spatial_confusion_weight: f32,
         excluded_colors_indices: Vec<f32>,
@@ -1436,7 +1504,7 @@ pub struct PaletteObjectiveBreakdown {
 pub fn evaluate_palette_objective_breakdown(
     c3: &c3::C3,
     oklab_flat: &[f32],
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_confusion_weight: f32,
     excluded_colors_indices: &[f32],
     color_name_indices: &[f32],
@@ -1458,7 +1526,7 @@ pub fn evaluate_palette_objective_breakdown(
 pub(crate) fn evaluate_palette_objective_breakdown_with_excluded_set(
     c3: &c3::C3,
     oklab_flat: &[f32],
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_confusion_weight: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -1549,7 +1617,7 @@ impl Anneal for Loss {
 pub(crate) fn annealing(
     colors: &[f32],
     locked_colors: &[bool],
-    intensity_array: Arc<Array2<f32>>,
+    intensity_array: Arc<OccupancySketch>,
     luminance_values: &[f32],
     excluded_colors_indices: &[f32],
     color_name_indices: &[f32],
@@ -1641,7 +1709,7 @@ pub struct OptimizePipelineResult {
     /// [`evaluate_palette_objective_breakdown`] on `oklab_best` — large gaps suggest optimizer issues.
     pub sa_best_cost: f32,
     pub oklab_best: Vec<f32>,
-    pub intensity_arc: Arc<Array2<f32>>,
+    pub intensity_arc: Arc<OccupancySketch>,
     pub excluded_colors_indices: Vec<f32>,
     pub color_name_indices: Vec<f32>,
     /// All multistart (+ rescue) outcomes with diagnostics for study selection.
@@ -1666,7 +1734,7 @@ struct PaletteOptContext {
     /// Start palette + lock invariant (replaces a bare mask plus a separate OKLab start).
     pins: LockedPins,
     float_luminance_values: Vec<f32>,
-    intensity_arc: Arc<Array2<f32>>,
+    intensity_arc: Arc<OccupancySketch>,
     excluded_colors_indices: Vec<f32>,
     color_name_indices: Vec<f32>,
     c3_eval: Arc<c3::C3>,
@@ -1710,7 +1778,7 @@ fn build_palette_opt_context(
         .map(|&x| (x as f32) / 100.0)
         .collect();
     let base_seed = problem_seed(colors, intensities, contrast_limits, luminance_values);
-    let intensity_array = preprocess_data(colors, intensities, contrast_limits, base_seed);
+    let intensity_array = preprocess_data(colors, intensities, contrast_limits);
     let excluded_colors = merge_excluded_color_names(excluded_colors);
     let c3_eval = Arc::new(c3::C3::new());
     let mut excluded_colors_indices = Vec::new();
@@ -2212,7 +2280,7 @@ fn run_nm_multistart_attempt(
     seed_salt: u64,
     start_oklab: &[f32],
     locked_colors: &[bool],
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     luminance_values: &[f32],
     excluded_colors_indices: &[f32],
     color_name_indices: &[f32],
@@ -2328,7 +2396,7 @@ fn nm_multistart_outcomes(
     seed_salt: u64,
     start_oklab: &[f32],
     locked_colors: &[bool],
-    intensity_arc: Arc<Array2<f32>>,
+    intensity_arc: Arc<OccupancySketch>,
     luminance_values: &[f32],
     excluded_colors_indices: &[f32],
     color_name_indices: &[f32],
@@ -2393,7 +2461,7 @@ fn fold_best_nm_restart(outcomes: &[NmRestartOutcome]) -> (Vec<f32>, f32, f32) {
 
 fn build_restart_pool(
     c3: &c3::C3,
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -2825,7 +2893,7 @@ pub fn optimize_palette_with_solver(
         .map(|&x| (x as f32) / 100.0)
         .collect();
     let base_seed = problem_seed(colors, intensities, contrast_limits, luminance_values);
-    let intensity_array = preprocess_data(colors, intensities, contrast_limits, base_seed);
+    let intensity_array = preprocess_data(colors, intensities, contrast_limits);
     let excluded_colors = merge_excluded_color_names(excluded_colors);
     let c3_eval = Arc::new(c3::C3::new());
     let mut excluded_colors_indices = Vec::new();
@@ -2924,8 +2992,8 @@ pub fn optimize_palette_with_solver(
     }
 }
 
-/// `include_spatial_channel_overlap`: `None` or `true` = full objective including per-pixel
-/// multi-channel confusion; `false` = name + OKLab separation + terms only (round‑1 eval).
+/// `include_spatial_channel_overlap`: `None` or `true` = full objective including occupancy-sketch
+/// mix-vs-P_k; `false` = name + OKLab separation + terms only (round‑1 eval).
 ///
 /// `num_restarts`: independent Nelder–Mead multistarts (default 18, scaled by channel count); best total wins.
 ///
@@ -3193,12 +3261,8 @@ pub fn calculate_palette_loss(
     );
 
     if include_overlap {
-        let confusion = optimize_for_confusion(
-            intensities,
-            colors,
-            contrast_limits,
-            luminance_values,
-        );
+        let confusion =
+            optimize_for_confusion(intensities, colors, contrast_limits, luminance_values);
         loss.insert("confusion".to_string(), confusion);
     } else {
         loss.insert("confusion".to_string(), 0.0);
@@ -3211,103 +3275,73 @@ pub fn calculate_palette_loss(
     JsValue::from_serde(&loss).unwrap()
 }
 
-/// Mix each aligned row, then occupancy-weighted mix-vs-P_k in display sRGB.
-/// Returns the unweighted spatial loss. 0 when `intensities.nrows() == 0`.
+/// Mix each occupancy bin in linear XYZ, then occupancy-weighted mix-vs-P_k in display sRGB.
+/// Returns the unweighted spatial loss. 0 when `sketch.nrows() == 0`.
 pub(crate) fn score_mix_vs_palette(
     oklab_color_map: &[f32],
-    intensities: &Array2<f32>,
+    sketch: &OccupancySketch,
     palette_display_rgb: &[[f64; 3]],
-    mixed_out: &mut Array2<f32>,
     mixed_display_rgb: &mut Vec<[f64; 3]>,
 ) -> f32 {
-    let num_rows = intensities.nrows();
+    let num_rows = sketch.nrows();
     if num_rows == 0 {
         return 0.0;
     }
-    write_mixed_oklab(oklab_color_map, intensities, mixed_out);
-    occupancy_weighted_rgb_deficit(mixed_out, intensities, palette_display_rgb, mixed_display_rgb)
-}
-
-fn write_mixed_oklab(
-    oklab_color_map: &[f32],
-    intensities: &Array2<f32>,
-    mixed_out: &mut Array2<f32>,
-) {
-    let num_channels = intensities.ncols();
-    let num_rows = intensities.nrows();
-    if mixed_out.nrows() != num_rows || mixed_out.ncols() != 3 {
-        *mixed_out = Array2::zeros((num_rows, 3));
+    let num_channels = sketch.ncols();
+    let mut xyz_ch = vec![[0.0f32; 3]; num_channels];
+    for k in 0..num_channels {
+        let xyz: Xyz = Xyz::from_color(Oklab::new(
+            oklab_color_map[k * 3],
+            oklab_color_map[k * 3 + 1],
+            oklab_color_map[k * 3 + 2],
+        ));
+        xyz_ch[k] = [xyz.x, xyz.y, xyz.z];
     }
+
+    mixed_display_rgb.clear();
+    mixed_display_rgb.reserve(num_rows);
+    let mut acc = 0.0f64;
+    let n_compare = num_channels.min(palette_display_rgb.len());
+    let mut total_w = 0.0f64;
     for row in 0..num_rows {
+        let w = sketch.weight[row] as f64;
+        total_w += w;
         let mut x = 0.0f32;
         let mut y = 0.0f32;
         let mut z = 0.0f32;
-        for channel in 0..num_channels {
-            let intensity_value = intensities[[row, channel]];
-            let oklab_colored = Oklab::new(
-                oklab_color_map[channel * 3] * intensity_value,
-                oklab_color_map[channel * 3 + 1] * intensity_value,
-                oklab_color_map[channel * 3 + 2] * intensity_value,
-            );
-            let xyz: Xyz = Xyz::from_color(oklab_colored);
-            x += xyz.x;
-            y += xyz.y;
-            z += xyz.z;
+        let mut row_sum = 0.0f32;
+        for k in 0..num_channels {
+            let occ = sketch.occupancy[[row, k]];
+            row_sum += occ;
+            x += occ * xyz_ch[k][0];
+            y += occ * xyz_ch[k][1];
+            z += occ * xyz_ch[k][2];
         }
-        let okl = Oklab::from_color(Xyz::new(x, y, z));
-        mixed_out[[row, 0]] = okl.l;
-        mixed_out[[row, 1]] = okl.a;
-        mixed_out[[row, 2]] = okl.b;
-    }
-}
-
-fn occupancy_weighted_rgb_deficit(
-    mixed_oklab: &Array2<f32>,
-    intensities: &Array2<f32>,
-    palette_display_rgb: &[[f64; 3]],
-    mixed_display_rgb: &mut Vec<[f64; 3]>,
-) -> f32 {
-    let num_rows = mixed_oklab.nrows();
-    let num_channels = intensities.ncols();
-    mixed_display_rgb.clear();
-    mixed_display_rgb.reserve(num_rows);
-    for row in 0..num_rows {
-        let okl = Oklab::new(
-            mixed_oklab[[row, 0]],
-            mixed_oklab[[row, 1]],
-            mixed_oklab[[row, 2]],
-        );
-        let rgb: Srgb = Srgb::from_color(okl);
-        mixed_display_rgb.push([
+        let rgb: Srgb = Srgb::from_color(Xyz::new(x, y, z));
+        let mix = [
             (rgb.red.clamp(0.0, 1.0) * 255.0) as f64,
             (rgb.green.clamp(0.0, 1.0) * 255.0) as f64,
             (rgb.blue.clamp(0.0, 1.0) * 255.0) as f64,
-        ]);
-    }
-
-    let mut acc = 0.0f64;
-    let n_compare = num_channels.min(palette_display_rgb.len());
-    for row in 0..num_rows {
-        let mut row_sum = 0.0f32;
-        for k in 0..num_channels {
-            row_sum += intensities[[row, k]];
-        }
-        if row_sum <= 0.0 {
+        ];
+        mixed_display_rgb.push(mix);
+        if w <= 0.0 || row_sum <= 0.0 {
             continue;
         }
-        let mix = mixed_display_rgb[row];
         for k in 0..n_compare {
-            let occ = intensities[[row, k]] / row_sum;
+            let occ = sketch.occupancy[[row, k]] / row_sum;
             let p = palette_display_rgb[k];
             let dr = mix[0] - p[0];
             let dg = mix[1] - p[1];
             let db = mix[2] - p[2];
             let d = (dr * dr + dg * dg + db * db).sqrt();
             let deficit = (MIN_DISPLAY_RGB_DISTANCE - d).max(0.0);
-            acc += (1.0 - occ as f64) * deficit * deficit;
+            acc += w * (1.0 - occ as f64) * deficit * deficit;
         }
     }
-    let mean = acc / num_rows as f64;
+    if total_w <= 0.0 {
+        return 0.0;
+    }
+    let mean = acc / total_w;
     (mean / (PERCEPTUAL_SCALE * PERCEPTUAL_SCALE) * PERCEPTUAL_DEFICIT_WEIGHT as f64) as f32
 }
 
@@ -3315,10 +3349,9 @@ fn optimize_for_confusion(
     intensities: &[u16],
     colors: &[u16],
     contrast_limits: &[u16],
-    luminance_values: &[u16],
+    _luminance_values: &[u16],
 ) -> f32 {
-    let seed = problem_seed(colors, intensities, contrast_limits, luminance_values);
-    let intensities_array_float = preprocess_data(colors, intensities, contrast_limits, seed);
+    let intensities_array_float = preprocess_data(colors, intensities, contrast_limits);
 
     let float_color_map: Vec<f32> = colors
         .iter()
@@ -3341,7 +3374,6 @@ fn optimize_for_confusion(
             &oklab_color_map,
             &intensities_array_float,
             &display_rgb,
-            &mut scratch.mixed_oklab,
             &mut scratch.mixed_display_rgb,
         )
     })

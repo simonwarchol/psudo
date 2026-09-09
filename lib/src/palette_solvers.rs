@@ -3,7 +3,7 @@
 use crate::{
     annealing, evaluate_palette_objective_breakdown_with_excluded_set, polish_oklab_palette,
     random_initial_oklab, refine_oklab_palette, sa_initial_oklab_for_restart, LockedPins, Loss,
-    PaletteObjectiveBreakdown,
+    OccupancySketch, PaletteObjectiveBreakdown,
 };
 use argmin::core::{CostFunction, Error, Executor, Gradient, State};
 use argmin::solver::gradientdescent::SteepestDescent;
@@ -11,7 +11,6 @@ use argmin::solver::linesearch::{condition::ArmijoCondition, BacktrackingLineSea
 use argmin::solver::neldermead::NelderMead;
 use argmin::solver::particleswarm::ParticleSwarm;
 use argmin::solver::quasinewton::LBFGS;
-use ndarray::Array2;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::collections::HashSet;
@@ -254,7 +253,7 @@ fn resolve_nm_start_param(
 
 fn make_loss(
     pins: &LockedPins,
-    intensity_arc: Arc<Array2<f32>>,
+    intensity_arc: Arc<OccupancySketch>,
     luminance_values: &[f32],
     spatial_w: f32,
     excluded_colors_indices: &[f32],
@@ -307,7 +306,7 @@ pub fn run_palette_argmin_solver(
     solver: PaletteArgminSolver,
     start_oklab: &[f32],
     locked_colors: &[bool],
-    intensity_arc: Arc<Array2<f32>>,
+    intensity_arc: Arc<OccupancySketch>,
     luminance_values: &[f32],
     excluded_colors_indices: &[f32],
     color_name_indices: &[f32],
@@ -457,7 +456,7 @@ pub fn study_postprocess_oklab(
     locked_colors: &[bool],
     luminance_values: &[f32],
     c3: &c3::C3,
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -492,7 +491,7 @@ pub fn study_postprocess_oklab(
 pub fn objective_total_for_oklab(
     c3: &c3::C3,
     oklab: &[f32],
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],

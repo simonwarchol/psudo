@@ -2,8 +2,10 @@
 
 use crate::c3::{self, RelatedTerm};
 use crate::palette_objective::{MIN_OKLAB_DISTANCE, OKLAB_PERCEPTUAL_SCALE};
-use crate::{term_loss, MIN_DISPLAY_RGB_DISTANCE, PERCEPTUAL_DEFICIT_WEIGHT, PERCEPTUAL_SCALE};
-use ndarray::Array2;
+use crate::{
+    term_loss, OccupancySketch, MIN_DISPLAY_RGB_DISTANCE, PERCEPTUAL_DEFICIT_WEIGHT,
+    PERCEPTUAL_SCALE,
+};
 use palette::{FromColor, Lab, Oklab, Srgb};
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -22,9 +24,7 @@ pub struct PaletteEvalScratch {
     pub projected_chromas: Vec<f32>,
     pub c3_samples: Vec<c3::ColorSample>,
     pub palette_terms: Vec<Vec<RelatedTerm>>,
-    /// Spatial mix-vs-P_k: mixed OKLab rows (n_rows × 3).
-    pub mixed_oklab: Array2<f32>,
-    /// Display-sRGB of mixed rows (0–255), reused across evals.
+    /// Display-sRGB of mixed occupancy bins (0–255), reused across evals.
     pub mixed_display_rgb: Vec<[f64; 3]>,
 }
 
@@ -39,7 +39,6 @@ impl PaletteEvalScratch {
             projected_chromas: Vec::new(),
             c3_samples: Vec::new(),
             palette_terms: Vec::new(),
-            mixed_oklab: Array2::zeros((0, 3)),
             mixed_display_rgb: Vec::new(),
         }
     }
@@ -284,7 +283,7 @@ pub fn oklab_pair_distance(oklab_flat: &[f32], i: usize, j: usize) -> f64 {
 pub fn evaluate_objective_fast(
     c3: &c3::C3,
     oklab_flat: &[f32],
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_confusion_weight: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -345,7 +344,6 @@ pub fn evaluate_objective_fast(
                 oklab_flat,
                 intensity_arc.as_ref(),
                 &scratch.display_rgb,
-                &mut scratch.mixed_oklab,
                 &mut scratch.mixed_display_rgb,
             );
     }

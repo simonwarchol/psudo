@@ -4,11 +4,13 @@
 
 use super::*;
 
-fn toy_intensity_two_channel() -> Arc<Array2<f32>> {
+fn toy_intensity_two_channel() -> Arc<OccupancySketch> {
     let data: Vec<f32> = vec![
         0.9, 0.1, 0.2, 0.85, 0.45, 0.5, 0.15, 0.88, 0.7, 0.25, 0.35, 0.6, 0.5, 0.48, 0.12, 0.9,
     ];
-    Arc::new(Array2::from_shape_vec((8, 2), data).unwrap())
+    Arc::new(OccupancySketch::from_rows(
+        ndarray::Array2::from_shape_vec((8, 2), data).unwrap(),
+    ))
 }
 
 fn base_oklab_two_channel() -> Vec<f32> {
@@ -179,14 +181,8 @@ fn chroma_objective_penalizes_achromatic_channels() {
     let names = vec![-1.0f32, -1.0f32];
     let saturated = vec![0.55, 0.22, 0.08, 0.55, -0.20, 0.10];
     let grey = vec![0.55, 0.02, 0.01, 0.55, -0.01, 0.02];
-    let sat_bd = super::evaluate_palette_objective_breakdown(
-        &c3,
-        &saturated,
-        &intensity,
-        0.0,
-        &[],
-        &names,
-    );
+    let sat_bd =
+        super::evaluate_palette_objective_breakdown(&c3, &saturated, &intensity, 0.0, &[], &names);
     let grey_bd =
         super::evaluate_palette_objective_breakdown(&c3, &grey, &intensity, 0.0, &[], &names);
     assert!(sat_bd.min_srgb_saturation > grey_bd.min_srgb_saturation);
@@ -199,14 +195,8 @@ fn high_l_pastel_oklab_can_still_fail_srgb_floor() {
     let intensity = toy_intensity_two_channel();
     let names = vec![-1.0f32; 3];
     let pastel = vec![0.92, 0.06, 0.02, 0.90, 0.05, 0.03, 0.88, -0.05, 0.04];
-    let bd = super::evaluate_palette_objective_breakdown(
-        &c3,
-        &pastel,
-        &intensity,
-        0.0,
-        &[],
-        &names,
-    );
+    let bd =
+        super::evaluate_palette_objective_breakdown(&c3, &pastel, &intensity, 0.0, &[], &names);
     assert!(bd.min_oklab_chroma >= 0.05);
     assert!(bd.min_srgb_saturation < 0.35);
     assert!(bd.saturation_deficit_penalty > 0.05);
@@ -219,24 +209,11 @@ fn min_name_weight_lowers_total_on_close_name_pair() {
     let red_pink_green = vec![0.58, 0.22, 0.06, 0.62, 0.20, 0.14, 0.55, -0.18, 0.10];
     let intensity = toy_intensity_two_channel();
     let names = vec![-1.0f32; 3];
-    let base = evaluate_palette_objective_breakdown(
-        &c3,
-        &red_pink_green,
-        &intensity,
-        0.0,
-        &[],
-        &names,
-    );
+    let base =
+        evaluate_palette_objective_breakdown(&c3, &red_pink_green, &intensity, 0.0, &[], &names);
     assert_eq!(base.minus_min_color_name_distance, 0.0);
     let with_min = with_min_name_weight(1.0, || {
-        evaluate_palette_objective_breakdown(
-            &c3,
-            &red_pink_green,
-            &intensity,
-            0.0,
-            &[],
-            &names,
-        )
+        evaluate_palette_objective_breakdown(&c3, &red_pink_green, &intensity, 0.0, &[], &names)
     });
     assert!(
         with_min.minus_min_color_name_distance < -0.01,
@@ -423,23 +400,10 @@ fn oklab_sep_flags_red_pink_closer_than_red_blue() {
     let c3 = c3::C3::new();
     let intensity = toy_intensity_two_channel();
     let names = vec![-1.0f32; 3];
-    let base_rp = evaluate_palette_objective_breakdown(
-        &c3,
-        &red_pink_green,
-        &intensity,
-        0.0,
-        &[],
-        &names,
-    );
+    let base_rp =
+        evaluate_palette_objective_breakdown(&c3, &red_pink_green, &intensity, 0.0, &[], &names);
     let oklab_rp = with_objective_mode(PaletteObjectiveMode::OklabSep, || {
-        evaluate_palette_objective_breakdown(
-            &c3,
-            &red_pink_green,
-            &intensity,
-            0.0,
-            &[],
-            &names,
-        )
+        evaluate_palette_objective_breakdown(&c3, &red_pink_green, &intensity, 0.0, &[], &names)
     });
     assert!(
         oklab_rp.perceptual_deficit_penalty > base_rp.perceptual_deficit_penalty
@@ -633,4 +597,82 @@ fn optimize_does_not_move_locked_display_rgb() {
             );
         }
     }
+}
+
+fn oklab_from_srgb(r: f32, g: f32, b: f32) -> [f32; 3] {
+    use palette::{FromColor, Oklab, Srgb};
+    let o: Oklab = Oklab::from_color(Srgb::new(r, g, b));
+    [o.l, o.a, o.b]
+}
+
+#[test]
+fn occupancy_sketch_collapses_coexpression_masks() {
+    let mut data = Vec::new();
+    for _ in 0..200 {
+        data.extend_from_slice(&[0.9, 0.85, 0.0]);
+    }
+    for _ in 0..50 {
+        data.extend_from_slice(&[0.95, 0.0, 0.0]);
+    }
+    let rows = ndarray::Array2::from_shape_vec((250, 3), data).unwrap();
+    let sketch = OccupancySketch::from_normalized_rows(&rows);
+    assert_eq!(sketch.nrows(), 2);
+    let mass: f32 = sketch.weight.iter().sum();
+    assert!((mass - 250.0).abs() < 1e-3);
+}
+
+#[test]
+fn mix_score_matches_duplicate_rows_and_weighted_bin() {
+    let row = [0.9f32, 0.8, 0.0];
+    let mut expanded = Vec::new();
+    for _ in 0..80 {
+        expanded.extend_from_slice(&row);
+    }
+    let many =
+        OccupancySketch::from_rows(ndarray::Array2::from_shape_vec((80, 3), expanded).unwrap());
+    let one = OccupancySketch {
+        occupancy: ndarray::Array2::from_shape_vec((1, 3), row.to_vec()).unwrap(),
+        weight: ndarray::Array1::from_elem(1, 80.0),
+    };
+    let mut oklab = Vec::new();
+    oklab.extend(oklab_from_srgb(0.9, 0.1, 0.05));
+    oklab.extend(oklab_from_srgb(0.1, 0.85, 0.1));
+    oklab.extend(oklab_from_srgb(0.1, 0.2, 0.9));
+    let mut display = Vec::new();
+    palette_eval::fill_display_srgb255(&oklab, &mut display);
+    let mut mixed = Vec::new();
+    let s_many = score_mix_vs_palette(&oklab, &many, &display, &mut mixed);
+    let s_one = score_mix_vs_palette(&oklab, &one, &display, &mut mixed);
+    assert!(
+        (s_many - s_one).abs() < 1e-4,
+        "weighted bin {s_one} vs expanded rows {s_many}"
+    );
+}
+
+#[test]
+fn mix_vs_palette_penalizes_third_channel_matching_overlap_mix() {
+    let occ = ndarray::Array2::from_shape_vec((1, 3), vec![0.9, 0.9, 0.0]).unwrap();
+    let sketch = OccupancySketch::from_rows(occ);
+    let red = oklab_from_srgb(0.9, 0.1, 0.05);
+    let green = oklab_from_srgb(0.1, 0.85, 0.1);
+    let yellow = oklab_from_srgb(0.95, 0.85, 0.1);
+    let blue = oklab_from_srgb(0.1, 0.2, 0.9);
+    let mut trap = Vec::new();
+    trap.extend(red);
+    trap.extend(green);
+    trap.extend(yellow);
+    let mut safe = Vec::new();
+    safe.extend(red);
+    safe.extend(green);
+    safe.extend(blue);
+    let mut display = Vec::new();
+    let mut mixed = Vec::new();
+    palette_eval::fill_display_srgb255(&trap, &mut display);
+    let trap_s = score_mix_vs_palette(&trap, &sketch, &display, &mut mixed);
+    palette_eval::fill_display_srgb255(&safe, &mut display);
+    let safe_s = score_mix_vs_palette(&safe, &sketch, &display, &mut mixed);
+    assert!(
+        trap_s > safe_s,
+        "yellow-as-third {trap_s} should exceed blue-as-third {safe_s}"
+    );
 }

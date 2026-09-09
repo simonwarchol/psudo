@@ -4,9 +4,9 @@ use crate::c3;
 use crate::palette_eval::{fill_c3_labs_from_oklab, fill_display_srgb255};
 use crate::{
     enforce_channel_saturation, evaluate_palette_objective_breakdown_with_excluded_set,
-    oklab_chroma, polish_oklab_palette, refine_oklab_palette, DEFAULT_MIN_OKLAB_CHROMA,
+    oklab_chroma, polish_oklab_palette, refine_oklab_palette, OccupancySketch,
+    DEFAULT_MIN_OKLAB_CHROMA,
 };
-use ndarray::Array2;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::collections::HashSet;
@@ -72,7 +72,7 @@ pub struct PolarRefineStats {
 fn objective_total(
     c3: &c3::C3,
     oklab: &[f32],
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -276,7 +276,7 @@ fn escape_duplicate_families(
     locked_colors: &[bool],
     luminance_values: &[f32],
     c3: &c3::C3,
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -392,7 +392,7 @@ pub fn refine_oklch_palette(
     locked_colors: &[bool],
     luminance_values: &[f32],
     c3: &c3::C3,
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -599,7 +599,7 @@ pub fn apply_palette_refine(
     locked_colors: &[bool],
     luminance_values: &[f32],
     c3: &c3::C3,
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -632,7 +632,7 @@ pub fn apply_palette_refine_ex(
     locked_colors: &[bool],
     luminance_values: &[f32],
     c3: &c3::C3,
-    intensity_arc: &Arc<Array2<f32>>,
+    intensity_arc: &Arc<OccupancySketch>,
     spatial_w: f32,
     excluded_set: &HashSet<usize>,
     color_name_indices: &[f32],
@@ -782,7 +782,9 @@ mod tests {
         ];
         let before = oklab.clone();
         let c3 = C3::new();
-        let intensity = Arc::new(Array2::<f32>::zeros((8, 3)));
+        let intensity = Arc::new(crate::OccupancySketch::from_rows(Array2::<f32>::zeros((
+            8, 3,
+        ))));
         let locked = vec![false, false, false];
         let lum = vec![0.50f32, 0.92];
         let excl = HashSet::new();
@@ -824,7 +826,9 @@ mod tests {
             before_dup > 0,
             "fixture should start with a family collision"
         );
-        let intensity = Arc::new(Array2::<f32>::zeros((8, 6)));
+        let intensity = Arc::new(crate::OccupancySketch::from_rows(Array2::<f32>::zeros((
+            8, 6,
+        ))));
         let locked = vec![false; 6];
         let lum = vec![0.50f32, 0.92];
         let excl = HashSet::new();

@@ -46,7 +46,11 @@ Key constants (current values):
   `PERCEPTUAL_DEFICIT_WEIGHT = 6.0`
 - `DEFAULT_MIN_OKLAB_CHROMA = 0.16`, `MIN_SRGB_SATURATION = 0.42`,
   `SATURATION_DEFICIT_WEIGHT = 10.0`, `MIN_SAT_REWARD_WEIGHT = 2.5`
-- `SPATIAL_CONFUSION_WEIGHT = 0.1` (native default on; WASM default off)
+- `SPATIAL_CONFUSION_WEIGHT = 0.1` (native default on; WASM default off).
+  Spatial mix-vs-P_k bins pixels by on/off co-expression (threshold 0.1 of the
+  contrast window), mixes each bin in linear XYZ (`Σ occ_k · xyz(P_k)`), then
+  scores occupancy-weighted display-sRGB deficit vs palette colors. Inner loop
+  is O(bins), not O(pixels).
 - `DEFAULT_EXCLUDED_COLOR_NAMES`: grey/white family only
 
 Notes:

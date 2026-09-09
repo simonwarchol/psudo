@@ -195,7 +195,7 @@ console.log(loss.perceptual_distance, loss.name_distance, loss.min_display_rgb_d
 |----------|----------------|-------|
 | `max_iters` | 2700 (× channels/3) | Higher = slower, often better |
 | `confusion_baseline_samples` | 32 | MC samples when spatial overlap is on |
-| `include_spatial_channel_overlap` | `false` | `true` uses image intensities in objective (slower) |
+| `include_spatial_channel_overlap` | `false` | `true` uses an occupancy-sketch mix-vs-P_k term |
 | `num_restarts` | 18 (× channels/3, max 40) | Nelder–Mead multistarts; best total wins |
 
 Callers pass `luminance_values` as OKLab L × 100; the study / app default is `[50, 92]`.
