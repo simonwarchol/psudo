@@ -1,6 +1,6 @@
 {
   "name": "psudo",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "type": "module",
   "description": "WASM palette optimization for multi-channel microscopy (Web Worker by default)",
   "license": "MIT",

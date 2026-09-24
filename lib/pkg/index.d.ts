@@ -10,12 +10,13 @@ export function setWorkerPoolSize(size: number): void;
 
 export function ln(array: Uint16Array): Promise<Float32Array>;
 
-/** Defaults: subsample=40000, tol=1e-6, max_iter=1000 */
+/** Defaults: subsample=40000, tol=1e-6, max_iter=1000, n_runs=10 */
 export function channel_gmm(
   array: Uint16Array,
   subsample?: number,
   tol?: number,
-  max_iter?: number
+  max_iter?: number,
+  n_runs?: number
 ): Promise<Float32Array>;
 
 /** Returns display-encoded sRGB values in [0, 1]. WASM defaults: max_iters=2700, confusion=32, spatial=false, num_restarts=18 (× n/3, max 40). luminance_values: recommended [60, 92] (OKLab L × 100). */
