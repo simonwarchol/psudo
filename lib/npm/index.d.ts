@@ -18,7 +18,7 @@ export function channel_gmm(
   max_iter?: number
 ): Promise<Float32Array>;
 
-/** Returns display-encoded sRGB values in [0, 1]. WASM defaults: max_iters=2700, confusion=32, spatial=false, num_restarts=18 (× n/3, max 40). luminance_values: recommended [50, 92] (OKLab L × 100). */
+/** Returns display-encoded sRGB values in [0, 1]. WASM defaults: max_iters=2700, confusion=32, spatial=false, num_restarts=18 (× n/3, max 40). luminance_values: recommended [60, 92] (OKLab L × 100). */
 export function optimize(
   colors: Uint16Array,
   locked_colors: Uint16Array,
@@ -30,7 +30,8 @@ export function optimize(
   max_iters?: number,
   confusion_baseline_samples?: number,
   include_spatial_channel_overlap?: boolean,
-  num_restarts?: number
+  num_restarts?: number,
+  signal?: AbortSignal
 ): Promise<Float32Array>;
 
 export interface PaletteObjectiveProfile {
@@ -100,7 +101,8 @@ export function optimize_profiled(
   confusion_baseline_samples?: number,
   include_spatial_channel_overlap?: boolean,
   num_restarts?: number,
-  polish_each_restart?: boolean
+  polish_each_restart?: boolean,
+  signal?: AbortSignal
 ): Promise<PaletteOptimizeProfile>;
 
 export function calculate_palette_loss(

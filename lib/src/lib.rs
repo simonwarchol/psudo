@@ -46,7 +46,7 @@ pub use palette_diagnostics::{
     SeedCandidate, EARTH_TONE_TERMS,
 };
 pub use palette_objective::{
-    current_min_name_weight, current_objective_mode, with_min_name_weight, with_objective_mode,
+    current_min_name_weight, current_objective_mode, with_objective_mode,
     PaletteObjectiveMode, MIN_NAME_DISTANCE_WEIGHT, MIN_OKLAB_DISTANCE, OKLAB_PERCEPTUAL_SCALE,
 };
 pub use palette_refine::{
@@ -1472,7 +1472,7 @@ pub struct PaletteObjectiveBreakdown {
     pub total: f32,
     /// Negative mean pairwise C3 color-name distance.
     pub minus_mean_color_name_distance: f32,
-    /// `−w·min` pairwise C3 name distance (0 unless [`PaletteObjectiveMode::MinName`]).
+    /// `−w·min` pairwise C3 name distance (production weight [`MIN_NAME_DISTANCE_WEIGHT`]).
     pub minus_min_color_name_distance: f32,
     /// Negative minimum display-sRGB distance (÷ [`PERCEPTUAL_SCALE`]).
     pub minus_min_perceptual_distance: f32,

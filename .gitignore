@@ -111,6 +111,7 @@ dist
 .tern-port
 
 notebooks/
+.audit/
 
 # any file named exemplar-001.ome.tif
 **/exemplar-001.ome.tif

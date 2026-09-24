@@ -9,15 +9,16 @@
 //! Environment (optional):
 //! - `PALETTE_STUDY_PARENTS` (default 10) — palettes per channel count
 //! - `PALETTE_STUDY_CHANNELS` (default `4,6,8`) — comma-separated channel counts
+//!   (`5` is not a free search: each 4-color row locks those four and optimizes one more)
 //! - `PALETTE_STUDY_ROWS` (default 384) — synthetic intensity rows per run
 //! - `PALETTE_STUDY_MAX_ITERS` (default 3000)
 //! - `PALETTE_STUDY_CONFUSION_SAMPLES` (default 32)
 //! - `PALETTE_STUDY_RESTARTS` (default 18) — Nelder–Mead multistarts
 //! - `PALETTE_STUDY_STUDY=1` — lighter Study postprocess (benchmark-style; default is Full)
-//! - `PALETTE_STUDY_SPATIAL=1` — spatial channel-overlap in the objective (default off)
+//! - `PALETTE_STUDY_SPATIAL=0` — color-only objective (default on: occupancy-sketch mix-vs-P_k)
 //! - `PALETTE_STUDY_SPREAD_INIT=0` — random saturated sRGB starts instead of hue-spread OKLab inits
-//! - `PALETTE_STUDY_LUMINANCE` (default `50-92`) — OKLab L × 100 ranges, comma-separated
-//!   (`50-92,58-94,66-96,74-97,82-98`). Each range is its own batch.
+//! - `PALETTE_STUDY_LUMINANCE` (default `60-92`) — OKLab L × 100 ranges, comma-separated
+//!   (`60-92,58-94,66-96,74-97,82-98`). Each range is its own batch.
 //! - `PSUDO_PALETTE_SELECTION` — selection modes for static report side-by-side (default `total`)
 //! - `PSUDO_INIT` (default `current`) — `current` | `glasbey_v1` | `mixed` initializer
 //! - `PSUDO_REFINE` (default `cartesian`) — refine used for `oklab_best` / report winner
@@ -54,7 +55,7 @@ use std::time::{Duration, Instant};
 
 const DEFAULT_CHANNEL_COUNTS: &str = "4,6,8";
 
-/// Same defaults as WASM / npm `optimize()` (spatial off).
+/// Native study default: spatial mix-vs-P_k on. WASM / npm `optimize()` still defaults off.
 const DEFAULT_MAX_ITERS: u32 = 3000;
 const DEFAULT_CONFUSION_SAMPLES: u32 = 32;
 const DEFAULT_RESTARTS: u32 = 18;
@@ -81,9 +82,9 @@ fn parse_env_bool(key: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// OKLab L × 100 pairs. `50-92` or `50-92,66-96`. Falls back to the production default.
+/// OKLab L × 100 pairs. `60-92` or `60-92,66-96`. Falls back to the production default.
 fn parse_luminance_ranges() -> Vec<[u16; 2]> {
-    let raw = env::var("PALETTE_STUDY_LUMINANCE").unwrap_or_else(|_| "50-92".to_string());
+    let raw = env::var("PALETTE_STUDY_LUMINANCE").unwrap_or_else(|_| "60-92".to_string());
     let mut out: Vec<[u16; 2]> = raw
         .split(',')
         .filter_map(|part| {
@@ -94,7 +95,7 @@ fn parse_luminance_ranges() -> Vec<[u16; 2]> {
         })
         .collect();
     if out.is_empty() {
-        out.push([50, 92]);
+        out.push([60, 92]);
     }
     out
 }
@@ -111,6 +112,12 @@ fn parse_channel_counts() -> Vec<usize> {
         .filter_map(|s| s.trim().parse::<usize>().ok())
         .filter(|&n| n >= 2)
         .collect();
+    // 5 is the locked +1 on each 4-color row, not a free 5-channel search.
+    let wants_plus_one = out.contains(&5);
+    out.retain(|&n| n != 5);
+    if wants_plus_one && !out.contains(&4) {
+        out.push(4);
+    }
     if out.is_empty() {
         out.push(6);
     }
@@ -318,6 +325,27 @@ fn random_intensities(n_rows: usize, channels: usize, rng: &mut StdRng) -> Vec<u
     out
 }
 
+fn start_u16_away_from(locked_rgb: &[[u8; 3]]) -> [u16; 3] {
+    const CANDIDATES: [[u16; 3]; 7] = [
+        [255, 255, 255],
+        [255, 0, 0],
+        [0, 255, 0],
+        [0, 0, 255],
+        [255, 255, 0],
+        [0, 255, 255],
+        [255, 0, 255],
+    ];
+    for c in CANDIDATES {
+        if !locked_rgb
+            .iter()
+            .any(|l| l[0] as u16 == c[0] && l[1] as u16 == c[1] && l[2] as u16 == c[2])
+        {
+            return c;
+        }
+    }
+    [255, 255, 255]
+}
+
 /// Evenly spaced hues in OKLab (reduces “unlucky” random starts for 4–6 channels).
 fn spread_initial_colors_u16(channels: usize, rng: &mut StdRng) -> Vec<u16> {
     let mut out = Vec::with_capacity(channels * 3);
@@ -482,7 +510,7 @@ fn format_loss_panel(bd: &PaletteObjectiveBreakdown, sa: f32) -> String {
     )
 }
 
-fn svg_swatches(rgb: &[[u8; 3]], sw: i32, sh: i32) -> String {
+fn svg_swatches(rgb: &[[u8; 3]], sw: i32, sh: i32, plus_last: bool) -> String {
     let n = rgb.len() as i32;
     let w = sw * n;
     let mut s = String::from(r#"<div class="swatches-wrap">"#);
@@ -494,13 +522,31 @@ fn svg_swatches(rgb: &[[u8; 3]], sw: i32, sh: i32) -> String {
     ));
     for (i, c) in rgb.iter().enumerate() {
         let x = i as i32 * sw;
-        s.push_str(&format!(
-            r#"<rect x="{}" y="0" width="{}" height="{}" fill="rgb({},{},{})"/>"#,
-            x, sw, sh, c[0], c[1], c[2]
-        ));
+        if plus_last && i + 1 == rgb.len() {
+            s.push_str(&format!(
+                r##"<rect x="{}" y="1.5" width="{}" height="{}" fill="rgb({},{},{})" stroke="#000" stroke-width="3"/>"##,
+                x as f32 + 1.5,
+                sw as f32 - 3.0,
+                sh as f32 - 3.0,
+                c[0],
+                c[1],
+                c[2]
+            ));
+        } else {
+            s.push_str(&format!(
+                r#"<rect x="{}" y="0" width="{}" height="{}" fill="rgb({},{},{})"/>"#,
+                x, sw, sh, c[0], c[1], c[2]
+            ));
+        }
     }
     s.push_str("</svg></div>");
     s
+}
+
+struct PlusOneRun {
+    result: OptimizePipelineResult,
+    breakdown: PaletteObjectiveBreakdown,
+    optimize_elapsed: Duration,
 }
 
 struct PaletteRun {
@@ -509,6 +555,8 @@ struct PaletteRun {
     result: OptimizePipelineResult,
     breakdown: PaletteObjectiveBreakdown,
     optimize_elapsed: Duration,
+    /// Fifth channel from locking the four and optimizing one more (4-color rows only).
+    plus_one: Option<PlusOneRun>,
 }
 
 struct StudyBatch {
@@ -516,6 +564,63 @@ struct StudyBatch {
     luminance: [u16; 2],
     parents: Vec<PaletteRun>,
     batch_elapsed: Duration,
+}
+
+fn optimize_locked_plus_one(
+    four: &OptimizePipelineResult,
+    intensities: &[u16],
+    max_iters: u32,
+    confusion_samples: u32,
+    num_restarts: u32,
+    include_spatial: bool,
+    postprocess: OptimizePostprocess,
+    init_mode: PaletteInitMode,
+    refine_mode: PaletteRefineMode,
+    report_objective: PaletteObjectiveMode,
+    c3_eval: &C3,
+    spatial_w: f32,
+    luminance: [u16; 2],
+) -> PlusOneRun {
+    let rgb4 = optimized_to_rgb8(&four.srgb_linear);
+    let extra_start = start_u16_away_from(&rgb4);
+    let mut colors: Vec<u16> = rgb4
+        .iter()
+        .flat_map(|c| [c[0] as u16, c[1] as u16, c[2] as u16])
+        .collect();
+    colors.extend_from_slice(&extra_start);
+    let locked = vec![1u16, 1, 1, 1, 0];
+    let t0 = Instant::now();
+    let result = optimize_palette_pipeline_with_init(
+        &colors,
+        &locked,
+        intensities,
+        &contrast_all(5),
+        &luminance_u16(luminance),
+        vec![],
+        empty_names(5),
+        Some(max_iters),
+        Some(confusion_samples),
+        Some(include_spatial),
+        Some(num_restarts),
+        Some(postprocess),
+        init_mode,
+        refine_mode,
+        report_objective,
+    );
+    let optimize_elapsed = t0.elapsed();
+    let breakdown = evaluate_palette_objective_breakdown(
+        c3_eval,
+        &result.oklab_best,
+        &result.intensity_arc,
+        spatial_w,
+        &result.excluded_colors_indices,
+        &result.color_name_indices,
+    );
+    PlusOneRun {
+        result,
+        breakdown,
+        optimize_elapsed,
+    }
 }
 
 fn run_channel_batch(
@@ -548,6 +653,11 @@ fn run_channel_batch(
 
     let mut shared_intensity_rng = StdRng::seed_from_u64(9000 + channels as u64);
     let shared_intensities = random_intensities(n_rows, channels, &mut shared_intensity_rng);
+    let plus_one_intensities = (channels == 4).then(|| {
+        let mut out = shared_intensities.clone();
+        out.extend(random_intensities(n_rows, 1, &mut shared_intensity_rng));
+        out
+    });
     let mut parents = Vec::with_capacity(n_parents);
     let seed_base = 50_000u64 + (channels as u64) * 10_000;
 
@@ -600,12 +710,42 @@ fn run_channel_batch(
             format_duration(optimize_elapsed),
             dbg
         );
+        let plus_one = plus_one_intensities.as_ref().map(|intens5| {
+            optimize_locked_plus_one(
+                &run,
+                intens5,
+                max_iters,
+                confusion_samples,
+                num_restarts,
+                include_spatial,
+                postprocess,
+                init_mode,
+                refine_mode,
+                report_objective,
+                c3_eval,
+                spatial_w,
+                luminance,
+            )
+        });
+        if let Some(extra) = plus_one.as_ref() {
+            eprintln!(
+                "[palette_study] 4ch+1 L={lum_label} #{}/{} L_tot={:.4} min_rgb={:.0} pool={} time={} | {}",
+                i + 1,
+                n_parents,
+                extra.breakdown.total,
+                extra.breakdown.min_display_rgb_distance,
+                extra.result.restart_pool.len(),
+                format_duration(extra.optimize_elapsed),
+                format_channel_debug(&extra.result.oklab_best, c3_eval)
+            );
+        }
         parents.push(PaletteRun {
             case_id: format!("{channels}ch_L{lum_label}_run{}", i + 1),
             parent_seed,
             result: run,
             breakdown: bd,
             optimize_elapsed,
+            plus_one,
         });
         if (i + 1) % 5 == 0 || i == 0 {
             eprintln!(
@@ -631,6 +771,15 @@ fn run_channel_batch(
             .map(|p| p.optimize_elapsed)
             .collect::<Vec<_>>(),
     );
+    if channels == 4 {
+        log_loss_stats(
+            &format!("4+1 locked palettes L={lum_label}"),
+            &parents
+                .iter()
+                .filter_map(|p| p.plus_one.as_ref().map(|e| e.breakdown.total))
+                .collect::<Vec<_>>(),
+        );
+    }
     eprintln!(
         "[palette_study] {channels}ch L={lum_label} batch wall time {} ({} palettes)",
         format_duration(batch_elapsed),
@@ -653,6 +802,7 @@ fn append_mode_card(
     sh: i32,
     production_bd: &PaletteObjectiveBreakdown,
     solver_cost: f32,
+    plus_one: Option<&PlusOneRun>,
 ) {
     let Some(idx) = select_best_restart(pool, mode) else {
         html.push_str(r#"<div class="mode-card"><div class="label">no pool</div></div>"#);
@@ -660,13 +810,30 @@ fn append_mode_card(
     };
     let rec = &pool[idx];
     let srgb = oklab_to_srgb_linear(&rec.oklab);
-    let rgb = optimized_to_rgb8(&srgb);
+    let mut rgb = optimized_to_rgb8(&srgb);
     let d = &rec.diagnostics;
-    let families = d.coarse_name_families.join(" · ");
-    let names = d.dominant_c3_names.join(" · ");
-    let hue_dbg = format_channel_debug(&rec.oklab, c3_eval);
+    let mut families = d.coarse_name_families.join(" · ");
+    let mut names = d.dominant_c3_names.join(" · ");
+    let mut hue_dbg = format_channel_debug(&rec.oklab, c3_eval);
     let same_as_prod = (d.total_loss - production_bd.total).abs() < 1e-4
         && mode == PaletteSelectionMode::TotalLoss;
+    let show_plus = same_as_prod && plus_one.is_some();
+    if let (true, Some(extra)) = (show_plus, plus_one) {
+        let s = &extra.result.srgb_linear;
+        let n = s.len();
+        rgb.push(srgb_linear_to_display8(s[n - 3], s[n - 2], s[n - 1]));
+        let fifth = debug_palette_channels(c3_eval, &extra.result.oklab_best);
+        if let Some(ch) = fifth.last() {
+            names.push_str(" · ");
+            names.push_str(&ch.name);
+            families.push_str(" · +1");
+            hue_dbg.push_str(" · + ");
+            hue_dbg.push_str(&format_channel_debug(
+                &extra.result.oklab_best[extra.result.oklab_best.len() - 3..],
+                c3_eval,
+            ));
+        }
+    }
     html.push_str(r#"<div class="mode-card">"#);
     html.push_str(&format!(
         r#"<div class="mode-title">{} <code>{}</code>{}</div>"#,
@@ -679,13 +846,21 @@ fn append_mode_card(
         }
     ));
     html.push_str(&format!(
-        r#"<div class="label">restart {} · L_tot={:.4} · min RGB Δ={:.1} · hueΔ≥{:.0}° · min C3={:.3} · p10 C3={:.3}<br/>{}</div>"#,
+        r#"<div class="label">restart {} · L_tot={:.4} · min RGB Δ={:.1} · hueΔ≥{:.0}° · min C3={:.3} · p10 C3={:.3}{}<br/>{}</div>"#,
         rec.restart_id,
         d.total_loss,
         d.min_display_rgb_distance,
         d.min_oklch_hue_gap_deg,
         d.min_c3_name_distance,
         d.p10_c3_name_distance,
+        plus_one
+            .filter(|_| show_plus)
+            .map(|e| format!(
+                " · +1 L_tot={:.4} ({})",
+                e.breakdown.total,
+                format_duration(e.optimize_elapsed)
+            ))
+            .unwrap_or_default(),
         format_diag_badges(rec)
     ));
     html.push_str(&format!(
@@ -693,7 +868,7 @@ fn append_mode_card(
         names, families, hue_dbg
     ));
     html.push_str(r#"<div class="card-body">"#);
-    html.push_str(&svg_swatches(&rgb, sw, sh));
+    html.push_str(&svg_swatches(&rgb, sw, sh, show_plus));
     // Approximate bars from diagnostics (full breakdown remaining on production path).
     let bd_for_bars = PaletteObjectiveBreakdown {
         total: d.total_loss,
@@ -735,9 +910,17 @@ fn append_section_html(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
+    let (plus, plus_note) = if channels == 4 {
+        (
+            " · black outline = locked +1",
+            " Black-outlined fifth swatch is one free channel with the four locked.",
+        )
+    } else {
+        ("", "")
+    };
     html.push_str(&format!(
-        r#"<h2>{channels}-color palettes · L {lum} (n={n}, sorted by production L_tot)</h2>
-<p class="sort-note">OKLab L bounds × 100: <code>[{lo}, {hi}]</code>. Each case shows selection modes side-by-side from the same restart pool. Batch wall {wall}.</p>
+        r#"<h2>{channels}-color palettes{plus} · L {lum} (n={n}, sorted by production L_tot)</h2>
+<p class="sort-note">OKLab L bounds × 100: <code>[{lo}, {hi}]</code>. Each case shows selection modes side-by-side from the same restart pool.{plus_note} Batch wall {wall}.</p>
 "#,
         lum = luminance_label(batch.luminance),
         lo = batch.luminance[0],
@@ -801,12 +984,19 @@ fn append_section_html(
         let pool = &pr.result.restart_pool;
         html.push_str(r#"<div class="case">"#);
         html.push_str(&format!(
-            r#"<h3>#{} · {} · seed {} · pool {} · <span class="time">{}</span></h3>"#,
+            r#"<h3>#{} · {} · seed {} · pool {} · <span class="time">{}</span>{}</h3>"#,
             rank + 1,
             pr.case_id,
             pr.parent_seed,
             pool.len(),
-            format_duration(pr.optimize_elapsed)
+            format_duration(pr.optimize_elapsed),
+            pr.plus_one
+                .as_ref()
+                .map(|e| format!(
+                    r#" · +1 <span class="time">{}</span>"#,
+                    format_duration(e.optimize_elapsed)
+                ))
+                .unwrap_or_default()
         ));
         html.push_str(r#"<div class="modes">"#);
         for &mode in modes {
@@ -819,6 +1009,7 @@ fn append_section_html(
                 sh,
                 &pr.breakdown,
                 pr.result.sa_best_cost,
+                pr.plus_one.as_ref(),
             );
         }
         html.push_str("</div>");
@@ -850,45 +1041,73 @@ struct CandidateJsonRow {
     min_oklab_chroma: f32,
 }
 
+fn push_candidate_rows(
+    rows: &mut Vec<CandidateJsonRow>,
+    case_id: String,
+    channels: usize,
+    parent_seed: u64,
+    init_mode: &str,
+    pool: &[RestartRecord],
+) {
+    let by_total = top_k_indices_by_total(pool, pool.len());
+    let by_lex = top_k_indices_by_lex(pool, pool.len());
+    let mut rank_total = vec![0usize; pool.len()];
+    let mut rank_lex = vec![0usize; pool.len()];
+    for (rank, &i) in by_total.iter().enumerate() {
+        rank_total[i] = rank + 1;
+    }
+    for (rank, &i) in by_lex.iter().enumerate() {
+        rank_lex[i] = rank + 1;
+    }
+    for (i, rec) in pool.iter().enumerate() {
+        let d = &rec.diagnostics;
+        rows.push(CandidateJsonRow {
+            case_id: case_id.clone(),
+            channels,
+            parent_seed,
+            init_mode: init_mode.to_string(),
+            restart_id: rec.restart_id,
+            rank_by_total: rank_total[i],
+            rank_by_lex_v1: rank_lex[i],
+            hex_colors: hex_colors_from_oklab(&rec.oklab),
+            dominant_names: d.dominant_c3_names.clone(),
+            families: d.coarse_name_families.clone(),
+            total_loss: d.total_loss,
+            min_c3_name_distance: d.min_c3_name_distance,
+            p10_c3_name_distance: d.p10_c3_name_distance,
+            mean_c3_name_distance: d.mean_c3_name_distance,
+            min_display_rgb_distance: d.min_display_rgb_distance,
+            min_oklab_distance: d.min_oklab_distance,
+            duplicate_family_pair_count: d.duplicate_family_pair_count,
+            earth_term_mass: d.earth_term_mass,
+            min_srgb_saturation: d.min_srgb_saturation,
+            min_oklab_chroma: d.min_oklab_chroma,
+        });
+    }
+}
+
 fn write_candidates_json(path: &PathBuf, batches: &[StudyBatch], init_mode: PaletteInitMode) {
     let mut rows = Vec::new();
+    let init = init_mode.id();
     for batch in batches {
         for pr in &batch.parents {
-            let pool = &pr.result.restart_pool;
-            let by_total = top_k_indices_by_total(pool, pool.len());
-            let by_lex = top_k_indices_by_lex(pool, pool.len());
-            let mut rank_total = vec![0usize; pool.len()];
-            let mut rank_lex = vec![0usize; pool.len()];
-            for (rank, &i) in by_total.iter().enumerate() {
-                rank_total[i] = rank + 1;
-            }
-            for (rank, &i) in by_lex.iter().enumerate() {
-                rank_lex[i] = rank + 1;
-            }
-            for (i, rec) in pool.iter().enumerate() {
-                let d = &rec.diagnostics;
-                rows.push(CandidateJsonRow {
-                    case_id: pr.case_id.clone(),
-                    channels: batch.channels,
-                    parent_seed: pr.parent_seed,
-                    init_mode: init_mode.id().to_string(),
-                    restart_id: rec.restart_id,
-                    rank_by_total: rank_total[i],
-                    rank_by_lex_v1: rank_lex[i],
-                    hex_colors: hex_colors_from_oklab(&rec.oklab),
-                    dominant_names: d.dominant_c3_names.clone(),
-                    families: d.coarse_name_families.clone(),
-                    total_loss: d.total_loss,
-                    min_c3_name_distance: d.min_c3_name_distance,
-                    p10_c3_name_distance: d.p10_c3_name_distance,
-                    mean_c3_name_distance: d.mean_c3_name_distance,
-                    min_display_rgb_distance: d.min_display_rgb_distance,
-                    min_oklab_distance: d.min_oklab_distance,
-                    duplicate_family_pair_count: d.duplicate_family_pair_count,
-                    earth_term_mass: d.earth_term_mass,
-                    min_srgb_saturation: d.min_srgb_saturation,
-                    min_oklab_chroma: d.min_oklab_chroma,
-                });
+            push_candidate_rows(
+                &mut rows,
+                pr.case_id.clone(),
+                batch.channels,
+                pr.parent_seed,
+                init,
+                &pr.result.restart_pool,
+            );
+            if let Some(extra) = &pr.plus_one {
+                push_candidate_rows(
+                    &mut rows,
+                    format!("{}_plus1", pr.case_id),
+                    5,
+                    pr.parent_seed,
+                    init,
+                    &extra.result.restart_pool,
+                );
             }
         }
     }
@@ -992,7 +1211,9 @@ fn main() {
     let confusion_samples =
         parse_env_u32("PALETTE_STUDY_CONFUSION_SAMPLES", DEFAULT_CONFUSION_SAMPLES);
     let num_restarts = parse_env_u32("PALETTE_STUDY_RESTARTS", DEFAULT_RESTARTS);
-    let include_spatial = parse_env_bool("PALETTE_STUDY_SPATIAL");
+    let include_spatial = env::var("PALETTE_STUDY_SPATIAL")
+        .map(|s| !matches!(s.as_str(), "0" | "false" | "FALSE" | "no" | "NO"))
+        .unwrap_or(true);
     let study_post = parse_env_bool("PALETTE_STUDY_STUDY");
     let postprocess = if study_post {
         OptimizePostprocess::Study
@@ -1079,6 +1300,7 @@ fn main() {
         r#"<h1>Palette study</h1>
 <p class="note">
   <strong>{total_palettes}</strong> optimized cases ({n_parents} per channel count × L range: channels <strong>{channels_label}</strong>, L <strong>{luminance_label_all}</strong>).
+  4-color rows append a fifth swatch by locking those four and optimizing one more.
   <code>max_iters={max_iters}</code>, <code>restarts={num_restarts}</code>,
   spatial <strong>{spatial}</strong>, init <strong>{init}</strong>, refine <strong>{refine}</strong>,
   report objective <strong>{obj}</strong>.

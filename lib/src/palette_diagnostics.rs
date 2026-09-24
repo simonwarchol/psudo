@@ -799,7 +799,7 @@ pub fn generate_feasible_seed_candidates(
     c3: &c3::C3,
     luminance_values: &[f32],
 ) -> Vec<SeedCandidate> {
-    let l_lo = luminance_values.get(0).copied().unwrap_or(0.50);
+    let l_lo = luminance_values.get(0).copied().unwrap_or(0.60);
     let l_hi = luminance_values.get(1).copied().unwrap_or(0.92);
     let l_grid = [0.48f32, 0.56, 0.64, 0.72];
     let c_grid = [0.16f32, 0.20, 0.24, 0.28, 0.32];

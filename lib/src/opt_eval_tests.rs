@@ -203,24 +203,27 @@ fn high_l_pastel_oklab_can_still_fail_srgb_floor() {
 }
 
 #[test]
-fn min_name_weight_lowers_total_on_close_name_pair() {
-    use super::{evaluate_palette_objective_breakdown, with_min_name_weight};
+fn min_name_term_is_worse_for_two_pinks_than_rgb() {
     let c3 = c3::C3::new();
-    let red_pink_green = vec![0.58, 0.22, 0.06, 0.62, 0.20, 0.14, 0.55, -0.18, 0.10];
     let intensity = toy_intensity_two_channel();
     let names = vec![-1.0f32; 3];
-    let base =
-        evaluate_palette_objective_breakdown(&c3, &red_pink_green, &intensity, 0.0, &[], &names);
-    assert_eq!(base.minus_min_color_name_distance, 0.0);
-    let with_min = with_min_name_weight(1.0, || {
-        evaluate_palette_objective_breakdown(&c3, &red_pink_green, &intensity, 0.0, &[], &names)
-    });
+    // Flat OKLab: two near-pinks + green vs spread RGB-ish triad.
+    let two_pinks = vec![0.62, 0.20, 0.14, 0.58, 0.18, 0.10, 0.55, -0.18, 0.10];
+    let rgb = vec![0.55, 0.22, 0.06, 0.55, -0.18, 0.10, 0.50, -0.03, -0.20];
+    let pinks =
+        evaluate_palette_objective_breakdown(&c3, &two_pinks, &intensity, 0.0, &[], &names);
+    let spread = evaluate_palette_objective_breakdown(&c3, &rgb, &intensity, 0.0, &[], &names);
     assert!(
-        with_min.minus_min_color_name_distance < -0.01,
-        "expected −w·min name term; got {}",
-        with_min.minus_min_color_name_distance
+        pinks.minus_min_color_name_distance < 0.0,
+        "production should include −min name; got {}",
+        pinks.minus_min_color_name_distance
     );
-    assert!(with_min.total < base.total);
+    assert!(
+        pinks.minus_min_color_name_distance > spread.minus_min_color_name_distance,
+        "two pinks −min {} should be worse than rgb −min {}",
+        pinks.minus_min_color_name_distance,
+        spread.minus_min_color_name_distance
+    );
 }
 
 #[test]

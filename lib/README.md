@@ -94,8 +94,8 @@ for (let i = 0; i < nChannels; i++) {
   contrastLimits[i * 2 + 1] = 65535;
 }
 
-// OKLab L bounds × 100 (e.g. 0.50–0.92)
-const luminance = new Uint16Array([50, 92]);
+// OKLab L bounds × 100 (e.g. 0.60–0.92)
+const luminance = new Uint16Array([60, 92]);
 
 const excluded = ["grey", "white", "lightgrey", "darkgrey", "offwhite"];
 const colorNames = ["red", "", "blue", ""]; // optional C3 hint per channel; "" = none
@@ -197,8 +197,9 @@ console.log(loss.perceptual_distance, loss.name_distance, loss.min_display_rgb_d
 | `confusion_baseline_samples` | 32 | MC samples when spatial overlap is on |
 | `include_spatial_channel_overlap` | `false` | `true` uses an occupancy-sketch mix-vs-P_k term |
 | `num_restarts` | 18 (× channels/3, max 40) | Nelder–Mead multistarts; best total wins |
+| `signal` | — | Optional `AbortSignal`; rejects with `AbortError`, stops dispatching restarts, and replaces busy pool workers |
 
-Callers pass `luminance_values` as OKLab L × 100; the study / app default is `[50, 92]`.
+Callers pass `luminance_values` as OKLab L × 100; the study / app default is `[60, 92]`.
 
 On **native** builds, multistarts run in parallel via `rayon`. In the browser, `optimize()` parallelizes the same multistarts across workers (`setParallelMultistart(false)` falls back to one sequential WASM run per call).
 
